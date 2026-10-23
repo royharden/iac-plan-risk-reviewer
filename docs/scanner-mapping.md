@@ -1,0 +1,7 @@
+# Scanner comparison boundary
+
+No scanner was installed or executed. Exact Checkov/Trivy versions, binary hashes, enabled checks, policy/config hashes and input compatibility remain unverified. No built-in or custom mapping is represented as passing. `scripts/eval_scanners.py` reports this incomplete status; it does not launch a process. `eval.scanners.artifacts` validates imported capture metadata and overlap eligibility, not scanner semantics.
+
+Required future arms remain separate: C Checkov built-ins; C-custom independently mapped action-aware Checkov policies; T compatible Trivy. All receive identical frozen synthetic raw JSON with source enrichment disabled. Rule detection agreement never establishes gold. A configuration-only check cannot silently stand in for a change predicate; unmapped action/type cells are unsupported, not true negatives. Missing binaries are incomplete work, not evidence of incompatibility.
+
+After Dirty Mode closes, appoint a mapping owner independent of hidden oracle custody. Pin actual upstream versions and author/verify custom policy mappings against development cases before sealing arms. Record stdout/stderr digests, raw exit status, timeout/truncation, duration and exact input hash. Resolve tfexplain license provenance before any future code reuse; none is copied here. Public scanner documentation and research snapshots were design references only.
