@@ -10,7 +10,7 @@ import hashlib
 import json
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Literal, Protocol
 
@@ -125,15 +125,182 @@ class Invocation:
                 raise ValueError("pinned scanner input changed")
 
 
+def invocation_digest(invocation: Invocation) -> str:
+    """Exact local command/environment/files/bounds fingerprint, no execution."""
+    return digest(json.dumps({"argv": invocation.argv, "cwd": str(invocation.cwd),
+                              "environment": invocation.environment,
+                              "limits": asdict(invocation.limits),
+                              "files": [(str(path), sha, cap)
+                                        for path, sha, cap in invocation.pinned_files]},
+                             sort_keys=True, separators=(",", ":")).encode())
+
+
+@dataclass(frozen=True)
+class ApprovedInvocation:
+    arm: Arm
+    scanner_name: Literal["checkov", "trivy"]
+    scanner_version: str
+    plan_sha256: str
+    executable_sha256: str
+    dependency_manifest_sha256: str
+    version_evidence_sha256: str
+    config_sha256: str
+    policy_sha256: str
+    invocation_sha256: str
+    check_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class LocalExecutionGrant:
+    grant_id: str
+    operator_id: str
+    build_sha256: str
+    comparison_manifest_sha256: str
+    invocations: tuple[ApprovedInvocation, ...]
+    approved_bytes_sha256: str
+
+
+def manifest_digest(manifest: dict) -> str:
+    return digest(json.dumps(manifest, sort_keys=True, separators=(",", ":"),
+                             allow_nan=False).encode())
+
+
+def load_execution_grant(path: Path, *, expected_sha256: str, manifest: dict) -> LocalExecutionGrant:
+    """Expected digest comes from the operator, never from the submitted grant.
+
+    This verifies a bounded explicit instruction, not the identity/truthfulness
+    of its author or OS confinement. No scanner/process probe occurs here.
+    """
+    raw = bounded_read(path, 256 * 1024)
+    if not SHA256.fullmatch(expected_sha256) or digest(raw) != expected_sha256:
+        raise ValueError("operator execution grant differs from its external pin")
+    value = strict_json(raw)
+    flags = {"dirty_mode_closed", "local_only", "network_denied", "descendants_confined",
+             "no_provider_credentials", "synthetic_input_attested"}
+    keys = {"schema_version", "grant_id", "operator_id", "build_sha256",
+            "comparison_manifest_sha256", "invocations"} | flags
+    if (not isinstance(value, dict) or set(value) != keys
+            or value["schema_version"] != "m4-local-scanner-execution-grant-v1"
+            or any(value[flag] is not True for flag in flags)
+            or manifest.get("input_scope") != "development_synthetic"
+            or manifest.get("synthetic_input_attested") is not True
+            or value["build_sha256"] != manifest.get("build_sha256")
+            or value["comparison_manifest_sha256"] != manifest_digest(manifest)):
+        raise ValueError("execution grant scope/mode/synthetic attestation mismatch")
+    if not isinstance(value["build_sha256"], str) or not SHA256.fullmatch(value["build_sha256"]):
+        raise ValueError("exact build pin required")
+    for key in ("grant_id", "operator_id"):
+        if not isinstance(value[key], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", value[key]):
+            raise ValueError("opaque operator/grant identity required")
+    declarations = value["invocations"]
+    if not isinstance(declarations, list) or not 0 < len(declarations) <= 768:
+        raise ValueError("bounded explicit invocation approvals required")
+    approved, seen = [], set()
+    for item in declarations:
+        if not isinstance(item, dict) or set(item) != set(ApprovedInvocation.__dataclass_fields__):
+            raise ValueError("closed invocation approval required")
+        item = dict(item)
+        if not isinstance(item["check_ids"], list):
+            raise ValueError("explicit check array required")
+        item["check_ids"] = tuple(item["check_ids"])
+        record = ApprovedInvocation(**item)
+        if (record.arm not in {"C", "C-custom", "T"}
+                or record.scanner_name != ("trivy" if record.arm == "T" else "checkov")
+                or not isinstance(record.scanner_version, str) or not record.scanner_version
+                or len(record.scanner_version) > 128 or not record.check_ids
+                or len(record.check_ids) != len(set(record.check_ids))
+                or any(not isinstance(check, str) or not CHECK_ID.fullmatch(check) for check in record.check_ids)):
+            raise ValueError("invalid approved scanner profile")
+        for name in ("plan_sha256", "executable_sha256", "dependency_manifest_sha256",
+                     "version_evidence_sha256", "config_sha256", "policy_sha256", "invocation_sha256"):
+            pin = getattr(record, name)
+            if not isinstance(pin, str) or not SHA256.fullmatch(pin):
+                raise ValueError("exact invocation pins required")
+        if record.invocation_sha256 in seen:
+            raise ValueError("duplicate invocation approval")
+        seen.add(record.invocation_sha256)
+        approved.append(record)
+    return LocalExecutionGrant(value["grant_id"], value["operator_id"], value["build_sha256"],
+                               value["comparison_manifest_sha256"], tuple(approved), expected_sha256)
+
+
+def _local_profile(invocation: Invocation, approved: ApprovedInvocation) -> None:
+    """Hard allowlist in addition to the exact operator-approved fingerprint."""
+    argv = invocation.argv
+    switches = {"--compact", "--skip-download", "--skip-results-upload"} if approved.scanner_name == "checkov" else {
+        "--include-non-failures", "--skip-check-update", "--disable-telemetry", "--skip-version-check"}
+    pairs = ({"--file", "--framework", "--output", "--check", "--config-file", "--download-external-modules",
+              "--external-checks-dir"} if approved.scanner_name == "checkov" else
+             {"--format", "--config", "--misconfig-scanners", "--exit-code", "--ignorefile", "--timeout", "--cache-dir"})
+    options, index, target = {}, 1, None
+    if approved.scanner_name == "trivy":
+        if len(argv) < 2 or argv[1] != "config":
+            raise PermissionError("only Trivy config is allowed")
+        index = 2
+    while index < len(argv):
+        key = argv[index]
+        if key == "--" and approved.scanner_name == "trivy" and index == len(argv) - 2:
+            target = argv[index + 1]
+            break
+        if key in options:
+            raise PermissionError("duplicate scanner option")
+        if key in switches:
+            options[key] = True
+            index += 1
+        elif key in pairs and index + 1 < len(argv):
+            options[key] = argv[index + 1]
+            index += 2
+        else:
+            raise PermissionError("unapproved command, cloud, enrichment or plugin option")
+    required = ({"--framework": "terraform_plan", "--output": "json",
+                 "--check": ",".join(approved.check_ids), "--download-external-modules": "false"}
+                if approved.scanner_name == "checkov" else
+                {"--format": "json", "--misconfig-scanners": "terraformplan-json", "--exit-code": "1",
+                 "--ignorefile": "", "--timeout": f"{invocation.limits.timeout_seconds:g}s",
+                 "--cache-dir": str(invocation.cwd)})
+    if any(options.get(key) != value for key, value in required.items()) or any(
+            options.get(key) is not True for key in switches):
+        raise PermissionError("fixed offline scanner options required")
+    target = options.get("--file") if approved.scanner_name == "checkov" else target
+    config = options.get("--config-file" if approved.scanner_name == "checkov" else "--config")
+    file_pins = {str(path): sha for path, sha, _ in invocation.pinned_files}
+    if (file_pins.get(argv[0]) != approved.executable_sha256
+            or file_pins.get(target) != approved.plan_sha256 or file_pins.get(config) != approved.config_sha256
+            or any(pin not in file_pins.values() for pin in (approved.dependency_manifest_sha256,
+                   approved.version_evidence_sha256, approved.policy_sha256))):
+        raise PermissionError("approved input/installation/config/policy files differ")
+    version_files = [path for path, sha, _ in invocation.pinned_files if sha == approved.version_evidence_sha256]
+    version = strict_json(bounded_read(version_files[0], 64 * 1024))
+    if not isinstance(version, dict) or any(version.get(key) != expected for key, expected in (
+            ("scanner_name", approved.scanner_name), ("version", approved.scanner_version),
+            ("executable_sha256", approved.executable_sha256),
+            ("dependency_manifest_sha256", approved.dependency_manifest_sha256))):
+        raise PermissionError("approved version receipt differs")
+    expected_env = dict(fixed_environment(invocation.cwd))
+    if approved.arm == "C-custom":
+        directory = options.get("--external-checks-dir")
+        if not isinstance(directory, str) or not Path(directory).is_absolute():
+            raise PermissionError("approved local custom policy directory required")
+        expected_env.update(IAC_CUSTOM_PLAN_JSON=target, IAC_CUSTOM_PLAN_SHA256=approved.plan_sha256)
+    elif "--external-checks-dir" in options:
+        raise PermissionError("custom checks cannot enter a built-in arm")
+    if dict(invocation.environment) != expected_env:
+        raise PermissionError("only the fixed credential-free environment is permitted")
+
+
 @dataclass(frozen=True)
 class RunResult:
-    execution_kind: Literal["fake", "live"]
+    execution_kind: Literal["fake", "live", "none"]
     exit_code: int | None
     stdout: bytes = field(repr=False)
     stderr: bytes = field(repr=False)
     elapsed_seconds: float
     timed_out: bool = False
     output_truncated: bool = False
+    operator_grant_sha256: str | None = None
+    start_receipt_sha256: str | None = None
+    terminal_receipt_sha256: str | None = None
+    error_code: str | None = None
 
 
 class Runner(Protocol):
@@ -167,20 +334,83 @@ class BoundedSubprocessRunner:
     sandbox is a prerequisite, not a property of Popen or these CLI flags.
     """
     activation_authorized: bool = False
+    execution_grant: LocalExecutionGrant | None = None
+
+    def verify_manifest(self, manifest: dict) -> None:
+        grant = self.execution_grant
+        if (not self.activation_authorized or grant is None
+                or manifest.get("synthetic_input_attested") is not True
+                or manifest.get("input_scope") != "development_synthetic"
+                or manifest.get("build_sha256") != grant.build_sha256
+                or manifest_digest(manifest) != grant.comparison_manifest_sha256):
+            raise PermissionError("pinned operator grant for this exact synthetic manifest required")
+
+    def approval(self, invocation: Invocation) -> ApprovedInvocation:
+        if not self.activation_authorized or self.execution_grant is None:
+            raise PermissionError("scanner runtime activation lacks a pinned operator grant")
+        matches = [item for item in self.execution_grant.invocations
+                   if item.invocation_sha256 == invocation_digest(invocation)]
+        if len(matches) != 1:
+            raise PermissionError("this exact scanner invocation is not approved")
+        invocation.verify()
+        _local_profile(invocation, matches[0])
+        if any((invocation.cwd / name).exists() for name in (
+                ".trivy/modules", "sitecustomize.py", "usercustomize.py")):
+            raise PermissionError("unapproved plugin/module content in scanner scratch directory")
+        return matches[0]
+
+    @staticmethod
+    def _receipt(path: Path, payload: dict) -> str:
+        import os
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                         allow_nan=False).encode()
+        with path.open("xb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        return digest(raw)
 
     def __call__(self, invocation: Invocation) -> RunResult:
-        if not self.activation_authorized:
-            raise PermissionError("scanner runtime activation is not authorized")
-        invocation.verify()
+        approved = self.approval(invocation)
         import subprocess
         import threading
         import time
 
         started = time.monotonic()
-        proc = subprocess.Popen(list(invocation.argv), cwd=invocation.cwd,
-                                env=dict(invocation.environment), shell=False,
-                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
+        grant_sha = self.execution_grant.approved_bytes_sha256
+        stem = approved.invocation_sha256
+        try:
+            start_sha = self._receipt(invocation.cwd / (".scanner-start-" + stem + ".json"), {
+                "schema_version": "m4-local-scanner-start-v1", "operator_grant_sha256": grant_sha,
+                "invocation_sha256": stem, "plan_sha256": approved.plan_sha256, "arm": approved.arm})
+        except FileExistsError as error:
+            raise PermissionError("approved invocation already has a start receipt; no automatic retries") from error
+
+        def finish(kind: str, code: int | None, stdout: bytes, stderr: bytes,
+                   elapsed: float, timed_out: bool = False, truncated: bool = False,
+                   error_code: str | None = None, process_id: int | None = None) -> RunResult:
+            terminal_sha = None
+            try:
+                terminal_sha = self._receipt(invocation.cwd / (".scanner-terminal-" + stem + ".json"), {
+                    "schema_version": "m4-local-scanner-terminal-v1", "operator_grant_sha256": grant_sha,
+                    "start_receipt_sha256": start_sha, "invocation_sha256": stem,
+                    "process_started": kind == "live", "process_id": process_id,
+                    "raw_exit_code": code, "stdout_sha256": digest(stdout), "stderr_sha256": digest(stderr),
+                    "elapsed_seconds": elapsed, "timed_out": timed_out, "output_truncated": truncated,
+                    "error_code": error_code})
+            except OSError:
+                error_code = "terminal_receipt_write_failed"
+            return RunResult(kind, code, stdout, stderr, elapsed, timed_out, truncated,
+                             grant_sha, start_sha, terminal_sha, error_code)
+
+        try:
+            proc = subprocess.Popen(list(invocation.argv), cwd=invocation.cwd,
+                                    env=dict(invocation.environment), shell=False,
+                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
+        except OSError:
+            return finish("none", None, b"", b"", time.monotonic() - started,
+                          error_code="process_start_failed")
         buffers = [bytearray(), bytearray()]
         overflow = threading.Event()
         read_error = threading.Event()
@@ -219,9 +449,9 @@ class BoundedSubprocessRunner:
             for reader in readers:
                 reader.join(timeout=max(0.0, min(1.0, deadline - time.monotonic())))
             incomplete = any(reader.is_alive() for reader in readers) or read_error.is_set()
-            return RunResult("live", proc.returncode, bytes(buffers[0]), bytes(buffers[1]),
-                             time.monotonic() - started, timed_out,
-                             overflow.is_set() or incomplete)
+            return finish("live", proc.returncode, bytes(buffers[0]), bytes(buffers[1]),
+                          time.monotonic() - started, timed_out,
+                          overflow.is_set() or incomplete, process_id=proc.pid)
         finally:
             if proc.poll() is None:
                 proc.kill()
@@ -260,6 +490,9 @@ class ScanArtifact:
     elapsed_seconds: float | None = None
     output_truncated: bool = False
     source_enrichment: Literal[False] = False
+    operator_grant_sha256: str | None = None
+    start_receipt_sha256: str | None = None
+    terminal_receipt_sha256: str | None = None
 
     @property
     def live_eligible(self) -> bool:
@@ -299,6 +532,7 @@ def fixed_environment(workspace: Path) -> tuple[tuple[str, str], ...]:
     values = {"HOME": str(workspace), "USERPROFILE": str(workspace),
               "TMP": str(workspace), "TEMP": str(workspace),
               "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1",
+              "PYTHONSAFEPATH": "1",
               "CHECKOV_ALLOW_USAGE_METRICS": "false", "LOG_LEVEL": "ERROR"}
     for name in ("SystemRoot", "WINDIR", "SYSTEMDRIVE"):
         if name in os.environ:
@@ -506,17 +740,17 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
                                  (policy_manifest_path, policy_sha256, 1024 * 1024))
                                 + extra_files)
         invocation.verify()
-        invocation_hash = digest(json.dumps({"argv": invocation.argv,
-                                "environment": invocation.environment,
-                                "timeout": limits.timeout_seconds,
-                                "stdout_cap": limits.stdout_bytes,
-                                "stderr_cap": limits.stderr_bytes},
-                                sort_keys=True, separators=(",", ":")).encode())
+        invocation_hash = invocation_digest(invocation)
         base = replace(base, plan_sha256=digest(raw), config_sha256=digest(raw_config),
                        invocation_sha256=invocation_hash, mapping_status=state)
+        if type(runner) is BoundedSubprocessRunner:
+            approval = runner.approval(invocation)
+            if (approval.arm != arm or approval.scanner_name != base.scanner_name
+                    or approval.scanner_version != pin.version):
+                raise PermissionError("approved scanner arm/version differs from capture")
         result = runner(invocation)
         invocation.verify()
-        if (result.execution_kind not in {"fake", "live"}
+        if (result.execution_kind not in {"fake", "live", "none"}
                 or not math.isfinite(result.elapsed_seconds) or result.elapsed_seconds < 0
                 or (result.exit_code is not None and type(result.exit_code) is not int)
                 or type(result.stdout) is not bytes or type(result.stderr) is not bytes):
@@ -528,7 +762,21 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
                        raw_exit_code=result.exit_code,
                        stdout_sha256=digest(result.stdout[:limits.stdout_bytes]),
                        stderr_sha256=digest(result.stderr[:limits.stderr_bytes]),
-                       elapsed_seconds=result.elapsed_seconds, output_truncated=truncated)
+                       elapsed_seconds=result.elapsed_seconds, output_truncated=truncated,
+                       operator_grant_sha256=result.operator_grant_sha256,
+                       start_receipt_sha256=result.start_receipt_sha256,
+                       terminal_receipt_sha256=result.terminal_receipt_sha256)
+        if result.execution_kind == "live" and (
+                type(runner) is not BoundedSubprocessRunner
+                or any(not isinstance(pin, str) or not SHA256.fullmatch(pin) for pin in (
+                    result.operator_grant_sha256, result.start_receipt_sha256, result.terminal_receipt_sha256))):
+            return replace(base, status="invalid", execution_kind="none",
+                           operator_grant_sha256=None, start_receipt_sha256=None, terminal_receipt_sha256=None,
+                           reasons=("untrusted_runner_cannot_attest_execution",))
+        if result.error_code is not None or result.execution_kind == "none":
+            reason = result.error_code if result.error_code in {
+                "process_start_failed", "terminal_receipt_write_failed"} else "process_not_started"
+            return replace(base, status="error", reasons=(reason,))
         if result.timed_out or result.elapsed_seconds > limits.timeout_seconds + 2:
             return replace(base, status="timeout", reasons=("scanner_timeout",))
         if truncated:

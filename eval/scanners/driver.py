@@ -14,7 +14,7 @@ import re
 
 from . import checkov_adapter, trivy_adapter
 from .artifacts import Mapping
-from .runner import (FakeRunner, Limits, Runner, SHA256, ScanArtifact, ScannerPin,
+from .runner import (BoundedSubprocessRunner, FakeRunner, Limits, Runner, SHA256, ScanArtifact, ScannerPin,
                      bounded_read, cell_status, digest, simulate_capture, strict_json)
 
 ARMS = ("C", "C-custom", "T")
@@ -229,8 +229,12 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
     Preserve one row per resource/rule/required arm, including missing observations.
     Never emits scorer ArmRows, and never interprets absent rows as true negatives.
     """
+    # Freeze caller-owned mutable configuration before checking the operator pin.
+    manifest = json.loads(json.dumps(manifest, allow_nan=False))
     if fake_only and runner is not None:
         raise ValueError("fake-only mode cannot accept a runtime runner")
+    if type(runner) is BoundedSubprocessRunner:
+        runner.verify_manifest(manifest)
     cases = _load_cases(manifest, limits)
     arms = manifest.get("arms", {})
     if not isinstance(arms, dict) or set(arms) - set(ARMS):

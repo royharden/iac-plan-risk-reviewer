@@ -95,3 +95,99 @@ The later CLI can print JSON or exclusively create a new --out metadata file.
 Exit 0 means serialization succeeded, not compatibility or correctness. No inventory
 command or regression source was executed during Dirty Mode. Actual activation,
 scorer bridge/eligibility approval and runtime checks remain separate later work.
+
+## Future explicitly granted pinned-local mode
+
+The source CLI now names pinned-local for future actual local scanner execution;
+legacy live is an alias with the same strict guard. Pending and fake-only remain
+nonexecuting/ineligible defaults. No mode was executed during construction.
+Runtime authorization, a confinement receipt and an execution-grant file with its
+externally approved raw-byte SHA256 are all required. A Boolean alone cannot
+activate BoundedSubprocessRunner. The existing runner remains the only subprocess
+implementation; no provider/HTTP/Terraform/cloud path or second runner is added.
+
+The closed m4-local-scanner-execution-grant-v1 metadata contains grant_id,
+operator_id, build_sha256, comparison_manifest_sha256 and invocations. Required
+True attestations are dirty_mode_closed, local_only, network_denied,
+descendants_confined, no_provider_credentials and synthetic_input_attested.
+The exact comparison manifest must itself declare development_synthetic scope and
+synthetic_input_attested=true. A generated development input manifest does not
+supply that operator approval automatically: its final bytes/config must be
+approved independently before any later actual execution.
+
+Each ApprovedInvocation binds arm/scanner/version, raw plan, executable,
+dependency inventory, version receipt, empty config, custom/built-in policy
+manifest, exact enabled check IDs and invocation_sha256. invocation_digest hashes
+all fixed argv, cwd, complete sanitized environment, pinned file paths/hashes/caps
+and all limits. That source helper does not execute a process. The operator must
+review and approve these exact private metadata values externally; passing a
+self-selected digest or reading a grant is not authentication of its author.
+Missing, changed, duplicate or unknown fields/invocations refuse execution.
+
+The local runner independently allowlists the source scanner profile in addition
+to checking its approved fingerprint. Checkov is plan-only with explicit local
+policy selection/config and enrichment/download/upload paths absent/disabled;
+Trivy is config/terraformplan-json with pinned cache, no telemetry/version fetch
+or ignore file. Cloud, external-check Git, arbitrary command and plugin flags are
+rejected. C-custom is the only arm admitting its exact approved local custom-policy
+directory/files. Sanitized environment is reconstructed, never inherited wholesale;
+provider keys, PATH, PYTHONPATH and user-site configuration are not forwarded.
+Unapproved scratch Python startup/custom Trivy module content is refused. These
+source choices do not replace actual dependency/OS confinement verification.
+
+A later authorized runner exclusively writes and flushes a payload-free start
+receipt in its exact approved scratch directory before process creation; an
+existing receipt prevents automatic retry/reuse there. A terminal metadata receipt
+records whether a process actually started, raw exit/output hashes, time/limits
+flags and the start/grant linkage. Process-start failure remains none/error,
+never executed. Missing terminal receipts remain incomplete; partial files are
+preserved for operator reconciliation. No raw stdout/stderr, input, secret or
+private address map is written by these receipt helpers. Names are fixed by the
+approved invocation digest, not submitted data. Network/process-descendant/pipe
+confinement, crash durability/races and raw-output retention still need real
+operator-owned runtime validation. No Docker/CI/sandbox provisioning is supplied.
+
+Injected fake/protocol runners cannot produce live capture records merely by
+returning execution_kind=live: capture marks such output invalid/none and removes
+execution proof fields. FakeRunner cannot activate the real runner. Even a valid
+actual captured local process is not scorer eligibility: the separate externally
+approved v2 EligibleMeasurement/EligibilityManifest remains mandatory. Unknown
+compatibility, mappings, output/identity failures and timeouts remain incomplete,
+not true negatives. No genuine operator grant or scanner version is supplied here.
+
+## Typed scanner RunManifest adapter source
+
+`eval.scanners.run_manifest.adapt_scanner_report` consumes the actual normalized
+driver/bridge records and actual D6 shared RunManifest, ComponentVersion,
+CaseBinding, ArtifactRef, InvocationMetadata, AttemptMetadata and
+EvaluationEligibility models. Callers supply externally approved report/eligibility
+pins, actual policy/authority/semantic-suite digests, development-only typed ancestry
+bindings and actual private artifact references. No source, oracle or artifact
+payload is opened; no execution, eligibility issuer or file writer is introduced.
+
+Exact scanner/config/installation/policy/receipt identities are retained as typed
+components. Known missing-run components can be supplied explicitly as declared
+metadata. Unknown mandatory fields return ScannerManifestResult.manifest=None and
+explicit missing reasons, with all original bridge rows/attempts preserved. No
+zero/default hash or invented unknown scanner version is generated to fill a
+required shared field. Mixed/missing raw input, duplicate identities, widened
+held-out scope and reused start/terminal proof across attempts are rejected.
+
+Start/terminal/operator digests must bind supplied private producer artifact
+references before an actual-source attempt may be represented as executed.
+Those bindings are metadata attestations, not independent file/execution
+authentication. Mock provenance overrides valid-looking execution references.
+Success still cannot claim scorer eligibility without separate approved v2 evidence.
+Every invocation leaves all_attempts_attested=false; source metadata cannot prove
+there were no lost/crashed/unreported calls. Failed/timeout status, terminal hashes,
+time and unknown billing are retained; no fake zero-cost measurement is introduced.
+
+The typed manifest is private reproducibility metadata. A separate
+public_summary_json contains count/status/kind/missing-reason fields only, excluding
+private paths, raw-source hashes, locators and payloads. Hidden oracle/private-map
+and outward payload artifact references are not accepted by this scanner adapter.
+Missing authority/semantic/eligibility/component inputs keep a useful draft; they
+are not permission to create gold or substitute implementation-generated approval.
+Construction checks are AST/source inspection only. Actual imports, model joins,
+receipt authenticity, runtime scanner effects and full comparative/finished-product
+acceptance remain unverified.

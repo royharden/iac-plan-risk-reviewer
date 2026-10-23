@@ -12,21 +12,25 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from eval.scanners.driver import compare, load_manifest  # noqa: E402
-from eval.scanners.runner import BoundedSubprocessRunner  # noqa: E402
+from eval.scanners.runner import BoundedSubprocessRunner, load_execution_grant  # noqa: E402
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--mode", choices=("pending", "fake-only", "live"), default="pending")
+    parser.add_argument("--mode", choices=("pending", "fake-only", "pinned-local", "live"), default="pending",
+                        help="pinned-local is future local execution; live is its compatibility alias")
     parser.add_argument("--authorize-runtime", action="store_true",
                         help="later authorized activation only; forbidden during Dirty Mode")
     parser.add_argument("--sandbox-receipt", type=Path,
                         help="operator-owned confinement receipt required for live mode")
+    parser.add_argument("--execution-grant", type=Path, help="later operator-approved exact local invocation grant")
+    parser.add_argument("--execution-grant-sha256", help="external approved SHA256 of grant file bytes")
     parser.add_argument("--out", type=Path, required=True,
                         help="new run directory directly under product results/")
     args = parser.parse_args()
     try:
+        local_mode = args.mode in {"pinned-local", "live"}
         output = args.out.absolute()
         product = Path(__file__).resolve().parents[1]
         expected_parent = product / "results"
@@ -34,13 +38,15 @@ def main() -> int:
                 or output.parent.resolve() != expected_parent.resolve()
                 or output.name in {"", ".", ".."}):
             raise ValueError("new exclusive product results directory required")
-        if args.mode != "live" and (args.authorize_runtime or args.sandbox_receipt):
+        if not local_mode and (args.authorize_runtime or args.sandbox_receipt
+                                    or args.execution_grant or args.execution_grant_sha256):
             raise ValueError("runtime switches are invalid outside explicit live mode")
         manifest = load_manifest(args.manifest)
         runner = None
         sandbox_sha256 = None
-        if args.mode == "live":
-            if not args.authorize_runtime or args.sandbox_receipt is None:
+        if local_mode:
+            if (not args.authorize_runtime or args.sandbox_receipt is None
+                    or args.execution_grant is None or args.execution_grant_sha256 is None):
                 raise ValueError("runtime and operator confinement authorization required")
             # A receipt records operator responsibility; it does not create a sandbox.
             from eval.scanners.runner import bounded_read, digest, strict_json
@@ -56,10 +62,13 @@ def main() -> int:
                     or receipt.get("build_sha256") != manifest.get("build_sha256")):
                 raise ValueError("missing current sandbox/mode attestation")
             sandbox_sha256 = digest(raw)
-            runner = BoundedSubprocessRunner(activation_authorized=True)
+            grant = load_execution_grant(args.execution_grant,
+                                         expected_sha256=args.execution_grant_sha256, manifest=manifest)
+            runner = BoundedSubprocessRunner(activation_authorized=True, execution_grant=grant)
         report = compare(manifest, runner=runner, fake_only=args.mode == "fake-only")
         report["activation_mode"] = args.mode
         report["sandbox_receipt_sha256"] = sandbox_sha256
+        report["operator_grant_sha256"] = runner.execution_grant.approved_bytes_sha256 if runner is not None else None
         # Exclusive creation before writing; never overwrite a prior run. No raw
         # plan, output or private address map is copied into these records.
         output.mkdir(parents=True, exist_ok=False)
