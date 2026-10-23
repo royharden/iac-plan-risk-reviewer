@@ -1,0 +1,58 @@
+# Private deterministic report provenance
+
+Source construction only: no report, viewer invocation or test was executed for
+this package. The descriptor binds local bytes and config; it does not authenticate
+the producer or prove benchmark execution, source correctness or deployed state.
+
+RunManifest now has an explicit stage, evaluation by default. Evaluation retains
+its required authority/semantic-suite/eligibility pins and custody preflight.
+The new deterministic stage is D-only, one local development case/invocation,
+source/parser/rule/config components only, and no model/scanner/prompt/corpus,
+attempt/usage, custody or benchmark eligibility claims. Its unavailable evaluation
+pins are null, not fabricated hashes. Benchmark preflight rejects this stage
+before opening metadata. Old evaluation constructors remain valid; canonical
+model hashes change with the new stage/default edition and require deliberate
+external re-pinning rather than reusing old digest approval.
+
+The local descriptor in iac_review.provenance uses the actual typed RunManifest.
+It hashes an explicit nine-file installed core source subset, the actual parser
+and rule modules and threshold config. That source identity describes the named
+installed files, not a Git commit, full repository or authenticated executable.
+No Git/subprocess/cloud/provider path is used. Missing installed source files or
+deadline exhaustion fail rather than fabricating a build pin. The private raw
+plan digest and local case ID bind the descriptor to the exact private report.
+
+The graph is acyclic:
+
+1. Private run-manifest.json describes source/config/input and contains no
+   artifact references or report digest.
+2. private.json holds that typed descriptor and its exact serialized digest.
+   Shareable/provider projections receive neither descriptor nor raw-plan/source
+   identity or private mapping. Existing opaque run/finding IDs and safe facts
+   remain unchanged.
+3. Private export manifest.json v1.1.0 hashes the four report files plus the
+   descriptor. It does not contain its own digest.
+4. manifest.sha256 hashes those exact export-manifest bytes. The closed COMPLETE
+   bundle inventory is eight files, including export-state.json. No source plan
+   or private map is copied into it.
+
+The viewer checks that exact inventory, typed stage, descriptor/private-report
+digest and run/case/config/raw-source bindings. Legacy v1.0.0 seven-file bundles
+remain readable as explicitly unbound archives; they are not promoted to bound
+provenance. Existing verify-report/evidence signatures and the four-report-file
+artifacts_verified count remain stable. New results identify run_manifest_bound
+and the private descriptor digest. These local verification results are sensitive;
+do not copy them into provider/shareable projections.
+
+Risk/evidence/exit logic and the cooperative deadline are unchanged. Descriptor
+work occurs within that budget, and export retains the ABORTED marker until every
+artifact is staged/published and the final COMPLETE state replaces it. No deadline
+rejection follows that final publication. Rollback removes only invocation-owned
+files; failed cleanup retains ABORTED. The reader rechecks the entire exact bundle
+before returning and never opens a report-supplied input path.
+
+Authorship, semantic execution, bytecode/source correspondence, filesystem race
+isolation and independent finished-product acceptance remain external matters.
+The new focused regression sources cover stage forgery, binding/digest mismatch,
+privacy separation, acyclicity, deadline rollback and viewer inventory/state.
+They have not run; dependency/runtime validation is deferred until authorized.

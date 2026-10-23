@@ -21,9 +21,11 @@ from iac_review.contracts import PARSER_VERSION, POLICY_VERSION, ValueState
 from iac_review.evidence import make_ref, resolve, verify_unchanged
 from iac_review.ingest import InputError, MAX_BYTES, MAX_RESOURCES, MAX_SECONDS
 from iac_review.ingest import decode_source, load_plan, read_source_bytes
+from iac_review.provenance import CORE_ARTIFACTS, DESCRIPTOR_FILE, verify_descriptor
 
 _ARTIFACTS = frozenset({"private.json", "private.html", "shareable.json", "shareable.html"})
 _FILES = _ARTIFACTS | {"manifest.json", "manifest.sha256", "export-state.json"}
+_BOUND_FILES = CORE_ARTIFACTS | {"manifest.json", "manifest.sha256", "export-state.json"}
 _HASH = re.compile(r"[0-9a-f]{64}")
 _ID = re.compile(r"[0-9a-f]{32}")
 _ACTIONS = {"no-op", "create", "read", "update", "delete"}
@@ -52,7 +54,7 @@ def _check(deadline: float) -> None:
     _require(monotonic() <= deadline, "evidence_view_time_limit")
 
 
-def _directory(path: Path) -> Path:
+def _directory(path: Path, expected: frozenset[str] | None = None) -> Path:
     path = Path(path).absolute()
     _require(not any(p.is_symlink() or (hasattr(p, "is_junction") and p.is_junction())
                      for p in (path, *path.parents)), "bundle_link_rejected")
@@ -61,8 +63,9 @@ def _directory(path: Path) -> Path:
     names = set()
     for item in path.iterdir():
         names.add(item.name)
-        _require(len(names) <= len(_FILES), "bundle_layout_invalid")
-    _require(names == _FILES, "bundle_layout_invalid")
+        _require(len(names) <= len(_BOUND_FILES), "bundle_layout_invalid")
+    _require(names in (_FILES, _BOUND_FILES) if expected is None else names == expected,
+             "bundle_layout_invalid")
     return path
 
 
@@ -86,6 +89,7 @@ class _Bundle:
     file_hashes: tuple[tuple[str, str], ...]
     private: dict[str, Any] = field(repr=False)
     shareable: dict[str, Any] = field(repr=False)
+    provenance_sha256: str | None = None
 
 
 def _load_bundle(path: Path, deadline: float) -> _Bundle:
@@ -106,7 +110,7 @@ def _load_bundle(path: Path, deadline: float) -> _Bundle:
     _require(set(manifest) == {"schema_version", "run_id", "created_at", "plan_sha256",
                               "parser_version", "policy_version", "artifacts", "privacy"},
              "bundle_manifest_schema_invalid")
-    _require(manifest["schema_version"] == "1.0.0"
+    _require(manifest["schema_version"] in {"1.0.0", "1.1.0"}
              and manifest["parser_version"] == PARSER_VERSION
              and manifest["policy_version"] == POLICY_VERSION, "bundle_version_unsupported")
     _require(type(manifest["run_id"]) is str and _ID.fullmatch(manifest["run_id"]) is not None
@@ -119,20 +123,26 @@ def _load_bundle(path: Path, deadline: float) -> _Bundle:
     except (ValueError, TypeError):
         raise InputError("bundle_timestamp_invalid") from None
     catalog = manifest["artifacts"]
-    _require(type(catalog) is dict and set(catalog) == _ARTIFACTS,
+    bound = manifest["schema_version"] == "1.1.0"
+    artifacts = CORE_ARTIFACTS if bound else _ARTIFACTS
+    _directory(path, _BOUND_FILES if bound else _FILES)
+    _require(type(catalog) is dict and set(catalog) == artifacts,
              "bundle_artifact_catalog_invalid")
     hashes = {"export-state.json": sha256(state_bytes).hexdigest(),
               "manifest.json": sha256(manifest_bytes).hexdigest(),
               "manifest.sha256": sha256(receipt).hexdigest()}
     reports = {}
-    for name in sorted(_ARTIFACTS):
+    descriptor_raw = None
+    for name in sorted(artifacts):
         _require(type(catalog[name]) is str and _HASH.fullmatch(catalog[name]) is not None,
                  "bundle_artifact_hash_invalid")
-        data = _read(path / name, deadline)
+        data = _read(path / name, deadline, 65_536 if name == DESCRIPTOR_FILE else MAX_BYTES)
         hashes[name] = sha256(data).hexdigest()
         _require(hashes[name] == catalog[name], "bundle_artifact_hash_mismatch")
         if name.endswith(".json"):
             reports[name] = _json(data, deadline)
+        if name == DESCRIPTOR_FILE:
+            descriptor_raw = data
     private, shared = reports["private.json"], reports["shareable.json"]
     _require(private.get("projection") == "private" and private.get("sensitive") is True
              and shared.get("projection") == "shareable" and shared.get("sensitive") is False,
@@ -159,12 +169,21 @@ def _load_bundle(path: Path, deadline: float) -> _Bundle:
              "bundle_case_identity_mismatch")
     _require([r["finding_id"] for r in private["evaluations"]]
              == [r["finding_id"] for r in shared["evaluations"]], "bundle_projection_join_mismatch")
+    provenance_hash = None
+    if bound:
+        try:
+            verify_descriptor(private, shared, descriptor_raw, manifest["plan_sha256"], manifest["run_id"])
+        except (ValueError, TypeError, KeyError):
+            raise InputError("bundle_run_manifest_binding_invalid") from None
+        provenance_hash = hashes[DESCRIPTOR_FILE]
+    else:
+        _require("provenance" not in private, "bundle_provenance_descriptor_missing")
     return _Bundle(path, manifest["run_id"], manifest["plan_sha256"],
-                   tuple(sorted(hashes.items())), private, shared)
+                   tuple(sorted(hashes.items())), private, shared, provenance_hash)
 
 
 def _recheck(bundle: _Bundle, deadline: float) -> None:
-    _directory(bundle.path)
+    _directory(bundle.path, frozenset(name for name, _ in bundle.file_hashes))
     for name, expected in bundle.file_hashes:
         _require(sha256(_read(bundle.path / name, deadline)).hexdigest() == expected,
                  "bundle_changed_during_view")
@@ -194,6 +213,8 @@ def verify_report(bundle_path: Path, original_plan: Path | None = None,
     return {"status": "complete_bundle_integrity_verified", "run_id": bundle.run_id,
             "plan_sha256": bundle.plan_sha256, "artifacts_verified": len(_ARTIFACTS),
             "source_digest_verified": original_plan is not None,
+            "run_manifest_bound": bundle.provenance_sha256 is not None,
+            "run_manifest_sha256": bundle.provenance_sha256,
             "raw_source_access_enabled": False, "producer_authenticated": False,
             "product_acceptance": False}
 

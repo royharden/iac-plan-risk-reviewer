@@ -24,6 +24,10 @@ from iac_review.contracts import (
 )
 from iac_review.evidence import resolve, verify_unchanged
 from iac_review.ingest import InputError, MAX_SECONDS
+from iac_review.provenance import (
+    DESCRIPTOR_FILE, ReportProvenance, descriptor_bytes, local_descriptor,
+    private_binding, verify_descriptor,
+)
 
 REPORT_VERSION = "1.0.0"
 _ACTIONS = {"no-op", "create", "read", "update", "delete"}
@@ -299,6 +303,13 @@ def build_report(
         "privacy_notice": "Opaque identities and safe facts only. Not source-resolvable without the separate private mapping.",
         "evaluations": shared_rows,
     }
+
+    def provenance_budget() -> None:
+        if monotonic() - started > MAX_SECONDS:
+            raise InputError("review_time_limit")
+
+    descriptor = local_descriptor(plan, run_id, case_id, fail_on, provenance_budget)
+    private["provenance"] = private_binding(descriptor)
     verify_unchanged(plan)
     return ReviewReport(private=private, shareable=shareable, exit_code=exit_code)
 
@@ -381,6 +392,14 @@ def write_report(report: ReviewReport, out: Path, *, deadline: float | None = No
     try:
         check_deadline()
         pending.mkdir()
+        binding = report.private.get("provenance")
+        if type(binding) is not dict or type(binding.get("descriptor")) is not dict:
+            raise ValueError("typed private report provenance required")
+        descriptor = ReportProvenance.model_validate_json(json.dumps(binding["descriptor"]))
+        provenance_bytes = descriptor_bytes(descriptor)
+        verify_descriptor(report.private, report.shareable, provenance_bytes,
+                          report.private["plan"]["sha256"], report.private["run_id"])
+        check_deadline()
         payloads: dict[str, bytes] = {}
         for name, projection, render in (
             ("private.json", report.private, _json_bytes),
@@ -391,8 +410,9 @@ def write_report(report: ReviewReport, out: Path, *, deadline: float | None = No
             check_deadline()
             payloads[name] = render(projection)
             check_deadline()
+        payloads[DESCRIPTOR_FILE] = provenance_bytes
         private_manifest = {
-            "schema_version": REPORT_VERSION, "run_id": report.private["run_id"],
+            "schema_version": "1.1.0", "run_id": report.private["run_id"],
             "created_at": datetime.now(timezone.utc).isoformat(),
             "plan_sha256": report.private["plan"]["sha256"],
             "parser_version": PARSER_VERSION, "policy_version": POLICY_VERSION,
