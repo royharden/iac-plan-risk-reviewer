@@ -1,0 +1,58 @@
+{
+  "schema_version": "m4-custom-policy-candidate-v1",
+  "arm": "C-custom",
+  "scanner_name": "checkov",
+  "compatibility": "unverified",
+  "tested_scanner_version": null,
+  "executable_sha256": null,
+  "policy_bundle_sha256": null,
+  "input_kind": "terraform-plan-json",
+  "source_enrichment": false,
+  "target": "introduced_risk",
+  "raw_plan_bridge": "same plan path and SHA256 from adapter-only environment, no HCL",
+  "rules": [
+    {
+      "rule_id": "R1",
+      "check_ids": ["CKV_M4_R1"],
+      "types": ["aws_security_group_rule"],
+      "candidate_actions": [["create"], ["update"], ["no-op"], ["delete", "create"], ["create", "delete"]],
+      "predicate": "new set member in world-open (IPv4|IPv6,22|3389); tcp/6 and all-protocol -1",
+      "negative": "no new exposure, including unchanged risk; not general security",
+      "incomplete": ["masked/unknown/invalid required facts", "prefix-list/security-group/self exposure sources", "callback absent", "inline or newer ingress shapes"]
+    },
+    {
+      "rule_id": "R2",
+      "check_ids": ["CKV_M4_R2"],
+      "types": ["aws_db_instance"],
+      "candidate_actions": [["create"], ["update"], ["no-op"], ["delete", "create"], ["create", "delete"]],
+      "predicate": "create true or known false-to-true publicly_accessible",
+      "negative": "known false after or true-to-true unchanged risk",
+      "incomplete": ["unknown prior plus true after", "masked/unknown/invalid required facts", "callback absent"]
+    },
+    {
+      "rule_id": "R3",
+      "check_ids": ["CKV_M4_R3"],
+      "types": ["aws_db_instance", "aws_ebs_volume"],
+      "candidate_actions": [["create"], ["update"], ["no-op"], ["delete", "create"], ["create", "delete"]],
+      "predicate": "known true-to-false storage_encrypted/encrypted on update or either replacement order",
+      "negative": "create and fully known other transitions; removal only",
+      "incomplete": ["masked/unknown/invalid necessary prior or after", "callback absent"]
+    },
+    {
+      "rule_id": "R4",
+      "check_ids": ["CKV_M4_R4"],
+      "types": ["aws_db_instance", "aws_ebs_volume"],
+      "candidate_actions": [["create"], ["update"], ["no-op"], ["delete", "create"], ["create", "delete"]],
+      "predicate": "ordered destructive intent with verified non-null before; no tag suppression",
+      "negative": "create/update/no-op on supported types",
+      "incomplete": ["delete-only callback not emitted by inspected Checkov parser", "absent/invalid prior for destructive action", "callback absent", "other stateful types"]
+    }
+  ],
+  "unrepresentable_cells": [
+    "delete-only resources absent from planned_values callbacks",
+    "duplicate/deposed address identity collapsed by upstream scanner",
+    "exact unchanged-risk versus clear labels in binary PASS output",
+    "exact reason/evidence facts from binary check results"
+  ],
+  "promotion": "A separately verified development compatibility receipt and actual version/binary/dependency/policy pins are required. This candidate is not artifacts.Mapping evidence."
+}
