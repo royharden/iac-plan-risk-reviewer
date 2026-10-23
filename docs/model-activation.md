@@ -84,10 +84,10 @@ rows, while every receipt is retained even without a matching prediction. Aggreg
 known portions and unresolved upper bounds are separate. Unknown total cost and
 cost per live success remain null, rather than a fabricated zero.
 
-Shared seam: `ArmRow` lacks a live/mock discriminator and `score()` excludes
-`not_run` rows from cost aggregation. Therefore **use `accounting_json` for every
-attempt**, not the existing scorer's model cost totals. INT owns any future scorer
-admission/CLI integration. D6 can consume the immutable attempts/provenance/accounting
+Shared seam: this bridge conservatively uses `not_run` for every L/P/M plumbing
+row independently of evolving scorer eligibility defaults. **Use `accounting_json`
+for every attempt**, not model cost totals from rows excluded from scoring. INT/D6
+own scorer admission and its v2 schema reconciliation. D6 can consume immutable attempts/provenance/accounting
 and normalized observations without inference payloads; independent P assessment
 requires the separately controlled transient claims, not these summaries.
 
@@ -98,3 +98,49 @@ transport deadlines, audited caps/prices and approved spend. Live eligibility ne
 an explicit new adapter/admission path; flipping a field on a mock cannot qualify it.
 Only then execute the required D/L/P/M measurements with exact provenance. No
 mock result closes those obligations or product/runtime acceptance.
+
+## Synthetic driver continuation (source only)
+
+`scripts/eval_model.py` now delegates to `eval.model.driver.main`. It resolves
+development imports relative to the script and keeps the caller's cwd. It accepts
+no `--manifest`, hidden corpus, gold, split, scanner record, provider configuration,
+key or arbitrary transport loader. The input is a user-attested synthetic plan;
+synthetic origin cannot be inferred reliably from JSON and remains the user's
+responsibility. The CLI requires `--fake`, a fresh output directory with an existing
+parent, and explicit request/input/output/USD caps. There is no live mode.
+
+For later authorized activation, an example interface is:
+
+```text
+python scripts/eval_model.py --synthetic-plan fixtures/demo/public-ssh.json --fake --out model-plumbing-run --max-requests 20 --max-input-tokens 2000000 --max-output-tokens 200000 --max-usd 0
+```
+
+This is an interface example, **not a command run during construction**; choose an
+actual synthetic file. Per-request token bounds, byte caps, timeout and
+`--fake-scenario valid|invalid|timeout|error|unknown-usage` are configurable. A
+reported timeout requires reconciliation even with the fake's known zero cost.
+Invalid/error responses retain all available accounting. Unknown usage halts later
+starts through the journal. The driver never retries or reconciles automatically.
+
+The driver computes D with the actual parser/rules/evidence/report source, joins
+public resource IDs to parser keys by checked evaluation order (never addresses),
+and constructs the safe baseline/projections for the executor. It fingerprints
+relevant source bytes and config; its single-case corpus hash asserts no independent
+oracle or sealed edition. It rechecks plan/source pins before exporting. Runtime setup,
+producer compatibility and all these joins remain unverified under Dirty Mode.
+
+Only the fresh output directory receives `attempts.jsonl` and `plumbing.json`.
+The latter contains safe D summary/rows, mock model rows, metadata-only observations,
+all-attempt receipts/costs and cumulative journal state, without source paths, raw
+addresses, pointers, P text or plan bytes. Existing files/directories and symlink/
+junction paths are rejected. A failed run preserves its journal for inspection;
+it does not remove, reuse or automatically repair that directory. Errors emit fixed
+codes rather than exception/request text. A completed plumbing invocation returns
+exit **2** because L/P/M measurement remains incomplete; invalid invocation/source
+returns **3**. D's own risk/coverage exit is retained in the deterministic summary,
+and is never promoted into an L/P/M measurement result.
+
+Focused regression **source** in `tests/eval/test_model_driver.py` covers canary
+boundaries/M isolation, D invariance, always-ineligible bridges, input byte caps,
+failed charges/usage, known-accounting timeout and unknown liabilities, explicit
+fake mode and fresh output preservation. These tests were authored but **not run**.
