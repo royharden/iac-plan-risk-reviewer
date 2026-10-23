@@ -27,6 +27,14 @@ def _parser() -> argparse.ArgumentParser:
     explain.add_argument("shareable", type=Path, help="Shareable JSON report, never a private report or raw plan")
     explain.add_argument("--finding", required=True, help="Opaque finding ID in that report")
     explain.add_argument("--selection", type=Path, required=True, help="Offline finite-template selector JSON")
+    verify = subcommands.add_parser("verify-report", help="Verify a finalized local report bundle and artifact hashes")
+    verify.add_argument("bundle", type=Path, help="Complete local bundle directory, including private artifacts")
+    verify.add_argument("--plan", type=Path, help="Optional explicitly supplied original plan to verify its digest")
+    evidence = subcommands.add_parser("evidence", help="Read one pinned mask-safe fact; exact locations are private")
+    evidence.add_argument("bundle", type=Path, help="Complete local private bundle; shareable-only input cannot resolve")
+    evidence.add_argument("--plan", type=Path, required=True, help="Explicit original local plan with exact pinned digest")
+    evidence.add_argument("--finding", required=True, help="Opaque finding ID from the private report")
+    evidence.add_argument("--fact", required=True, help="Opaque fact ID within that finding")
     return parser
 
 
@@ -44,6 +52,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if exc.code == 0 else 3
     started = time.monotonic()
     try:
+        if arguments.command in ("verify-report", "evidence"):
+            import json
+            from iac_review.source_view import verify_report, view_evidence
+
+            if arguments.command == "verify-report":
+                result = verify_report(arguments.bundle, arguments.plan, deadline=started + MAX_SECONDS)
+            else:
+                result = view_evidence(arguments.bundle, arguments.plan, arguments.finding,
+                                       arguments.fact, deadline=started + MAX_SECONDS)
+            _within_budget(started)
+            sys.stdout.write(json.dumps(result, ensure_ascii=True, allow_nan=False) + "\n")
+            return 0
         if arguments.command == "explain":
             from iac_review.explain import build_capsule, validate_selection
 
