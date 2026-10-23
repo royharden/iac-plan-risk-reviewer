@@ -6,7 +6,7 @@ No live adapter, subprocess, tool API, retry or automatic journal reconciliation
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 import hashlib
 import json
@@ -101,6 +101,13 @@ class Observation:
     # Untrusted experimental prose is transient assessor input, never product text/export.
     claims: tuple[str, ...] = field(default=(), repr=False)
     predictions: tuple[Prediction, ...] = ()
+    fact_ids: tuple[str, ...] = ()
+    required_limitation_ids: tuple[str, ...] = ()
+    baseline_words: int | None = None
+    rendered_words: int | None = None
+    # Only explicitly requested P capture retains bounded raw response bytes.
+    private_response: bytes | None = field(default=None, repr=False)
+    private_response_complete: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -155,7 +162,7 @@ def run_experiments(
     *, plan: PlanDocument, shareable: dict[str, Any], baseline: tuple[ArmRow, ...],
     links: tuple[FindingLink, ...], resource_links: tuple[ResourceLink, ...],
     context: Context, transport: Transport,
-    journal: AttemptJournal, limits: Limits = Limits(),
+    journal: AttemptJournal, limits: Limits = Limits(), capture_private_prose: bool = False,
 ) -> Result:
     """One L/P call per linked finding, one isolated M call; D is supplied, never rerun.
 
@@ -163,6 +170,8 @@ def run_experiments(
     executed it. Gold/split/scanner records are intentionally absent from this API.
     Journal must have separate exclusive ownership and separately chosen mock budget.
     """
+    if type(capture_private_prose) is not bool:
+        raise ValueError("private_capture_requires_explicit_boolean")
     for value in (context.build_sha256, context.source_sha256,
                   context.corpus_sha256, context.config_sha256):
         if not re.fullmatch(r"[0-9a-f]{64}", value):
@@ -262,6 +271,8 @@ def run_experiments(
         start = perf_counter()
         usage = Usage()
         response_hash = None
+        private_response = None
+        private_response_complete = None
         selected = None
         claims: tuple[str, ...] = ()
         predictions: tuple[Prediction, ...] = ()
@@ -271,6 +282,10 @@ def run_experiments(
             reply = transport.complete(request)
             if not isinstance(reply, Reply):
                 raise ValueError("invalid transport envelope")
+            if arm == "P" and capture_private_prose and type(reply.payload) is bytes:
+                capture_bound = min(limits.max_output_bytes, 65_536)
+                private_response = reply.payload[:capture_bound]
+                private_response_complete = len(reply.payload) <= capture_bound
             usage = _usage(reply.usage)
             if reply.status not in ("ok", "invalid", "timeout", "error", "cancelled"):
                 raise ValueError("invalid transport status")
@@ -322,7 +337,9 @@ def run_experiments(
                           digest(canonical([usage.input_tokens, usage.output_tokens,
                                             None if usage.known_usd is None else str(usage.known_usd)])),
                           not billing_known)
-        return Observation(arm, finding_id, status, reason, receipt, selected, claims, predictions)
+        return Observation(arm, finding_id, status, reason, receipt, selected, claims, predictions,
+                           private_response=private_response,
+                           private_response_complete=private_response_complete)
 
     for link, capsule in capsules:
         payload = capsule.model_dump_json()
@@ -338,8 +355,20 @@ def run_experiments(
                 raise ValueError("empty or invalid claim")
             return None, tuple(value["claims"]), ()
 
-        observations.append(invoke("L", payload, link.finding_id, validate_l))
-        observations.append(invoke("P", payload, link.finding_id, validate_p))
+        l_result = invoke("L", payload, link.finding_id, validate_l)
+        finite = l_result.selection
+        if finite is None and l_result.attempt is not None:
+            # Actually obtain the finite D fallback; do not invent a rendered count.
+            finite = validate_selection(capsule, {})
+        observations.append(replace(
+            l_result, selection=finite, fact_ids=tuple(f.fact_id for f in capsule.facts),
+            required_limitation_ids=capsule.required_limitation_ids,
+            baseline_words=len(re.findall(r"\S+", capsule.baseline)),
+            rendered_words=len(re.findall(r"\S+", finite.text)) if finite is not None else None))
+        p_result = invoke("P", payload, link.finding_id, validate_p)
+        observations.append(replace(
+            p_result, fact_ids=tuple(f.fact_id for f in capsule.facts),
+            required_limitation_ids=capsule.required_limitation_ids))
 
     def validate_m(value: dict[str, Any]) -> tuple:
         if set(value) != {"predictions"} or type(value["predictions"]) is not list:

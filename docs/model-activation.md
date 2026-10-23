@@ -144,3 +144,37 @@ Focused regression **source** in `tests/eval/test_model_driver.py` covers canary
 boundaries/M isolation, D invariance, always-ineligible bridges, input byte caps,
 failed charges/usage, known-accounting timeout and unknown liabilities, explicit
 fake mode and fresh output preservation. These tests were authored but **not run**.
+
+## Opt-in separate PRIVATE assessment capture
+
+Private P response capture is disabled by default. The later-activation interface
+adds `--capture-private-prose PRIVATE_DIR` and one or more explicitly declared
+`--generator-actor-id` values (32 lowercase hex characters). The private directory
+must be fresh, have an existing parent, and be separate from the ordinary run
+directory in both directions; nested/shared sinks are refused before any calls.
+The driver still accepts only synthetic input and fake/protocol plumbing, never
+live provider keys, tools or model admission.
+
+With opt-in, exact P text fitting D7's declared ExplanationArtifact wire is stored
+privately, including invalid/failed/withheld text and its full response envelope.
+Unrepresentable controls/encoding/size remain bounded base64 diagnostics, with
+explicit missing/truncated/unassessable state. No output is silently relabeled as
+supported or discarded from an assessment denominator. There is no automatic claim
+extraction, rubric, labeling or human-authentication claim. See
+[EXPERIMENT-ARTIFACTS.md](EXPERIMENT-ARTIFACTS.md) for bounds and failure states.
+
+The private `artifact-index.json` binds every P outcome, opaque artifact/diagnostic
+files, wire/file digests, D baseline and capture origin; `capture-state.json` becomes
+WRITTEN only after the index/files are flushed. It is not a semantic completion
+marker. Ordinary `plumbing.json` receives only the private index hash/count receipt,
+never private text, diagnostics, sink paths or maps. All outputs remain live-ineligible;
+L finite word/limitation receipts stay payload-free and cannot replace independent
+utility/rubric requirements. The journal remains authoritative if capture fails.
+
+For later manual assessment, pass a selected private `artifact-<opaque-id>.json`
+file explicitly to D7's `scripts/annotate_prose.py`. The curator supplies exact
+spans, then two distinct nonauthoring assessors supply labels; neither the driver
+nor index prepares truth labels. Missing bytes, invalid-wire diagnostics, blank
+annotations, missing receipts or external provenance keep assessment incomplete.
+Capture buffering before final private writing is not crash-durable prose storage.
+No artifact generation, annotation or regression execution happened in Dirty Mode.

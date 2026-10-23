@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 from iac_review.attempts import AttemptJournal, Budget, PriceIdentity
@@ -34,6 +35,8 @@ class DriverConfig:
     max_usd: Decimal
     limits: Limits = Limits()
     fake_scenario: str = "valid"
+    capture_private_prose: Path | None = None
+    generator_actor_ids: tuple[str, ...] = ()
 
 
 def _plain_path(path: Path) -> Path:
@@ -89,6 +92,21 @@ def run_driver(config: DriverConfig, *, transport: Transport | None = None) -> P
     if selected_transport.identity.kind not in ("mock", "protocol"):
         raise ValueError("live_transport_disabled")
     source, out = _plain_path(config.synthetic_plan), _plain_path(config.out)
+    capture_out = None
+    if config.capture_private_prose is not None:
+        capture_out = _plain_path(config.capture_private_prose)
+        if capture_out == out or out in capture_out.parents or capture_out in out.parents:
+            raise ValueError("separate_private_capture_sink_required")
+        if capture_out.exists() or not capture_out.parent.is_dir():
+            raise ValueError("fresh_private_capture_directory_required")
+        actors = config.generator_actor_ids
+        if not 1 <= len(actors) <= 16 or len(set(actors)) != len(actors) \
+                or any(not re.fullmatch(r"[0-9a-f]{32}", actor) for actor in actors):
+            raise ValueError("capture_generator_ids_invalid")
+        if config.max_requests > 10_000:
+            raise ValueError("capture_request_limit")
+    elif config.generator_actor_ids:
+        raise ValueError("generator_ids_require_private_capture")
     if out.exists() or not out.parent.is_dir():
         raise ValueError("fresh_output_directory_with_existing_parent_required")
     build = _build_sha256()
@@ -102,6 +120,8 @@ def run_driver(config: DriverConfig, *, transport: Transport | None = None) -> P
             "mode": "fake-only", "scenario": config.fake_scenario,
             "max_requests": config.max_requests, "max_input_tokens": config.max_input_tokens,
             "max_output_tokens": config.max_output_tokens, "max_usd": str(config.max_usd),
+            "capture_private_prose": capture_out is not None,
+            "generator_actor_ids": list(config.generator_actor_ids),
         })),
     )
     baseline = []
@@ -149,11 +169,19 @@ def run_driver(config: DriverConfig, *, transport: Transport | None = None) -> P
             plan=plan, shareable=report.shareable, baseline=tuple(baseline), links=tuple(links),
             resource_links=tuple(ResourceLink(public, local) for local, public in resource_ids.items()),
             context=context, transport=selected_transport, journal=journal, limits=config.limits,
+            capture_private_prose=capture_out is not None,
         )
         verify_unchanged(plan)
         if _build_sha256() != build:
             raise ValueError("experiment_source_changed")
         bundle = export_bundle(result)
+        capture_receipt = None
+        if capture_out is not None:
+            from eval.model.assessment_capture import build_capture, write_private_capture
+
+            private_capture = build_capture(result, generator_actor_ids=config.generator_actor_ids,
+                origin="mock" if identity.kind == "mock" else "unverified")
+            capture_receipt = write_private_capture(private_capture, capture_out)
         artifact = {
             "schema": 1, "mode": "synthetic_fake_or_protocol_plumbing",
             "live_eligible": False, "product_acceptance": False,
@@ -166,6 +194,8 @@ def run_driver(config: DriverConfig, *, transport: Transport | None = None) -> P
             "provenance": json.loads(bundle.provenance_json),
             "observations": json.loads(bundle.observations_json),
             "journal_summary": json.loads(result.journal_summary_json),
+            # Hash/counts only: no private sink path or generated text in this artifact.
+            "private_capture": capture_receipt,
         }
         destination = out / "plumbing.json"
         with destination.open("x", encoding="utf-8", newline="\n") as stream:
@@ -199,6 +229,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout-seconds", type=float, default=30.0)
     parser.add_argument("--fake-scenario", choices=("valid", "invalid", "timeout", "error", "unknown-usage"),
                         default="valid")
+    parser.add_argument("--capture-private-prose", type=Path,
+                        help="Explicit separate fresh PRIVATE P artifact directory; disabled by default")
+    parser.add_argument("--generator-actor-id", action="append",
+                        help="Declared opaque generator actor ID; required only with private capture")
     args = parser.parse_args(argv)
     try:
         config = DriverConfig(
@@ -208,6 +242,8 @@ def main(argv: list[str] | None = None) -> int:
             limits=Limits(args.request_input_tokens, args.request_output_tokens,
                           args.max_input_bytes, args.max_output_bytes,
                           args.timeout_seconds, args.max_requests), fake_scenario=args.fake_scenario,
+            capture_private_prose=args.capture_private_prose,
+            generator_actor_ids=tuple(args.generator_actor_id or ()),
         )
         run_driver(config)
     except (ValueError, OSError, InvalidOperation, ArithmeticError):

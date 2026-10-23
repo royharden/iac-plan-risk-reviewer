@@ -42,8 +42,8 @@ def _attempt(row: Attempt) -> dict:
 def export_bundle(result: Result) -> ExportBundle:
     """Bind local model records to scorer identities without exposing payloads.
 
-    ArmRow has no mock/live eligibility flag. Therefore every L/P/M row from this
-    executor is not_run, even when its plumbing status is ok. D rows retain the
+    Every L/P/M row is conservatively not_run even when its plumbing status is ok,
+    independently of scorer eligibility defaults. D rows retain the
     supplied decision exactly; D is a baseline input, not executed by this harness.
     All attempts/failed spending are retained separately, including zero-row calls.
     Existing score() excludes not_run rows from costs: use accounting_json, never
@@ -88,16 +88,30 @@ def export_bundle(result: Result) -> ExportBundle:
         "live_successes": 0, "cost_per_live_success_usd": None,
         "live_eligible": False,
     })
+    finding_links = {link.finding_id: link for link in result.links}
+    baseline_rows = {(r.case_id, r.resource_id, r.rule_id): r for r in result.baseline}
     summaries = []
     for obs in result.observations:
+        link = finding_links.get(obs.finding_id)
+        base = baseline_rows.get((link.case_id, link.resource_id, link.rule_id)) if link else None
         summaries.append({
             "arm": obs.arm, "finding_id": obs.finding_id, "status": obs.status,
+            "case_id": link.case_id if link else None,
+            "resource_id": link.resource_id if link else None,
+            "rule_id": link.rule_id if link else None,
+            "D_row_sha256": digest(canonical(base.model_dump(mode="json"))) if base else None,
+            "fact_ids": list(obs.fact_ids),
             "reason": obs.reason, "attempt_id": obs.attempt.attempt_id if obs.attempt else None,
             "claim_count": len(obs.claims), "prediction_count": len(obs.predictions),
             "claims_withheld_from_product": obs.arm == "P",
             "selection_accepted": obs.selection.accepted if obs.selection is not None else False,
             "selected_fact_ids": list(obs.selection.selected_fact_ids) if obs.selection else [],
             "limitation_ids": list(obs.selection.limitation_ids) if obs.selection else [],
+            "required_limitation_ids": list(obs.required_limitation_ids),
+            "baseline_words": obs.baseline_words, "rendered_words": obs.rendered_words,
+            "word_count_definition": "Unicode non-whitespace runs" if obs.arm == "L" else None,
+            "render_source": obs.selection.source if obs.selection is not None else None,
+            "word_counts_available": obs.baseline_words is not None and obs.rendered_words is not None,
             "live_eligible": False, "product_prose_enabled": False,
         })
     observations_json = canonical(summaries)
