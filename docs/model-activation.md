@@ -2,8 +2,8 @@
 
 This is Dirty Mode source construction, **runtime unverified**. No model experiment,
 provider request, dependency setup, app import or test was run for this package.
-L/P/M remain **NOT MEASURED**. The existing CLI entrypoint remains INT-owned and
-unchanged; these functions do not silently enable it.
+L/P/M remain **NOT MEASURED**. The CLI remains mandatory fake; source-only
+programmatic provider integration does not authorize execution or activate it.
 
 `eval.model.experiment.run_experiments` accepts a pinned `PlanDocument`, shareable
 projection, immutable D `ArmRow` baseline, local `FindingLink`/`ResourceLink` joins, SHA256-only
@@ -44,10 +44,34 @@ mock budget rather than pretending a provider price was measured.
 
 The only other transport kind is `protocol`, also live-ineligible. Trusted injected
 code is a caller responsibility; it must honor request limits and must have no
-tools. There is no HTTP/SDK/provider implementation, environment lookup, retry or
-network/process launch in these modules. `IAC_REVIEW_PROVIDER`, `IAC_REVIEW_MODEL`
+tools. These executor/fake modules import no HTTP/provider client. Separate disabled
+provider_http/provider_activation source is described in PROVIDER-ACTIVATION.md;
+only its explicitly admitted call path contains deferred environment/network
+operations. No such operations have run. `IAC_REVIEW_PROVIDER`, `IAC_REVIEW_MODEL`
 and `IAC_REVIEW_API_KEY` are names only, never read. Arbitrary Python injection is
 not a sandbox. Do not inject a live callable under this construction grant.
+
+Compatible driver extension: `run_driver(config, *, transport=None, journal=None,
+provider_mode=False)`. Defaults retain the fake CLI and fresh per-run mock journal.
+An external journal is used without replacement/closure and must match the explicit
+total budget and transport price identity. Programmatic provider mode additionally
+requires config.fake=False and an enabled, externally controlled journal-bound
+transport; it uses the external journal's pinned price, never mock-zero prices.
+The CLI supplies none of those arguments. All resulting model rows stay
+not_run/live-ineligible, including future provider responses until external
+measurement admission. Shared cumulative journal summaries are separate from
+per-invocation attempts/costs; consumers must not sum cumulative summaries per case.
+
+`run_experiments` keeps its public signature. After its one durable start it calls
+optional `complete_started(request, *, journal, attempt_id, deadline_monotonic)`;
+ordinary transports continue through complete(request). The monotonic deadline
+starts before journal reservation and is passed unchanged. ProviderReply extends
+Reply with payload_complete; False prevents ok parsing and marks opt-in private
+capture as prefix-only diagnostics, with no sanitized exact artifact. Errors,
+timeouts and partial/unknown billing keep the existing terminal/accounting flow.
+D hashes/outcomes, raw-source provenance, request/projection semantics and P/M's
+non-product role remain unchanged. All regression source and integration/runtime
+behavior are unverified.
 
 For every started call, journal `start` durably records the worst-case reservation
 before transport invocation, followed by `terminal` with shape/transport status,

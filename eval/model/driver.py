@@ -1,7 +1,8 @@
-"""Explicitly synthetic, fake-only experiment driver; never a live model evaluation."""
+"""Synthetic experiment driver; fake CLI, separately admitted programmatic transport."""
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -72,15 +73,21 @@ def _fake(scenario: str) -> FakeTransport:
     raise ValueError("unknown_fake_scenario")
 
 
-def run_driver(config: DriverConfig, *, transport: Transport | None = None) -> Path:
+def run_driver(config: DriverConfig, *, transport: Transport | None = None,
+               journal: AttemptJournal | None = None, provider_mode: bool = False) -> Path:
     """Future activation API: create one fresh local run directory and safe artifact.
 
-    The CLI cannot load injected code. Programmatic injection is trusted keyless
-    mock/protocol code only, never a means of authorizing an actual provider call.
+    The CLI cannot load injected code or enable provider_mode. Programmatic provider
+    use needs an explicitly enabled externally admitted transport, config.fake=False,
+    and an already exclusively owned journal with genuine pinned budget/price.
     The driver does not accept oracle labels, corpus splits or scanner records.
     """
-    if config.fake is not True:
+    if type(provider_mode) is not bool:
+        raise ValueError("provider_mode_requires_explicit_boolean")
+    if not provider_mode and config.fake is not True:
         raise ValueError("explicit_fake_mode_required")
+    if provider_mode and (config.fake is not False or transport is None or journal is None):
+        raise ValueError("explicit_provider_transport_and_shared_journal_required")
     counts = (config.max_requests, config.max_input_tokens, config.max_output_tokens)
     if any(type(value) is not int or value <= 0 for value in counts):
         raise ValueError("explicit_positive_caps_required")
@@ -89,6 +96,14 @@ def run_driver(config: DriverConfig, *, transport: Transport | None = None) -> P
     # Validate scenario even when a caller supplies a recording fake/protocol.
     default_transport = _fake(config.fake_scenario)
     selected_transport = transport if transport is not None else default_transport
+    network_capable = getattr(selected_transport, "network_capable", False)
+    if provider_mode:
+        if network_capable is not True or getattr(selected_transport, "enabled", False) is not True \
+                or not callable(getattr(selected_transport, "controller", None)) \
+                or not callable(getattr(selected_transport, "complete_started", None)):
+            raise ValueError("disabled_or_unadmitted_provider_transport")
+    elif network_capable:
+        raise ValueError("provider_transport_forbidden_in_fake_mode")
     if selected_transport.identity.kind not in ("mock", "protocol"):
         raise ValueError("live_transport_disabled")
     source, out = _plain_path(config.synthetic_plan), _plain_path(config.out)
@@ -109,6 +124,13 @@ def run_driver(config: DriverConfig, *, transport: Transport | None = None) -> P
         raise ValueError("generator_ids_require_private_capture")
     if out.exists() or not out.parent.is_dir():
         raise ValueError("fresh_output_directory_with_existing_parent_required")
+    budget = Budget(max_requests=config.max_requests, max_input_tokens=config.max_input_tokens,
+                    max_output_tokens=config.max_output_tokens, max_usd=config.max_usd)
+    if journal is not None:
+        if not isinstance(journal, AttemptJournal) or journal.budget != budget \
+                or (journal.price.provider, journal.price.model) != (
+                    selected_transport.identity.provider, selected_transport.identity.model):
+            raise ValueError("external_journal_budget_or_price_identity_mismatch")
     build = _build_sha256()
     plan = load_plan(source)
     evaluations = evaluate(plan)
@@ -117,11 +139,13 @@ def run_driver(config: DriverConfig, *, transport: Transport | None = None) -> P
         build_sha256=build, source_sha256=plan.identity.sha256,
         corpus_sha256=digest(canonical({"synthetic_single_case_sha256": plan.identity.sha256})),
         config_sha256=digest(canonical({
-            "mode": "fake-only", "scenario": config.fake_scenario,
+            "mode": "provider-unverified" if provider_mode else "fake-only", "scenario": config.fake_scenario,
             "max_requests": config.max_requests, "max_input_tokens": config.max_input_tokens,
             "max_output_tokens": config.max_output_tokens, "max_usd": str(config.max_usd),
             "capture_private_prose": capture_out is not None,
             "generator_actor_ids": list(config.generator_actor_ids),
+            **({"price_sha256": digest(journal.price.model_dump_json()),
+                "budget_sha256": digest(journal.budget.model_dump_json())} if provider_mode else {}),
         })),
     )
     baseline = []
@@ -153,18 +177,17 @@ def run_driver(config: DriverConfig, *, transport: Transport | None = None) -> P
         baseline.append(base)
         if base.applicability == "supported" and base.outcome is not None:
             links.append(FindingLink(row["finding_id"], case_id, row["resource_id"], evaluation.rule_id))
-    budget = Budget(max_requests=config.max_requests, max_input_tokens=config.max_input_tokens,
-                    max_output_tokens=config.max_output_tokens, max_usd=config.max_usd)
     identity = selected_transport.identity
-    price = PriceIdentity(provider=identity.provider, model=identity.model,
+    price = journal.price if journal is not None else PriceIdentity(provider=identity.provider, model=identity.model,
                           price_id="mock-zero-not-provider-price", price_date=date.today().isoformat(),
                           input_usd_per_million=Decimal(0), output_usd_per_million=Decimal(0))
     # mkdir(exist_ok=False) and exclusive writes prevent reusing/overwriting a run.
     # A failure preserves all started attempts for inspection/reconciliation.
     out.mkdir(mode=0o700)
     journal_path = out / "attempts.jsonl"
-    journal_path.touch(exist_ok=False)
-    with AttemptJournal(journal_path, budget, price) as journal:
+    if journal is None:
+        journal_path.touch(exist_ok=False)
+    with (nullcontext(journal) if journal is not None else AttemptJournal(journal_path, budget, price)) as journal:
         result = run_experiments(
             plan=plan, shareable=report.shareable, baseline=tuple(baseline), links=tuple(links),
             resource_links=tuple(ResourceLink(public, local) for local, public in resource_ids.items()),
@@ -183,7 +206,8 @@ def run_driver(config: DriverConfig, *, transport: Transport | None = None) -> P
                 origin="mock" if identity.kind == "mock" else "unverified")
             capture_receipt = write_private_capture(private_capture, capture_out)
         artifact = {
-            "schema": 1, "mode": "synthetic_fake_or_protocol_plumbing",
+            "schema": 1, "mode": "synthetic_provider_unverified_plumbing" if provider_mode
+                else "synthetic_fake_or_protocol_plumbing",
             "live_eligible": False, "product_acceptance": False,
             "measurement_status": {arm: "NOT MEASURED" for arm in ("L", "P", "M")},
             "D_role": "locally evaluated deterministic baseline; no oracle score asserted",

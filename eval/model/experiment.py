@@ -12,7 +12,7 @@ import hashlib
 import json
 import math
 import re
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import Any
 
 from pydantic import TypeAdapter
@@ -166,7 +166,9 @@ def run_experiments(
 ) -> Result:
     """One L/P call per linked finding, one isolated M call; D is supplied, never rerun.
 
-    Intended for future keyless activation. This source-construction package has NOT
+    Optional complete_started dispatch binds an explicitly admitted provider to the
+    same durable start and remaining monotonic deadline. Ordinary fakes retain their
+    complete(request) API. This source-construction package has NOT
     executed it. Gold/split/scanner records are intentionally absent from this API.
     Journal must have separate exclusive ownership and separately chosen mock budget.
     """
@@ -259,6 +261,7 @@ def run_experiments(
         bound = (Decimal(limits.input_tokens_upper) * journal.price.input_usd_per_million
                  + Decimal(limits.output_tokens_upper) * journal.price.output_usd_per_million
                  ) / Decimal(1_000_000)
+        deadline_monotonic = monotonic() + limits.timeout_seconds
         try:
             attempt_id = journal.start(Reservation(
                 input_tokens_upper=limits.input_tokens_upper,
@@ -279,19 +282,25 @@ def run_experiments(
         status: Terminal = "error"
         reason = "transport_error"
         try:
-            reply = transport.complete(request)
+            started_call = getattr(transport, "complete_started", None)
+            reply = started_call(request, journal=journal, attempt_id=attempt_id,
+                deadline_monotonic=deadline_monotonic) if callable(started_call) else transport.complete(request)
             if not isinstance(reply, Reply):
                 raise ValueError("invalid transport envelope")
             if arm == "P" and capture_private_prose and type(reply.payload) is bytes:
                 capture_bound = min(limits.max_output_bytes, 65_536)
                 private_response = reply.payload[:capture_bound]
-                private_response_complete = len(reply.payload) <= capture_bound
+                private_response_complete = len(reply.payload) <= capture_bound \
+                    and getattr(reply, "payload_complete", True) is True
             usage = _usage(reply.usage)
             if reply.status not in ("ok", "invalid", "timeout", "error", "cancelled"):
                 raise ValueError("invalid transport status")
             status = reply.status
             reason = "transport_" + status
-            if type(reply.payload) is not bytes or len(reply.payload) > limits.max_output_bytes:
+            complete = getattr(reply, "payload_complete", True)
+            if type(complete) is not bool or complete is False and status == "ok":
+                status, reason = "invalid", "response_incomplete"
+            elif type(reply.payload) is not bytes or len(reply.payload) > limits.max_output_bytes:
                 status, reason = "invalid", "response_size_or_type"
             else:
                 response_hash = digest(reply.payload)
