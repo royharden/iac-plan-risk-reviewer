@@ -207,13 +207,17 @@ class AttemptJournal:
             unresolved = outcome is None or any(
                 outcome[field] is None for field in ("known_usd", "input_tokens", "output_tokens")
             )
+            unresolved |= (
+                attempt["reconciled"] is None and attempt["terminal"] is not None
+                and attempt["terminal"]["status"] == "timeout"
+            )
             partial_known = _usd(outcome["known_usd"]) if outcome and outcome["known_usd"] is not None else Decimal(0)
             known_usd += partial_known
             if unresolved:
                 pending.append(key)
                 unresolved_usd_upper += max(_usd(start["usd_upper"]) - partial_known, Decimal(0))
-                input_tokens += start["input_tokens_upper"]
-                output_tokens += start["output_tokens_upper"]
+                input_tokens += max(start["input_tokens_upper"], (outcome or {}).get("input_tokens") or 0)
+                output_tokens += max(start["output_tokens_upper"], (outcome or {}).get("output_tokens") or 0)
             else:
                 measured = _usd(outcome["known_usd"])
                 input_tokens += outcome["input_tokens"]

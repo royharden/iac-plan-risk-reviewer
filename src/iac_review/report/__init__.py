@@ -11,6 +11,7 @@ from hashlib import sha256
 from html import escape
 import json
 import math
+import os
 from pathlib import Path
 import re
 from time import monotonic
@@ -173,6 +174,16 @@ def build_report(
             for ref in refs:
                 if monotonic() - started > MAX_SECONDS:
                     raise InputError("review_time_limit")
+                if ref.resource_key != resource.key or ref.resource_index != resource.index:
+                    if role == "decision":
+                        decision_failed = True
+                        evidence_failures.append({
+                            "evaluation_id": evaluation.evaluation_id,
+                            "fact_id": ref.fact_id, "role": role, "status": "mismatch",
+                        })
+                    else:
+                        local_limits.add("supporting_evidence_omitted")
+                    continue
                 resolved = resolve(plan, ref)
                 marker_allowed = (
                     outcome == "indeterminate" and
@@ -335,8 +346,19 @@ All benchmark arms remain NOT MEASURED in this construction edition.</footer></m
     return document.encode("utf-8")
 
 
-def write_report(report: ReviewReport, out: Path) -> None:
-    """Write a fresh directory only; a shareable bundle never includes private data."""
+def write_report(report: ReviewReport, out: Path, *, deadline: float | None = None) -> None:
+    """Stage a bounded bundle; publish only within the invocation's deadline.
+
+    export-state.json remains ABORTED until every artifact is published. Failed
+    writes roll back this invocation's files; pending files are never reports.
+    Existing two-argument callers receive a fresh cooperative export budget.
+    """
+    deadline = monotonic() + MAX_SECONDS if deadline is None else deadline
+
+    def check_deadline() -> None:
+        if monotonic() > deadline:
+            raise InputError("review_time_limit")
+
     out = Path(out).absolute()
     if any(parent.is_symlink() or (hasattr(parent, "is_junction") and parent.is_junction())
            for parent in (out, *out.parents)):
@@ -346,24 +368,79 @@ def write_report(report: ReviewReport, out: Path) -> None:
             raise ValueError("output directory must be new or empty")
     else:
         out.mkdir(parents=True, exist_ok=False)
-    payloads = {
-        "private.json": _json_bytes(report.private), "private.html": _html(report.private),
-        "shareable.json": _json_bytes(report.shareable), "shareable.html": _html(report.shareable),
-    }
-    private_manifest = {
-        "schema_version": REPORT_VERSION, "run_id": report.private["run_id"],
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "plan_sha256": report.private["plan"]["sha256"],
-        "parser_version": PARSER_VERSION, "policy_version": POLICY_VERSION,
-        "artifacts": {name: sha256(data).hexdigest() for name, data in payloads.items()},
-        "privacy": "Private files and this manifest remain local. Share only the two shareable files.",
-    }
-    manifest_bytes = _json_bytes(private_manifest)
-    # Hash binds the exact serialized manifest; it is local provenance, not a low-
-    # entropy value hash in provider/shareable facts.
-    payloads["manifest.json"] = manifest_bytes
-    payloads["manifest.sha256"] = (sha256(manifest_bytes).hexdigest() + "\n").encode("ascii")
-    for name, data in payloads.items():
-        destination = out / name
-        with destination.open("xb") as stream:
-            stream.write(data)
+    state_path = out / "export-state.json"
+    aborted = _json_bytes({"state": "ABORTED", "reason": "export_not_finalized"})
+    # Fail closed even on process termination before the exception handler runs.
+    with state_path.open("xb") as stream:
+        stream.write(aborted)
+        stream.flush()
+        os.fsync(stream.fileno())
+    pending = out / ".pending"
+    staged: list[Path] = []
+    published: list[Path] = []
+    try:
+        check_deadline()
+        pending.mkdir()
+        payloads: dict[str, bytes] = {}
+        for name, projection, render in (
+            ("private.json", report.private, _json_bytes),
+            ("private.html", report.private, _html),
+            ("shareable.json", report.shareable, _json_bytes),
+            ("shareable.html", report.shareable, _html),
+        ):
+            check_deadline()
+            payloads[name] = render(projection)
+            check_deadline()
+        private_manifest = {
+            "schema_version": REPORT_VERSION, "run_id": report.private["run_id"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "plan_sha256": report.private["plan"]["sha256"],
+            "parser_version": PARSER_VERSION, "policy_version": POLICY_VERSION,
+            "artifacts": {name: sha256(data).hexdigest() for name, data in payloads.items()},
+            "privacy": "Private files and this manifest remain local. Share only the two shareable files.",
+        }
+        manifest_bytes = _json_bytes(private_manifest)
+        payloads["manifest.json"] = manifest_bytes
+        payloads["manifest.sha256"] = (sha256(manifest_bytes).hexdigest() + "\n").encode("ascii")
+        for name, data in payloads.items():
+            check_deadline()
+            destination = pending / name
+            with destination.open("xb") as stream:
+                staged.append(destination)
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+        for source in staged:
+            check_deadline()
+            destination = out / source.name
+            # Exclusive creation keeps rollback limited to files we own.
+            with destination.open("xb") as stream:
+                published.append(destination)
+                stream.write(source.read_bytes())
+                stream.flush()
+                os.fsync(stream.fileno())
+        for source in staged:
+            source.unlink()
+        pending.rmdir()
+        final_state = out / ".export-state.pending"
+        with final_state.open("xb") as stream:
+            staged.append(final_state)
+            stream.write(_json_bytes({"state": "COMPLETE", "exit_code": report.exit_code}))
+            stream.flush()
+            os.fsync(stream.fileno())
+        # No deadline rejection may occur after this publication boundary.
+        check_deadline()
+        os.replace(final_state, state_path)
+    except BaseException:
+        # Remove only exact paths created by this invocation. A filesystem that
+        # refuses cleanup retains the fail-closed ABORTED marker for inspection.
+        for path in (*published, *staged):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        try:
+            pending.rmdir()
+        except OSError:
+            pass
+        raise

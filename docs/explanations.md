@@ -20,11 +20,22 @@ authorized caller reserves worst-case token/USD exposure and flushes/fsyncs a
 request-start record before attempting a provider call. Every attempt has its own
 terminal outcome, duration, usage/known cost or explicit unknown liability, dated
 price identity and input/build/prompt/projection hashes. Unknown bills, crashes,
-timeouts without complete usage, and reservation overruns block new calls pending
+every timeout (even with complete reported usage/cost), and reservation overruns block new calls pending
 operator reconciliation. Caps include failed attempts. No automatic retry exists.
 The journal contains no raw prompt, response text, plan values or secret credentials.
 It enforces accounting bounds; it does not confer spend authorization or prove an
 external provider will honor a client timeout/token estimate.
+
+An unreconciled timeout retains known costs plus the remaining conservative
+reservation bounds and stays pending until explicit operator reconciliation with
+a billing receipt. Public start/terminal/reconcile signatures are unchanged.
+
+Report exports stage artifacts while `export-state.json` says `ABORTED`.
+Only successful writes and the final cooperative deadline check publish
+`COMPLETE`. A failed invocation removes its own report files where the filesystem
+allows cleanup; residual files must never be used when the marker is `ABORTED`.
+The CLI supplies its whole-review deadline; two-argument `write_report(report,
+out)` callers remain compatible and receive a separate export deadline.
 
 An exclusive lock prevents a second instance from using the same journal. A lock
 surviving a crash is not stolen by PID or age; an operator must first establish the

@@ -69,10 +69,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         _within_budget(started)
         # A mutation cannot be hidden by the absence of a particular fact row.
         verify_unchanged(plan)
-        write_report(report, arguments.out)
-        _within_budget(started)
+        write_report(report, arguments.out, deadline=started + MAX_SECONDS)
         # Avoid logging user paths, resource addresses, values or input exceptions.
-        sys.stdout.write(f"review_exported exit_code={report.exit_code}; private artifacts are sensitive\n")
+        try:
+            sys.stdout.write(f"review_exported exit_code={report.exit_code}; private artifacts are sensitive\n")
+        except OSError:
+            # A closed console cannot turn an already finalized bundle into an
+            # aborted review. The finalized artifact/exit code remain authoritative.
+            pass
         return report.exit_code
     except InputError as exc:
         sys.stderr.write(f"review_aborted code={exc}\n")
