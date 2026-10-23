@@ -9,10 +9,19 @@ After the activation owner authorizes environment setup and the core journey,
 keep the shell at the outer project root and select the inner project explicitly:
 
 ```powershell
-uv run --project .\iac-plan-risk-reviewer python .\iac-plan-risk-reviewer\scripts\demo.py --out .\iac-plan-risk-reviewer\reports\demo
+New-Item -ItemType Directory -Force .\iac-plan-risk-reviewer\reports | Out-Null
+uv run --project .\iac-plan-risk-reviewer python .\iac-plan-risk-reviewer\scripts\demo.py --fake --synthetic --out .\iac-plan-risk-reviewer\reports\demo
 ```
 
-Use a new output directory on each run. The script has four input names:
+Both flags are mandatory and there is no live/provider/scanner mode or arbitrary
+input-plan option. Inputs are the fixed shipped development fixtures. Their
+synthetic origin is a source assertion, not authenticated Terraform provenance.
+Use a fresh output directory with an existing private parent on each run.
+Require root `demo-state.json` COMPLETE before opening `index.html`.
+The entire demo directory is PRIVATE: it contains source-location evidence,
+private bundles and mock accounting. Never share that whole folder.
+
+The script has four input names:
 `public-ssh`, `port-443`, `unknown-port`, `stateful-replacement`. Inspect each
 child's `export-state.json` before opening reports. A failed/ABORTED export or
 pending remnant is not a completed demonstration.
@@ -46,3 +55,20 @@ interface in [model activation](model-activation.md). Mock usage/cost is not liv
 usage/cost; completed plumbing returns 2 because L/P/M remain incomplete. Scanner
 execution, live calls, hidden corpus, schema generation and publication are not
 part of this walkthrough. Use [activation](ACTIVATION.md) for their later gates.
+
+The journey source now writes an escaped private index, four bound core bundles,
+one explicitly private pinned-evidence response, valid and deliberately invalid
+same-finding finite fake selections, and an exclusive local fake attempt journal.
+The invalid selection falls back while D results remain unchanged. Two mock
+attempts use mock zero-cost/zero-token accounting only; those counters are not
+provider usage or a cost/performance result. The declared C/C-custom/T capability
+table never executes a scanner and never implies tested compatibility. Every
+required arm remains NOT MEASURED. Failure leaves the root ABORTED marker; child
+outputs cannot establish a completed journey on their own. The 120-second source
+deadline is cooperative, not a measured demo time or operating-system cancellation.
+
+Focused source regressions are in `tests/integration/test_demo_journey.py`; they
+have not run. The private-safe share exporter is a separate explicit command;
+it must regenerate safe content from a bound bundle and the supplied original
+plan rather than copying arbitrary stored HTML. See [sharing](SHARING.md) for
+the source interface and its still-unverified activation boundary.

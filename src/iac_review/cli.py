@@ -35,6 +35,10 @@ def _parser() -> argparse.ArgumentParser:
     evidence.add_argument("--plan", type=Path, required=True, help="Explicit original local plan with exact pinned digest")
     evidence.add_argument("--finding", required=True, help="Opaque finding ID from the private report")
     evidence.add_argument("--fact", required=True, help="Opaque fact ID within that finding")
+    share = subcommands.add_parser("share", help="Regenerate safe files from a bound bundle and explicit original plan")
+    share.add_argument("bundle", type=Path, help="Complete bound PRIVATE input bundle")
+    share.add_argument("--plan", type=Path, required=True, help="Explicit pinned original plan; never copied")
+    share.add_argument("--out", type=Path, required=True, help="Fresh separate share-only directory; existing parent")
     return parser
 
 
@@ -52,6 +56,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if exc.code == 0 else 3
     started = time.monotonic()
     try:
+        if arguments.command == "share":
+            from iac_review.shareable_export import export_shareable
+            result = export_shareable(arguments.bundle, arguments.plan, arguments.out, deadline=started + MAX_SECONDS)
+            try:
+                sys.stdout.write(f"shareable_exported review_exit_code={result['review_exit_code']}; not source-resolvable\n")
+            except (OSError, KeyboardInterrupt):
+                pass
+            return result["review_exit_code"]
         if arguments.command in ("verify-report", "evidence"):
             import json
             from iac_review.source_view import verify_report, view_evidence
