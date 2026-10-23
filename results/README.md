@@ -13,3 +13,28 @@ No product or benchmark was executed during construction. These are obligation s
 | T | NOT MEASURED | Compatible pinned Trivy mappings and actual execution, or evidenced incompatibility disposition |
 
 No model/scanner accuracy, latency or cost figures are available. Later `scripts/eval.py` writes `results.md` and `results.jsonl` from independently supplied oracle rows and measurements, with hashes and explicit missing rows. Missing/unsupported arms cannot be counted as passing negatives.
+
+The model driver can later produce `plumbing.json` plus an attempt journal under
+explicit fake mode. That output is live-ineligible even when finite selection or
+accounting looks valid; it is not a provider bill, quality score or new D benchmark.
+Scanner pending/fake capture and scoring bridges likewise retain incomplete/mock
+status rather than supplying measured negatives. Always include failed attempts
+and unresolved cost bounds in a later all-attempt accounting summary.
+
+The scorer requires independently supplied oracle/measurement/custody/seal/
+semantic/eligibility/utility inputs and exact external pins. Those records are not
+included here as hidden gold. An imported self-consistent record or a manifest
+hash does not authenticate its original execution. RunManifest/preflight and
+explicit binary-target scorer source now exist, with schema-export bindings;
+their integrated execution and admission behavior remain unverified.
+
+Keep introduced-risk Boolean predictions separate from full-outcome metrics.
+Null abstains, indeterminate gold exposes certainty errors, and D exact remains
+full-outcome only. `ProducerAccounting` requires D5 accounting_json plus every
+attempt snapshot, including failed/no-row attempts and unresolved liabilities;
+scorer row subtotals alone are partial and cannot produce a model total. Optional
+producer-export imports remain live-ineligible under v2 eligibility/pins.
+
+No output from a documentation example, hand-authored demo, AST parse, source
+inspection or fake replay closes any row above. Independent semantic/effect
+validation, required live measurements and product acceptance remain pending.

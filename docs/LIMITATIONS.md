@@ -9,3 +9,40 @@
 - D/L/P/M/C/C-custom/T measurements remain incomplete. Checkov/Trivy mapping/version compatibility is unresolved; absence is not incompatibility evidence. Free prose never ships as verified product explanation.
 - Journal accounting and selector safety are source contracts, runtime unverified. No live transport, price table, budget approval or credential provisioning has been performed.
 - Dependency ranges are declared, not locked/audited. Final licensing/publication and independent product acceptance remain deferred. No remote or deployment exists.
+
+The private exact-location exception is intentional: addresses and pointers can
+contain secrets, even though marked attribute values stay masked. A shareable
+report has no source filename, exact identity/location or private map. Its opaque
+IDs are not independently source-resolvable. Never upload a whole report directory
+as though every file were shareable; validate the local COMPLETE marker first.
+
+The pinned viewer checks bundle integrity and selected facts against an explicitly
+supplied original plan. Hash agreement is not authentication of a producer,
+detector semantics, oracle independence or a live experiment. Raw-source access
+is not enabled merely by having a shareable finding/fact ID. Main CLI viewer
+wiring and RunManifest/preflight/binary-target scoring exist as unexecuted source;
+integrated runtime consumption remains unverified. Evidence-command stdout intentionally includes
+private exact locations and is not a shareable log.
+
+Export deadlines are cooperative between operations. Failed writes roll back
+owned artifacts when possible; blocked I/O, cleanup refusal or process death
+require inspecting the authoritative ABORTED marker and residual files. The source
+does not promise operating-system preemption or proven crash durability. Journal
+locks and reconciliation likewise need later platform/concurrency validation.
+
+The model driver is explicitly fake-only. Scanner runner/adapters and scorer
+bridges are development harness source with unverified pins, sandbox and mapping
+semantics; they are not part of default review imports. Neither mocks nor imported
+metadata authenticate an execution. All seven arms remain NOT MEASURED. No zero
+cost, latency, accuracy or productivity result follows from source construction.
+
+Binary introduced-risk prediction is not a full semantic outcome or D exact pass.
+Row cost subtotals are partial; model totals require every producer attempt,
+including failed/no-row attempts and pending liabilities. Optional producer exports
+stay live-ineligible. The operator ledger CLI is still in progress; the existing
+accounting library alone does not establish operator-command availability.
+
+Development regressions and the bounded AST checker source are not hidden gold,
+independent acceptance or an effect sandbox. Reflection, generated/native code,
+dependency import behavior and indirect runtime effects require later execution
+under an independently enforced boundary.
