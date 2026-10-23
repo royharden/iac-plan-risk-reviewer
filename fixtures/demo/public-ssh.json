@@ -1,0 +1,27 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.9.0",
+  "complete": true,
+  "applyable": true,
+  "errored": false,
+  "resource_changes": [{
+    "address": "aws_security_group_rule.demo[\"CANARY-ADDRESS-DO-NOT-SHARE\"]",
+    "mode": "managed",
+    "type": "aws_security_group_rule",
+    "name": "demo",
+    "provider_name": "registry.terraform.io/hashicorp/aws",
+    "change": {
+      "actions": ["create"],
+      "before": null,
+      "after": {
+        "type": "ingress", "protocol": "tcp", "from_port": 22, "to_port": 22,
+        "cidr_blocks": ["0.0.0.0/0"], "ipv6_cidr_blocks": [],
+        "prefix_list_ids": [], "source_security_group_id": null, "self": false,
+        "tags": {"untrusted": "CANARY-UNMARKED-VALUE-DO-NOT-SHARE", "secret": "CANARY-MARKED-VALUE"}
+      },
+      "before_sensitive": false,
+      "after_sensitive": {"tags": {"secret": true}},
+      "after_unknown": {}
+    }
+  }]
+}

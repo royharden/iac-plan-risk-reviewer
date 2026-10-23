@@ -1,0 +1,17 @@
+{
+  "format_version": "1.2", "terraform_version": "1.9.0",
+  "complete": true, "applyable": true, "errored": false,
+  "resource_changes": [{
+    "address": "aws_security_group_rule.unknown_demo", "mode": "managed",
+    "type": "aws_security_group_rule", "name": "unknown_demo",
+    "provider_name": "registry.terraform.io/hashicorp/aws",
+    "change": {
+      "actions": ["create"], "before": null,
+      "after": {"type": "ingress", "protocol": "tcp", "from_port": null, "to_port": null,
+        "cidr_blocks": ["0.0.0.0/0"], "ipv6_cidr_blocks": [], "prefix_list_ids": [],
+        "source_security_group_id": null, "self": false},
+      "before_sensitive": false, "after_sensitive": false,
+      "after_unknown": {"from_port": true, "to_port": true}
+    }
+  }]
+}

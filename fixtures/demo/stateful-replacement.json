@@ -1,0 +1,15 @@
+{
+  "format_version": "1.2", "terraform_version": "1.9.0",
+  "complete": true, "applyable": true, "errored": false,
+  "resource_changes": [{
+    "address": "aws_ebs_volume.data_demo", "mode": "managed",
+    "type": "aws_ebs_volume", "name": "data_demo",
+    "provider_name": "registry.terraform.io/hashicorp/aws",
+    "change": {
+      "actions": ["delete", "create"],
+      "before": {"encrypted": true, "tags": {"environment": "disposable-demo"}},
+      "after": null, "before_sensitive": false, "after_sensitive": false,
+      "after_unknown": true
+    }
+  }]
+}
