@@ -44,3 +44,33 @@ identity, not that an attestation is truthful, compatible or sufficiently scoped
 Current implementation lineage cannot supply independent oracle/acceptance proof.
 No genuine scanner pins/eligibility, runtime tests, raw-output retention or hidden
 measurements were created. Those remain later activation work after Dirty Mode.
+
+## Source interface and regression coverage checkpoint
+
+D6's shared-wire-v2-current.txt and actual scoring.py now define optional
+prediction_target (default full_outcome) and introduced_prediction (default null).
+Binary rows explicitly target introduced_risk and forbid any simultaneous full
+outcome. The existing bridge's guarded source path matches those fields and its
+executed-kind eligibility rules; no shared source change or fabricated eligibility
+is needed. This is static interface reconciliation, not an executed schema/import
+or scorer result. Independent oracle and genuine scanner measurements remain absent.
+
+Targeted regression SOURCE covers these boundaries without duplicating existing
+cases; none has run during Dirty Mode:
+
+| Boundary | Source coverage |
+|---|---|
+| Missing arm/observation and unmapped action/type/provider | existing test_scanner_driver.py missing-arm and cell-gate cases |
+| External report/manifest/config/bounds proof and wrong plan/arm | existing test_scanner_scoring_bridge.py provenance cases |
+| Binary negative retains null full outcome | existing bridge regression plus new shared-wire rejection of an invented full label |
+| Malformed/non-UTF8/duplicate-key scanner JSON | new test_scanner_output_boundaries.py parser/admission cases |
+| Incomplete quiet output, contradictory categories, reported parsing errors | new Checkov output cases |
+| Oversized input or stderr, valid-looking stdout after timeout | new bounded admission cases, complementing earlier stdout truncation/empty timeout cases |
+| Deposed/duplicate address or repeated check/resource output | new lossy-identity cases |
+| Same address but raw input mutation during injected capture | new complete artificial-pin fake-runner case; no executable is launched |
+| Unknown/unrecognized Trivy output state | new unknown-preservation and rejection case |
+
+Fixture checks, artificial pin files and fake outputs are implementation-owned
+plumbing data, not actual scanner versions, independent expected risk labels,
+compatibility evidence or executed measurements. Tests are later activation work;
+source availability and AST parsing cannot close those runtime boundaries.
