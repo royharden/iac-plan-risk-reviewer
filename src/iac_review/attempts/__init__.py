@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from decimal import Decimal
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,6 +18,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from iac_review.contracts import Wire
+from iac_review.ingest import decode_source, read_source_bytes
 
 _HASH = re.compile(r"[0-9a-f]{64}")
 _LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}")
@@ -96,6 +98,7 @@ class AttemptJournal:
         self._closed = False
         self._fd: int | None = None
         self._events: list[dict[str, Any]] = []
+        self._loaded_sha256 = hashlib.sha256(b"").hexdigest()
         try:
             self._fd = os.open(self.lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         except FileExistsError as error:
@@ -103,13 +106,7 @@ class AttemptJournal:
         try:
             os.write(self._fd, self._owner.encode("ascii"))
             os.fsync(self._fd)
-            if self.path.exists():
-                if self.path.stat().st_size > 16 * 1024 * 1024:
-                    raise JournalError("journal exceeds bounded replay size")
-                for line in self.path.read_text(encoding="utf-8").splitlines():
-                    event = json.loads(line)
-                    self._validate_event(event)
-                    self._events.append(event)
+            self._events, self._loaded_sha256 = self._read_events(self.path, required=False)
             # Replay validates pair ordering and detects unmatched starts. It does
             # not convert a missing terminal into a free/failed request.
             self._state()
@@ -122,6 +119,109 @@ class AttemptJournal:
 
     def __exit__(self, *args: Any) -> None:
         self.close()
+
+    @classmethod
+    def _read_events(cls, path: Path, *, required: bool) -> tuple[list[dict[str, Any]], str]:
+        """One strict bounded reader shared by ordinary replay and read-only snapshots."""
+        if not path.exists() and not path.is_symlink():
+            if required:
+                raise JournalError("journal_missing")
+            return [], hashlib.sha256(b"").hexdigest()
+        try:
+            data = read_source_bytes(path)
+            if data and not data.endswith(b"\n"):
+                raise JournalError("journal_truncated_line")
+            lines = data.splitlines()
+            if len(lines) > 100_000:
+                raise JournalError("journal_event_limit")
+            # Reuse the public strict JSON decoder, including one overall parse budget.
+            import time
+            started = time.monotonic()
+            events = []
+            for line in lines:
+                event = decode_source(line, started)
+                cls._validate_event(event)
+                events.append(event)
+            return events, hashlib.sha256(data).hexdigest()
+        except JournalError:
+            raise
+        except (ValueError, OSError, TypeError, KeyError, ArithmeticError, RuntimeError):
+            raise JournalError("journal_read_invalid") from None
+
+    @classmethod
+    def snapshot(cls, path: Path) -> dict[str, Any]:
+        """Read existing journal only: no constructor, mkdir, lock or journal writes.
+
+        The snapshot is informational, not budget/spend/start authorization. Lock
+        presence is as observed, never a stale-lock or worker-death determination.
+        """
+        path = Path(path).absolute()
+        lock = path.with_suffix(path.suffix + ".lock")
+        if any(p.is_symlink() or (hasattr(p, "is_junction") and p.is_junction())
+               for p in (path, lock, *path.parents)):
+            raise JournalError("journal_link_rejected")
+        events, digest = cls._read_events(path, required=True)
+        # _state depends only on events. Reuse its exact accounting without
+        # constructing a worker or introducing a second balance implementation.
+        reader = object.__new__(cls)
+        reader._events = events
+        state = reader._state()
+        pending = set(state["pending"])
+        attempts = []
+        for attempt_id, attempt in state["attempts"].items():
+            terminal, reconciled = attempt["terminal"], attempt["reconciled"]
+            outcome = reconciled or terminal
+            attempts.append({
+                "attempt_id": attempt_id, "status": terminal["status"] if terminal else "interrupted",
+                "reconciled": reconciled is not None,
+                "requires_reconciliation": attempt_id in pending,
+                "input_tokens": outcome["input_tokens"] if outcome else None,
+                "output_tokens": outcome["output_tokens"] if outcome else None,
+                "known_usd": str(_usd(outcome["known_usd"]))
+                    if outcome and outcome["known_usd"] is not None else None,
+                "receipt_sha256": reconciled["evidence_sha256"] if reconciled else None,
+            })
+        return {"schema": 1, "read_only": True, "journal_sha256": digest,
+                "worker_lock_present": lock.exists(), "start_authorized": False,
+                "reservation_overrun": state["overrun"], "summary": cls._summary(state),
+                "attempts": attempts}
+
+    @classmethod
+    def operator_reconcile(
+        cls, path: Path, *, expected_journal_sha256: str, attempt_id: str,
+        input_tokens: int, output_tokens: int, known_usd: Decimal, evidence_sha256: str,
+    ) -> dict[str, Any]:
+        """Explicit existing-journal operation; no start/retry/unlock or cap change."""
+        if not isinstance(expected_journal_sha256, str) or not _HASH.fullmatch(expected_journal_sha256):
+            raise JournalError("journal_digest_invalid")
+        if not isinstance(attempt_id, str) or not re.fullmatch(r"[0-9a-f]{32}", attempt_id):
+            raise JournalError("attempt_id_invalid")
+        if not isinstance(evidence_sha256, str) or not _HASH.fullmatch(evidence_sha256):
+            raise JournalError("receipt_digest_invalid")
+        _tokens(input_tokens)
+        _tokens(output_tokens)
+        _usd(known_usd)
+        path = Path(path).absolute()
+        before = cls.snapshot(path)
+        if before["journal_sha256"] != expected_journal_sha256:
+            raise JournalError("journal_digest_mismatch")
+        # This private worker can never start a request (zero caps). Its price is
+        # not written or substituted into historical reservations; reconcile()
+        # appends only actual operator accounting and receipt identity.
+        budget = Budget(max_requests=0, max_input_tokens=0, max_output_tokens=0, max_usd=Decimal(0))
+        price = PriceIdentity(provider="operator", model="reconciliation-only",
+                              price_id="not-a-provider-price", price_date=date.today().isoformat(),
+                              input_usd_per_million=Decimal(0), output_usd_per_million=Decimal(0))
+        with cls(path, budget, price) as worker:
+            if worker._loaded_sha256 != expected_journal_sha256 \
+                    or hashlib.sha256(read_source_bytes(path)).hexdigest() != expected_journal_sha256:
+                raise JournalError("journal_digest_mismatch")
+            worker.reconcile(attempt_id, input_tokens=input_tokens, output_tokens=output_tokens,
+                             known_usd=known_usd, evidence_sha256=evidence_sha256)
+            after = cls.snapshot(path)
+            return {"operation": "reconciliation_recorded", "attempt_id": attempt_id,
+                    "receipt_sha256": evidence_sha256, "snapshot": after,
+                    "provider_billing_authenticated": False, "start_authorized": False}
 
     def close(self) -> None:
         with self._mutex:
@@ -305,17 +405,20 @@ class AttemptJournal:
 
     def summary(self) -> dict[str, Any]:
         with self._mutex:
-            state = self._state()
-            successes = sum(attempt["terminal"] is not None and attempt["terminal"]["status"] == "ok"
-                            for attempt in state["attempts"].values())
-            return {
-                "requests": state["requests"], "successful_attempts": successes,
-                "known_usd": str(state["known_usd"]),
-                "unresolved_usd_upper": str(state["unresolved_usd_upper"]),
-                "billing_known": not state["pending"], "pending_attempt_ids": state["pending"],
-                "input_tokens_with_unresolved_bounds": state["input_tokens"],
-                "output_tokens_with_unresolved_bounds": state["output_tokens"],
-                "cost_per_success_usd": str(state["known_usd"] / successes)
-                    if successes and not state["pending"] else None,
-                "new_requests_blocked": bool(state["pending"] or state["overrun"]),
-            }
+            return self._summary(self._state())
+
+    @staticmethod
+    def _summary(state: dict[str, Any]) -> dict[str, Any]:
+        successes = sum(attempt["terminal"] is not None and attempt["terminal"]["status"] == "ok"
+                        for attempt in state["attempts"].values())
+        return {
+            "requests": state["requests"], "successful_attempts": successes,
+            "known_usd": str(state["known_usd"]),
+            "unresolved_usd_upper": str(state["unresolved_usd_upper"]),
+            "billing_known": not state["pending"], "pending_attempt_ids": state["pending"],
+            "input_tokens_with_unresolved_bounds": state["input_tokens"],
+            "output_tokens_with_unresolved_bounds": state["output_tokens"],
+            "cost_per_success_usd": str(state["known_usd"] / successes)
+                if successes and not state["pending"] else None,
+            "new_requests_blocked": bool(state["pending"] or state["overrun"]),
+        }
