@@ -161,8 +161,16 @@ def _inventory(cases: tuple[ExplanationCase, ...]) -> dict:
     if not cases or len(cases) > 4096:
         raise ValueError("bounded nonempty independent denominator inventory required")
     _unique(tuple(_key(row) for row in cases), "scenario keys")
-    _unique(tuple(row.case_id for row in cases), "eligible scenario ids")
-    _unique(tuple(row.input_sha256 for row in cases), "eligible input digests")
+    # Several findings/resources/rules from one saved plan are observations of one
+    # scenario. Keep every finding row, but count each distinct raw-plan digest once
+    # toward the independent >=24 scenario gate.
+    raw_by_case: dict[str, str] = {}
+    by_raw: dict[str, list[ExplanationCase]] = {}
+    for row in cases:
+        prior = raw_by_case.setdefault(row.case_id, row.input_sha256)
+        if prior != row.input_sha256:
+            raise ValueError("one scenario identity cannot name multiple raw plans")
+        by_raw.setdefault(row.input_sha256, []).append(row)
     for row in cases:
         for name in ("required_fact_ids", "required_limitation_ids", "allowed_fact_ids",
                      "allowed_limitation_ids"):
@@ -170,14 +178,19 @@ def _inventory(cases: tuple[ExplanationCase, ...]) -> dict:
         if (not set(row.required_fact_ids) <= set(row.allowed_fact_ids)
                 or not set(row.required_limitation_ids) <= set(row.allowed_limitation_ids)):
             raise ValueError("required identifiers outside approved capsule")
-    rules = Counter(row.rule_id for row in cases)
-    balanced = (len(cases) >= 24 and all(rules[rule] >= 6 for rule in ("R1", "R2", "R3", "R4"))
-                and {row.action for row in cases} == {
+    for rows in by_raw.values():
+        if len({row.action for row in rows}) != 1 or len({row.knowledge for row in rows}) != 1:
+            raise ValueError("findings from one raw plan disagree on scenario action/knowledge")
+    rules = Counter(rule for rows in by_raw.values() for rule in {row.rule_id for row in rows})
+    plan_rows = [rows[0] for rows in by_raw.values()]
+    balanced = (len(by_raw) >= 24 and all(rules[rule] >= 6 for rule in ("R1", "R2", "R3", "R4"))
+                and {row.action for row in plan_rows} == {
                     "create", "update", "delete", "no-op", "delete/create", "create/delete"}
-                and {row.knowledge for row in cases} == {"known", "unknown", "sensitive"})
-    return {"eligible_scenarios": len(cases), "rule_counts": dict(rules),
-            "action_counts": dict(Counter(row.action for row in cases)),
-            "knowledge_counts": dict(Counter(row.knowledge for row in cases)),
+                and {row.knowledge for row in plan_rows} == {"known", "unknown", "sensitive"})
+    return {"eligible_scenarios": len(by_raw), "eligible_findings": len(cases),
+            "distinct_raw_plan_sha256": len(by_raw), "rule_scenario_counts": dict(rules),
+            "action_scenario_counts": dict(Counter(row.action for row in plan_rows)),
+            "knowledge_scenario_counts": dict(Counter(row.knowledge for row in plan_rows)),
             "minimum_24_balanced": balanced}
 
 

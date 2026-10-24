@@ -38,3 +38,26 @@ producer-export imports remain live-ineligible under v2 eligibility/pins.
 No output from a documentation example, hand-authored demo, AST parse, source
 inspection or fake replay closes any row above. Independent semantic/effect
 validation, required live measurements and product acceptance remain pending.
+
+## Aggregate renderer source
+
+`eval/runner/results.py` and `scripts/render_results.py` provide a bounded,
+aggregate-only rendering path for the scorer's exact seven-arm envelope. It emits
+four per-rule rows per arm, coverage and confusion counts, failure counts, D exact
+gate status, utility summaries, and separate row-subtotal versus all-attempt cost
+fields. A missing/ineligible measurement is `NOT MEASURED`; zero metric denominators
+are `NA`; a recorded D exact-gate failure is `FAIL`. Negative and abstaining
+outcomes remain visible in counts and do not become acceptance.
+
+Model totals require the D5 all-attempt accounting record or a complete D6 utility
+attempt summary. Without either, the renderer prints `NOT MEASURED` for the total
+and labels any score-row amount as partial. It does not treat mock status as live
+evidence, authenticate authorship, or infer product acceptance. When given private
+assessment inputs, it emits aggregate values only; case IDs, resource IDs, prose,
+and per-case failure details stay in the private source files.
+
+The future CLI requires `--score` and a fresh `--out` directory. Optional inputs
+are `--l-utility`, `--assessment-import`, and `--producer-accounting`. It writes
+`results.md`, seven arm plus 21 pairwise failure-overlap `results.jsonl` records and a `render-state.json`
+completion marker. The generated files are source-design outputs only; the CLI was
+not run and no measurement data was rendered during construction.
