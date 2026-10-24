@@ -1,57 +1,88 @@
 # Limits and deferred validation
 
-- Source construction only: no application, tests, provider/scanner arms, CPU budget, memory bound or file-output behavior has been exercised. Syntax parsing does not establish runtime correctness.
-- R1 concerns world-open 22/3389 only, in the standalone SG-rule shape. It is not general network exposure/reachability analysis. Unknown/sensitive required facts cannot be inferred from other fields.
-- R2 is declared public accessibility, R3 encryption removal, R4 review-required destructive intent. They do not prove routing, actual data loss, backups or organizational undesirability. No tag suppresses R4.
-- Exact private addresses/pointers may themselves disclose sensitive indexed keys. Treat private reports as sensitive. Whitelist projections reduce outbound exposure; they are not a universal detector of arbitrary secrets.
-- Parser targets are not tested compatibility claims. Omitted completeness flags remain unknown. Source mutation aborts evidence resolution. Whole source documents are never report artifacts.
-- No independently authored held-out edition or rubric assessment exists yet. Demo fixtures are development-only and must never become hidden evidence through relabeling.
-- D/L/P/M/C/C-custom/T measurements remain incomplete. Checkov/Trivy mapping/version compatibility is unresolved; absence is not incompatibility evidence. Free prose never ships as verified product explanation.
-- Journal accounting and selector safety are source contracts, runtime unverified. No live transport, price table, budget approval or credential provisioning has been performed.
-- Dependency ranges are declared, not locked/audited. Final licensing/publication and independent product acceptance remain deferred. No remote or deployment exists.
+## Nothing has run
 
-The private exact-location exception is intentional: addresses and pointers can
-contain secrets, even though marked attribute values stay masked. A shareable
-report has no source filename, exact identity/location or private map. Its opaque
-IDs are not independently source-resolvable. Never upload a whole report directory
-as though every file were shareable; validate the local COMPLETE marker first.
+- This is construction source. No dependency was installed and no module was imported,
+  executed or tested. The only checks were syntax parsing and focused source inspection,
+  which do not establish runtime correctness, privacy behavior, effects, performance,
+  memory bounds or crash behavior.
+- All regression files under `tests/` are authored source; none has run or passed.
+- Dependencies are declared ranges in `pyproject.toml`, not a locked or audited set.
+  Licensing, publication and independent product acceptance are pending. There is no
+  remote deployment.
 
-The pinned viewer checks bundle integrity and selected facts against an explicitly
-supplied original plan. Hash agreement is not authentication of a producer,
-detector semantics, oracle independence or a live experiment. Raw-source access
-is not enabled merely by having a shareable finding/fact ID. Main CLI viewer
-wiring and RunManifest/preflight/binary-target scoring exist as unexecuted source;
-integrated runtime consumption remains unverified. Evidence-command stdout intentionally includes
-private exact locations and is not a shareable log.
+## Deferred validation (in order)
 
-Export deadlines are cooperative between operations. Failed writes roll back
-owned artifacts when possible; blocked I/O, cleanup refusal or process death
-require inspecting the authoritative ABORTED marker and residual files. The source
-does not promise operating-system preemption or proven crash durability. Journal
-locks and reconciliation likewise need later platform/concurrency validation.
+1. Lock and audit dependencies; pin real Terraform/AWS producer and scanner tool versions.
+   Then run the core, import, schema, CLI, privacy, effect, journal and crash regressions.
+2. Exercise the held-out exposure split: the pre-access input-exposure commit (measurement
+   intents) versus the post-measurement exposure receipt (actual results hash), and the
+   sealed-plus-committed input-access path. These are source contracts only; runtime and
+   custody behavior are unverified.
+3. Exercise the strict JSON-mode assessment batch intake (exact pinned bytes after duplicate
+   and non-finite checks); untested.
+4. Appoint an independent oracle author, checker and rubric assessors; seal a lineage-
+   disjoint held-out corpus; confirm provider prices and caps; then measure all seven arms
+   (D, L, P, M, C, C-custom, T), keeping every attempt and its cost. All seven are
+   **NOT MEASURED**. Independent final acceptance has not started.
 
-The ordinary model CLI is explicitly fake-only. Disabled programmatic provider
-source separately requires external admission and the original journal start before
-credential access/HTTPS; it has no execution evidence. Scanner runner/adapters and scorer
-bridges are development harness source with unverified pins, sandbox and mapping
-semantics; they are not part of default review imports. Neither mocks nor imported
-metadata authenticate an execution. All seven arms remain NOT MEASURED. No zero
-cost, latency, accuracy or productivity result follows from source construction.
+## Product scope
 
-Binary introduced-risk prediction is not a full semantic outcome or D exact pass.
-Row cost subtotals are partial; model totals require every producer attempt,
-including failed/no-row attempts and pending liabilities. Optional producer exports
-stay live-ineligible. The separate [operator ledger source](LEDGER.md) now exists;
-status/reconciliation/crash/concurrency behavior has not run.
+- R1 covers world-open TCP (or all-protocol `-1`) 22/3389 in the standalone `aws_security_group_rule` shape only.
+  It is not general exposure or reachability analysis. Prefix-list and security-group
+  sources are unsupported, never assumed private. Inline and newer ingress shapes are out of
+  scope.
+- R2 is declared public accessibility, not proven routing. R3 is encryption-flag removal
+  only. R4 is declared destructive intent; it does not prove data loss or missing backups,
+  and no tag suppresses it.
+- Unknown or sensitive required facts are never inferred from other fields; they make the
+  predicate indeterminate. Omitted completeness/errored flags stay unknown and make the
+  review inconclusive.
+- JSON format versions listed in [compatibility](COMPATIBILITY.md) are parser targets, not
+  fixture-tested support. No Terraform or AWS provider version is claimed as tested.
+- An address containing a lone surrogate escape passes ingest but fails strict report
+  validation, so that plan gets no report (fail closed).
 
-The [share exporter](SHARING.md) requires current bound source and an explicit
-original plan; stale/legacy bundles need reinspection. No retained mapping or
-automatic upgrade exists. The [consumed-edition gate](CONSUMED-EDITIONS.md) requires
-separate external release and completion pins. No real hidden payload was read or
-candidate generated. Metadata cannot authenticate permission, genuine execution or
-secret-free origin. Measured FAIL/unknown stays; missing/mock arms cannot close it.
+## Privacy
 
-Development regressions and the bounded AST checker source are not hidden gold,
-independent acceptance or an effect sandbox. Reflection, generated/native code,
-dependency import behavior and indirect runtime effects require later execution
-under an independently enforced boundary.
+- Private reports keep exact addresses and JSON pointers, which can themselves contain
+  secrets even though marked values are masked. Treat the whole private report and the
+  `evidence` command's output as sensitive and local.
+- Shareable reports contain opaque IDs and allowlisted Boolean, numeric and fixed-enum facts
+  only. The allowlist reduces outbound exposure; it is not a general secret detector.
+- Never upload a whole report directory. Check that `export-state.json` says `COMPLETE`,
+  then use the [share exporter](SHARING.md) with the original plan. Legacy (manifest 1.0.0)
+  bundles stay unbound and need re-inspection.
+- Demo fixtures are synthetic development data and must never be relabeled as held-out
+  evidence.
+
+## Integrity and verification
+
+- Bundle hashes, the provenance descriptor and imported metadata check consistency only.
+  They do not authenticate a producer, detector semantics, oracle independence or a live
+  experiment.
+- The four report artifacts are capped at 16 MiB by both writer and viewer (the viewer uses
+  smaller caps for `run-manifest.json` and control files), so a very large review fails
+  instead of producing an unreadable bundle. Report string bounds are enforced by the report
+  wire. See
+  [report wire](REPORT-WIRE.md).
+- Export deadlines are cooperative between operations. Failed writes roll back created files
+  where possible; a killed process or refused cleanup leaves the `ABORTED` marker as the
+  authority. Journal locks and reconciliation need platform and concurrency validation.
+- The bounded AST boundary checker is not an effect sandbox. Reflection, native code,
+  dependency imports and indirect effects need later execution under an enforced boundary.
+
+## Evaluation harness
+
+- The ordinary model CLI is fake-only. The provider path is disabled source requiring
+  external activation pins and a durable journal start; no credential, provider call, price
+  table or budget approval exists.
+- Scanner runner and adapters are development source with unverified pins, sandboxing and
+  mapping semantics. Absence of a mapping is not evidence of incompatibility.
+- Mock or protocol results are always live-ineligible. A binary introduced-risk prediction is
+  not a full outcome. Row cost subtotals are partial; model totals need every attempt,
+  including failed and no-row attempts and pending liabilities.
+- A committed input-exposure record is input permission only, never oracle, scoring or
+  tuning permission. Measured FAIL or unknown results stay recorded; missing or mock arms
+  cannot close them. No hidden payload, oracle or label was authored or read here.
+- No accuracy, latency, cost or productivity result follows from this source.

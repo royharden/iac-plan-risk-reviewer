@@ -1,7 +1,7 @@
-# Report wire contract (seam S2)
+# Report wire contract
 
-Status: construction source, Dirty Mode. Accepted at most as *construction — runtime
-unverified*. Nothing in this module or its regressions has been imported or executed yet.
+Status: construction source, runtime unverified. Nothing in these modules or their
+regressions has been imported or executed yet.
 
 `src/iac_review/contracts/report_wire.py` is the single canonical owner of the report
 projection types. Producers (`report/`), the writer, the bundle viewer (`source_view.py`)
@@ -61,10 +61,9 @@ Accepted fail-closed refusal: an address containing a lone surrogate escape (e.g
 `"\ud800"`) passes ingest and Python `json`, but the strict JSON model parser rejects it,
 so no report is produced for that plan.
 
-Consumer seam (D7, `source_view.py`): the viewer reads `private.json` with a 16 MiB cap
-and the ingest 256 KiB string limit, while the writer's `ensure_ascii` + `indent=2`
-output can exceed both (e.g. a non-ASCII address escapes to up to 3x its UTF-8 size).
-Until the viewer cap is aligned, such a valid bundle can be refused by the viewer.
+The four report artifacts are additionally capped at 16 MiB by both writer and viewer; the
+viewer uses smaller caps for `run-manifest.json` and the control files, and leaves report
+string bounds to this module.
 
 Before model validation: byte cap 256 MiB, strict UTF-8 (no UTF-16/32 sniffing, no BOM),
 duplicate object keys rejected, `NaN`/`Infinity` rejected, top level must be an object,
@@ -107,8 +106,9 @@ shareable rows equal the private rows with `address`, `actions`, `reason_code`, 
 
 ## Import DAG
 
-`contracts` (`Wire`) <- `contracts.manifest` <- `provenance` <- `contracts.report_wire`.
-`contracts/__init__.py` imports `report_wire` lazily inside `_canonical_pair`; no cycle.
+`provenance` imports `contracts` and `contracts.manifest`; `contracts.report_wire` imports
+those plus `provenance`; `contracts.report_inventory` imports `report_wire`,
+`contracts.manifest` and `provenance`. `contracts/__init__.py` imports `report_wire` lazily inside `_canonical_pair`; no cycle.
 `report_wire` never imports `report/`, `source_view` or `rules`; the severity and text
 tables are fixed policy data mirrored from the producer, not detector logic.
 
@@ -141,12 +141,9 @@ entries, a catalog that is not exactly the version's payload set, payload hash d
 receipt mismatch. A legacy layout never yields `kind="bound"`; `BundleInventory` itself
 rejects a kind/version/catalog mismatch. Control files are capped at 64 KiB and parsed
 with the same strict JSON ingress as reports. Constants reuse `provenance.REPORT_FILES` and
-`DESCRIPTOR_FILE`, so there is no second payload list (`CONTROL_FILES` still mirrors the
-viewer's control-file set in `source_view.py` until D7 imports it from here).
-
-Consumer seam (D7): `source_view.py` currently accepts `exit_code` 0-3 and a receipt
-without LF; the canonical types are stricter (0-2, LF required). Before adopting
-`classify_bundle`, D7 decides whether to align the viewer or report a legacy-receipt need to D5.
+`DESCRIPTOR_FILE`. The viewer (`source_view.py`) imports these layouts directly; there is
+no second file list. It accepts the same COMPLETE exit codes (0-2) and LF-terminated
+receipt as these types, and the writer checks its own bundle with `classify_bundle`.
 
 ## Deferred validation
 
@@ -154,4 +151,4 @@ without LF; the canonical types are stricter (0-2, LF required). Before adopting
 - No real bundle or archive was read to confirm the inventory types against writer output.
 - Pydantic strict JSON-mode behaviour for literal/union edge cases, and full producer
   compatibility of the added invariants, are unverified until tests run.
-- Source fingerprint profile v2 including this module is owned by D7 (seam S3).
+- Source fingerprint profile v2 (`provenance.py`) includes `report_wire.py`; v1 descriptors keep verifying against the nine-file v1 profile.
