@@ -6,7 +6,7 @@ Evidence uses RFC6901 locations in that pinned local document and checks masks a
 
 Private reports preserve exact addresses and pointers as an explicitly sensitive local artifact. Shareable reports and model capsules contain random IDs and whitelisted typed facts, excluding addresses, pointers, filenames, tags, arbitrary strings and private mappings. HTML escapes all text and loads no external assets.
 
-The default CLI is read/export only. No Terraform, cloud SDK, subprocess, network, database or server is part of the review pipeline. A future optional provider transport has a separate approval boundary and all-attempt budget journal; finite selectors cannot mutate rule outcomes. Free prose and model-only prediction remain isolated experimental arms.
+The default CLI is read/export only. No Terraform, cloud SDK, subprocess, network, database or server is part of the review pipeline. Separate development provider source is disabled by default, requiring external admission and an active all-attempt journal start before credential access/HTTPS. The synthetic CLI stays fake-only. Finite selectors cannot mutate rule outcomes. Free prose and model-only prediction remain isolated experimental arms.
 
 Evaluation sources import independently authored gold and measured rows. A fresh hidden corpus must be independently sealed and lineage-disjoint before tuning; it is consumed after exposure. Detector authors have supplied no hidden oracle here. Static construction acceptance does not close release acceptance.
 
@@ -20,6 +20,7 @@ Evaluation sources import independently authored gold and measured rows. A fresh
 | Evidence | `src/iac_review/evidence/` | Reopen pinned bytes; verify resource, side, pointer, masks and expected value state |
 | Report | `src/iac_review/report/` | Bind references to their evaluation resource, withhold failed required evidence, aggregate exit precedence, allowlisted projections and escaped HTML |
 | Private viewer | `src/iac_review/source_view.py` | Verify the closed COMPLETE bundle inventory; optionally check source digest and one explicitly selected private fact |
+| Safe export | [shareable_export.py](src/iac_review/shareable_export.py) | Recompute canonical D from explicit source/current pins and exact threshold; fresh safe-only output/IDs, no retained map |
 | Explanation | `src/iac_review/explain/` | Finite relation/polarity/ID/limitation validation; deterministic fallback and immutable rule decisions |
 | Accounting | `src/iac_review/attempts/` | Exclusive worker, durable starts/reservations and terminal history; every unreconciled timeout blocks subsequent calls |
 
@@ -43,8 +44,11 @@ allowlisted fact rather than an unrestricted raw-document viewer.
 
 `eval/model/` contains injected fake/protocol transport, isolated M/P inputs,
 finite L validation, all-attempt provenance and synthetic driver source. Mock or
-protocol transport is always live-ineligible. P prose is transient experimental
-material for later independent rubric assessment; it cannot enter product decisions.
+protocol transport is always live-ineligible. Separate disabled programmatic provider
+activation/HTTPS source requires external admission and the original journal; see
+[provider boundary](docs/PROVIDER-ACTIVATION.md). P prose can be explicitly captured
+in separate private artifacts for independent assessment; it cannot enter product
+decisions or shareable output. No provider or capture was executed.
 
 `eval/scanners/` contains fixed-argument bounded runner/adapters, comparison rows
 and a scorer import bridge for C/C-custom/T. This separate harness deliberately
@@ -74,8 +78,16 @@ snapshot, including failed attempts and attempts without scorer rows. Model tota
 are absent without that all-attempt account; row subtotal is explicitly partial.
 Optional `UtilityRequest.producer_exports` consumes the exact ExportBundle
 allowlist and remains live-ineligible. No producer change is needed merely to
-invent eligibility. The accounting library is present; its operator ledger CLI
-remains in progress and is not documented as an available command.
+invent eligibility. The separate [operator ledger source](docs/LEDGER.md) now offers
+read-only status and pinned receipt reconciliation with normal exclusive ownership.
+There is no force unlock/retry. Runtime behavior remains unverified.
+
+[Consumed-edition preparation](docs/CONSUMED-EDITIONS.md) reuses existing custody/
+release types plus externally pinned CompletionReference. All seven genuine measured
+terminal inventories and full failure/unknown/cost coverage are required before
+input/oracle reads. It never derives labels or runs arms. The fresh local candidate
+retains exact approved bytes and lineage; score FAIL stays FAIL. This is neither
+automatic unblinding nor publication. All seven remain NOT MEASURED.
 
 `scripts/check_source_boundaries.py` contains a bounded stdlib checker for product AST/import edges
 without importing product modules. It excludes the development scanner harness.

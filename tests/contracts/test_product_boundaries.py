@@ -94,3 +94,50 @@ def test_source_limit_is_an_explicit_finding(boundary_checker, product_source, m
     monkeypatch.setattr(boundary_checker, "MAX_FILES", 1)
     report = boundary_checker.inspect_package(product_source)
     assert any(row["code"] == "source_file_limit" for row in report["issues"])
+
+
+def test_lazy_safe_export_stays_in_product_graph(boundary_checker, product_source):
+    (product_source / "cli.py").write_text(
+        'def main():\n    from iac_review.shareable_export import export_shareable\n'
+        '    return export_shareable()\n', encoding="utf-8")
+    (product_source / "shareable_export.py").write_text(
+        'def export_shareable():\n    return 0\n', encoding="utf-8")
+    report = boundary_checker.inspect_package(product_source)
+    assert "iac_review.shareable_export" in report["default_reachable_modules"]
+    assert report["issues"] == []
+    assert report["development_evaluation_inspected"] is False
+    assert report["authorization_granted"] is False
+    assert report["publication_performed"] is False
+
+
+@pytest.mark.parametrize("source", [
+    'def main():\n    from eval.model.provider_http import ProviderTransport\n',
+    'def main():\n    from eval.runner.edition_release import prepare_consumed_edition\n',
+])
+def test_evaluation_import_cannot_enter_product(boundary_checker, product_source, source):
+    (product_source / "cli.py").write_text(source, encoding="utf-8")
+    report = boundary_checker.inspect_package(product_source)
+    assert any(row["code"] == "forbidden_import" for row in report["issues"])
+
+
+@pytest.mark.parametrize("source", [
+    'import os\ndef main():\n    return os.getenv("SYNTHETIC_KEY_NAME")\n',
+    'from os import environ as settings\ndef main():\n    return settings["SYNTHETIC_KEY_NAME"]\n',
+])
+def test_product_environment_lookup_is_a_finding(boundary_checker, product_source, source):
+    (product_source / "cli.py").write_text(source, encoding="utf-8")
+    report = boundary_checker.inspect_package(product_source)
+    assert any(row["code"] in {"product_environment_access", "forbidden_or_dynamic_call"}
+               for row in report["issues"])
+
+
+def test_external_provider_source_is_not_claimed_inspected(boundary_checker, product_source):
+    harness = product_source.parents[1] / "eval" / "model"
+    harness.mkdir(parents=True)
+    (harness / "provider_http.py").write_text(
+        'import http.client\nimport os\ndef admitted():\n    return os.environ["SYNTHETIC_KEY"]\n',
+        encoding="utf-8")
+    report = boundary_checker.inspect_package(product_source)
+    assert report["issues"] == []
+    assert report["development_evaluation_inspected"] is False
+    assert report["runtime_verified"] is False

@@ -55,3 +55,11 @@ coverage. No global secure badge, live measurement, producer authenticity or
 publication authorization follows. Existing inspect/explain/evidence/verify-report
 interfaces remain unchanged. Focused source regressions live in tests/shareable/
 and have not run.
+
+The separate [consumed-edition gate](CONSUMED-EDITIONS.md) is a private local
+reproducibility workflow, not this outward projection. Its candidate contains
+approved original synthetic input/oracle bytes and must not be copied into a
+share directory. Neither command authorizes external publication. The
+[disabled provider harness](PROVIDER-ACTIVATION.md) has a separate external admission
+boundary; sharing never activates it. See [testing](TESTING.md) for deferred
+privacy/failure checks. All seven arms remain NOT MEASURED.

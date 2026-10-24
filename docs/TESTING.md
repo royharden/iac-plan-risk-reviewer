@@ -20,9 +20,10 @@ Terraform version strings in test inputs do not claim tested compatibility.
 | `tests/attempts/` | F2 timeout pending/replay/conservative accounting and explicit reconciliation |
 | `tests/integration/` | CLI 3/2/1/0, finalization deadline, occupied output, default model/network/process guards, mutation abort, offline explain boundary |
 
-Shared `tests/eval/` and other `tests/contracts/` files belong to other leads.
-Only the later explicitly granted `tests/contracts/test_product_boundaries.py`
-belongs to this package; no other shared test was edited or validated.
+Shared `tests/eval/` and other `tests/contracts/` files generally belong to other
+leads. D7 has individual grants for its annotation/assessment bridge tests,
+`tests/eval/test_edition_release.py` and `tests/contracts/test_product_boundaries.py`;
+no directory-wide ownership or independent acceptance follows.
 `tests/conftest.py` supplies only uniquely prefixed
 `core_change`/`core_plan_file` helpers; no global autouse behavior or environment
 mutation affects other test groups.
@@ -99,4 +100,70 @@ The checker prints a static report to stdout, with 0 for no policy findings and
 checker result has been observed. Declarative dataclass/Pydantic/regex calls are
 trusted syntax; aliases/rebinding, reflection, generated/native code, dependency
 behavior and filesystem races prevent this from proving runtime isolation. Dev
-scanner subprocess code is intentionally outside the product-package scan.
+scanner/provider/edition harness code is intentionally outside the product-package
+scan. A product import of evaluation code remains forbidden even when lazy. Direct
+product environment lookup is a finding. The checker neither inspects nor admits the
+disabled external provider nor grants authorization or publication.
+
+## Demo, safe export and consumed-edition source
+
+[Demo](DEMO.md) requires fake/synthetic flags and a PRIVATE root marker, with strict
+viewer, finite fallback, mock journal and declared scanner capabilities.
+[Sharing](SHARING.md) requires the original plan/current bound core pins and
+canonical regeneration into a fresh safe-only directory. Focused sources:
+[demo journey](../tests/integration/test_demo_journey.py) and
+[share exporter](../tests/shareable/test_export.py). Neither has run.
+
+[Consumed-edition preparation](CONSUMED-EDITIONS.md) has separate external release
+and completion pins. Missing/mock/not-run arms cannot close it; measured
+negative/unknown/error results and costs remain. Its [regressions](../tests/eval/test_edition_release.py)
+are public metadata examples, not custody, oracle labels or release evidence.
+The [ledger](LEDGER.md) and [disabled provider](PROVIDER-ACTIVATION.md) now have
+source interfaces; ordinary model CLI stays fake-only and product review offline.
+
+Additional future authorized selection, from the outer shell:
+
+```powershell
+uv run --project .\iac-plan-risk-reviewer pytest --import-mode=importlib `
+  .\iac-plan-risk-reviewer\tests\shareable `
+  .\iac-plan-risk-reviewer\tests\eval\test_edition_release.py `
+  .\iac-plan-risk-reviewer\tests\contracts\test_product_boundaries.py
+```
+
+Do not run under open Dirty Mode. A later positive edition test needs separately
+approved independent records and exact-copy/privacy/failure/cost/expiry/rollback/
+crash checks. Tiny metadata examples cannot close that obligation. All seven arms
+remain NOT MEASURED.
+
+## Fixed schema descriptions and compatibility
+
+The [actual-wire registry](../eval/runner/schema_registry.py) and
+[exporter](../scripts/export_schemas.py) remain unexecuted source. Their focused
+[export regressions](../tests/contracts/test_schema_export.py) and
+[registry/compatibility regressions](../tests/contracts/test_schema_registry.py)
+cover fixed canonical types, missing/duplicate/version conflicts, private versus
+shareable-shape classification, data-only catalogue without application imports,
+legacy exporter API/--out retention, explicit unsupported versions, closed root
+unknown fields, partial-write ABORTED state and detached catalogue/file hashes.
+
+Compatibility cases distinguish seven-file legacy report inventory 1.0.0 from
+eight-file bound 1.1.0; changing a version cannot retain the wrong inventory or
+upgrade a legacy bundle's trust. They also distinguish deterministic RunManifest
+from schema-valid evaluation declarations requiring separate preflight admission.
+Batch transport requires its exact explicit version; dataclass descriptions do not
+gain strict/unknown-field rejection from being listed. Dictionary report projections
+and private fields excluded by serialization remain documented schema limits.
+
+Future selection after authorization, with outer cwd unchanged:
+
+```powershell
+uv run --project .\iac-plan-risk-reviewer pytest --import-mode=importlib `
+  .\iac-plan-risk-reviewer\tests\contracts\test_schema_export.py `
+  .\iac-plan-risk-reviewer\tests\contracts\test_schema_registry.py
+```
+
+No test, import or schema generation was run. Later activation must inspect real
+validation/serialization schema output and references, aliases/strictness/custom
+validators, frozen dataclass limitations, version drift and filesystem failures.
+See [schema source documentation](schemas/README.md). Descriptions never admit
+payloads, authenticate actors/execution or authorize provider/release activity.

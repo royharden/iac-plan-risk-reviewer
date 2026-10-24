@@ -15,7 +15,7 @@ uv run --project .\iac-plan-risk-reviewer iac-review inspect .\iac-plan-risk-rev
 
 Require `reports/public-ssh/export-state.json` to say `COMPLETE` before opening or copying reports. An `ABORTED` marker or pending remnants are not a completed invocation. A successful risk review deliberately returns exit 1; coverage uncertainty returns 2. Neither is a command-crash signal.
 
-Open the inner `reports/public-ssh/private.html` locally. It is sensitive: exact resource addresses and JSON pointers are intentional. Share only the two `shareable` files, which replace identifying locations with random opaque IDs. Marked values remain masked in both. The private mapping, original plan and local manifest stay private. Intended default behavior runs no Terraform/apply, model, scanner, server or cloud SDK. It does not copy the source plan into a report. Runtime effect/privacy validation remains pending.
+Open the inner `reports/public-ssh/private.html` locally. It is sensitive: exact resource addresses and JSON pointers are intentional. Use the explicit [share exporter](docs/SHARING.md) with the original plan and a fresh separate destination. It verifies a COMPLETE bound bundle/current source pins, then regenerates canonical safe files with fresh IDs. Never share the whole private/demo directory. Marked values remain masked. Intended default behavior runs no Terraform/apply, model, scanner, server or cloud SDK. It does not copy the source plan into a report. Runtime effect/privacy validation remains pending.
 
 Expected by policy, not observed output: standalone ingress opening TCP/22 to `0.0.0.0/0` produces R1 introduced risk with exact source references. HTTPS/443 alone is outside R1's admin-port predicate. Unknown required facts produce an indeterminate result. Follow the [two-minute synthetic walkthrough](docs/DEMO.md), [activation order](docs/ACTIVATION.md) and [limits](docs/LIMITATIONS.md).
 
@@ -32,7 +32,7 @@ Unchanged declared risk remains visible and counts toward the severity threshold
 
 ## Architecture
 
-`ingest` bounds and validates local JSON → `rules` evaluates frozen predicates → `evidence` resolves exact pinned source facts → `report` produces escaped self-contained artifacts. Strict frozen Pydantic v2 records connect these stages. Optional `explain` accepts finite template selections only; it cannot change a finding. `attempts` implements a single-worker append-only accounting contract. Default product imports expose no network/process launch or cloud SDK path. The model transport remains a fake/protocol until explicit future approval.
+`ingest` bounds and validates local JSON → `rules` evaluates frozen predicates → `evidence` resolves exact pinned source facts → `report` produces escaped self-contained artifacts. Strict frozen Pydantic v2 records connect these stages. Optional `explain` accepts finite template selections only; it cannot change a finding. `attempts` implements a single-worker append-only accounting contract. Product review source has no model/network/process/scanner entrypoint. Separate development provider source is disabled by default and requires external admission plus an active journal start. It has not run; the ordinary model CLI remains explicitly fake-only.
 
 Development evaluation sources live in `eval/` and `scripts/`, outside default product imports. They consume independently supplied labels/measurements; they do not manufacture gold from detectors. See [evaluation](docs/EVALUATION.md), [compatibility](docs/COMPATIBILITY.md) and [architecture](ARCHITECTURE.md).
 
@@ -46,14 +46,16 @@ These interfaces exist as source; none is claimed executed or accepted at runtim
 | `iac-review explain SHAREABLE --finding ID --selection FILE` | Validate an offline finite selection; exit 0 accepted, 2 deterministic fallback, 3 malformed input; no implicit model call |
 | `iac-review verify-report BUNDLE [--plan PLAN]` | Confirm complete local bundle/hash integrity; optional explicit source digest check; exit 0 integrity result or 3 failure, not a risk verdict |
 | `iac-review evidence BUNDLE --plan PLAN --finding ID --fact ID` | Resolve one selected safe fact; stdout deliberately contains private exact locations and must stay local; exit 0 or 3 |
+| `iac-review share BUNDLE --plan PLAN --out DIR` | Regenerate safe-only output from bound current source/config pins; preserve review exit 0/1/2, refuse with 3 |
 | `iac_review.source_view.verify_report(bundle, original_plan=None)` | Verify COMPLETE bundle/hash integrity and optionally an explicitly supplied source digest; does not authenticate the producer or prove rule correctness |
 | `iac_review.source_view.view_evidence(bundle, original_plan, finding_id, fact_id)` | Reopen only the explicitly supplied pinned plan; return one mask-safe fact with a clearly private exact location |
-| `scripts/demo.py --out DIR` | Four hand-authored synthetic cases; walkthrough only, not a benchmark |
+| `scripts/demo.py --fake --synthetic --out DIR` | Fixed four-case PRIVATE offline journey, strict viewer/finite fallback/mock journal; all seven arms NOT MEASURED |
 | `scripts/eval_model.py` | Explicit `--fake` synthetic D/L/P/M plumbing with bounded journal/provenance; mock/protocol results are live-ineligible and completed plumbing returns 2 |
 | `scripts/eval_scanners.py` | Explicit manifest/output and pending/fake-only/live modes; live runner source requires separate runtime authorization and confinement, unavailable under construction |
 | `scripts/eval.py` | Import independently supplied oracle/measurements plus pinned custody, seal, semantic, eligibility and utility records; no bundled hidden corpus or invented results |
 | `iac_review.contracts.manifest.RunManifest`; `eval.runner.preflight.preflight(root, manifest, pins)` | Closed run metadata and explicit read-only metadata preflight source; verifies declared links/pins, not payload truth or execution authenticity |
-| `iac_review.attempts.AttemptJournal.start/terminal/reconcile` | Existing accounting library; operator ledger CLI is still in progress and is not an available command in this snapshot |
+| `scripts/ledger.py status JOURNAL`; `scripts/ledger.py reconcile ...` | Explicit bounded read-only status/pinned append-only receipt reconciliation source; no retry/unlock/provider; see [ledger](docs/LEDGER.md) |
+| `scripts/prepare_consumed_edition.py` | Externally pinned local consumed-synthetic candidate gate; no inference/publication; see [consumed editions](docs/CONSUMED-EDITIONS.md) |
 | `scripts/export_schemas.py --out DIR` | Explicit schema-export source, not generated schemas or evidence that every validator is represented |
 | `scripts/check_source_boundaries.py [--package PATH]` | Bounded stdlib AST/import-graph policy source for `src/iac_review`; not executed, not a runtime effect sandbox |
 

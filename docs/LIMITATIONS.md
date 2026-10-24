@@ -30,7 +30,9 @@ require inspecting the authoritative ABORTED marker and residual files. The sour
 does not promise operating-system preemption or proven crash durability. Journal
 locks and reconciliation likewise need later platform/concurrency validation.
 
-The model driver is explicitly fake-only. Scanner runner/adapters and scorer
+The ordinary model CLI is explicitly fake-only. Disabled programmatic provider
+source separately requires external admission and the original journal start before
+credential access/HTTPS; it has no execution evidence. Scanner runner/adapters and scorer
 bridges are development harness source with unverified pins, sandbox and mapping
 semantics; they are not part of default review imports. Neither mocks nor imported
 metadata authenticate an execution. All seven arms remain NOT MEASURED. No zero
@@ -39,8 +41,15 @@ cost, latency, accuracy or productivity result follows from source construction.
 Binary introduced-risk prediction is not a full semantic outcome or D exact pass.
 Row cost subtotals are partial; model totals require every producer attempt,
 including failed/no-row attempts and pending liabilities. Optional producer exports
-stay live-ineligible. The operator ledger CLI is still in progress; the existing
-accounting library alone does not establish operator-command availability.
+stay live-ineligible. The separate [operator ledger source](LEDGER.md) now exists;
+status/reconciliation/crash/concurrency behavior has not run.
+
+The [share exporter](SHARING.md) requires current bound source and an explicit
+original plan; stale/legacy bundles need reinspection. No retained mapping or
+automatic upgrade exists. The [consumed-edition gate](CONSUMED-EDITIONS.md) requires
+separate external release and completion pins. No real hidden payload was read or
+candidate generated. Metadata cannot authenticate permission, genuine execution or
+secret-free origin. Measured FAIL/unknown stays; missing/mock arms cannot close it.
 
 Development regressions and the bounded AST checker source are not hidden gold,
 independent acceptance or an effect sandbox. Reflection, generated/native code,

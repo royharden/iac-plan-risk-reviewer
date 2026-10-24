@@ -47,13 +47,45 @@ promote mocks/legacy rows to satisfy a missing measurement.
 Use strict ProducerAccounting over D5 accounting_json plus every attempt snapshot,
 including failed/no-row attempts, usage and pending liabilities. A row subtotal
 cannot stand in for model total cost. Optional producer_exports consumes only the
-exact allowlisted ExportBundle and remains live-ineligible. The operator ledger
-CLI is still in progress; do not invent commands or infer its completion from the
-existing start/terminal/reconcile library. Later activation must exercise the
-actual completed interface and operator reconciliation boundary.
+exact allowlisted ExportBundle and remains live-ineligible. The separate
+[operator ledger source](LEDGER.md) now provides status and pinned receipt
+reconciliation. Later activation must exercise that interface, residual locks,
+torn replay and the explicit operator reconciliation boundary.
+
+The ordinary [model CLI](model-activation.md) remains explicitly fake-only.
+Separate [disabled provider source](PROVIDER-ACTIVATION.md) requires externally
+approved admission, exact request/data/model/budget pins and an active original
+journal start before credential access/HTTPS. It has not been activated.
+The [share exporter](SHARING.md) and [private demo](DEMO.md) need fresh separate
+outputs and authoritative COMPLETE markers. Exercise stale bound source refusal,
+canonical regeneration and all privacy/failure boundaries after authorization.
+
+Only after all seven genuine measurements exist may an external controller approve
+[consumed-edition preparation](CONSUMED-EDITIONS.md). Separate release/completion
+pins bind the full consumed inventory and global frozen identities before payload
+reads. Keep all measured FAIL/negative/unknown and costs. Missing/mock/not-run arms
+block preparation. No actual candidate generation or publication is authorized by
+these commands/docs; all seven remain NOT MEASURED.
 
 After later authorization, verify the new AST boundary-checker source and tests
 before using its result. The intended checker reads default product source and
 import edges without loading application modules; development scanner subprocess
 code is deliberately outside its scope. Runtime dependencies/effects still need
 the actual sandbox checks in step 2 above. No static pass replaces those checks.
+
+The [fixed schema registry/exporter](schemas/README.md) now covers completed
+canonical wires and distinguishes ordinary dataclass descriptions from closed
+Pydantic roots. After explicit environment/runtime authorization, run its focused
+[compatibility regression source](../tests/contracts/test_schema_registry.py) and
+[export failure/API source](../tests/contracts/test_schema_export.py) before
+generating descriptions into a fresh separate directory. The exporter retains
+`--out`; its manifest is explicitly version 2, with a separately pinned catalogue
+and authoritative COMPLETE marker. Do not run it during open Dirty Mode.
+
+Inspect actual output for references/aliases/private classification and custom
+validator gaps. The report wrapper's dictionary projections are not a closed
+per-artifact safety schema; existing viewer inventory checks remain required.
+Exact batch version dispatch, deterministic/evaluation separation and genuine
+external custody/eligibility stay separate gates. A schema catalogue does not
+authenticate actors/execution, admit a payload, activate a provider or authorize
+consumed-edition release. All seven arms remain NOT MEASURED.

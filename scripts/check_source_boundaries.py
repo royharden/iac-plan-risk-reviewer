@@ -1,6 +1,7 @@
 """Bounded static product-source policy; never imports/executes the application.
 
-Development scanner harness is outside scope. A clear AST result cannot establish
+Development evaluation/provider/scanner/release harnesses are outside scope.
+A clear AST result cannot establish
 runtime effects, dependency behavior, sandboxing or independent product acceptance.
 """
 from __future__ import annotations
@@ -21,13 +22,14 @@ BLOCKED_IMPORTS = (
     "socket", "_socket", "socketserver", "http", "urllib", "urllib3", "requests", "httpx", "aiohttp",
     "subprocess", "asyncio", "multiprocessing", "boto3", "botocore", "azure", "google.cloud",
     "openai", "anthropic", "grpc", "paramiko", "ftplib", "smtplib", "telnetlib", "xmlrpc",
-    "webbrowser", "ctypes", "cffi", "eval", "scripts", "tests",
+    "webbrowser", "ctypes", "cffi", "keyring", "eval", "scripts", "tests",
 )
 BLOCKED_CALLS = {
     "__import__", "builtins.__import__", "eval", "exec", "compile", "builtins.eval",
     "builtins.exec", "builtins.compile", "importlib.import_module", "importlib.util.module_from_spec",
     "os.system", "os.popen", "os.startfile", "os.fork", "os.forkpty",
     "concurrent.futures.ProcessPoolExecutor",
+    "os.getenv", "os.getenvb", "os.environ.get", "os.environb.get",
 }
 DECLARATIVE_CALLS = {
     "frozenset", "set", "dict", "tuple", "list", "object", "re.compile",
@@ -222,6 +224,9 @@ def inspect_package(package: Path) -> dict:
             elif root not in sys.stdlib_module_names | {"pydantic", "__future__"}:
                 add(module, node, "unapproved_dependency_import")
         for node in ast.walk(tree):
+            if isinstance(node, (ast.Name, ast.Attribute)) and _qualified(node, aliases) in {
+                    "os.environ", "os.environb"}:
+                add(module, node, "product_environment_access")
             if isinstance(node, ast.Call):
                 target = _qualified(node.func, aliases)
                 if (target in BLOCKED_CALLS or _blocked(target)
@@ -248,8 +253,11 @@ def inspect_package(package: Path) -> dict:
         "import_edges": {name: sorted(targets) for name, targets in sorted(edges.items())},
         "issues": sorted(issues, key=lambda row: (row["module"], row["line"], row["code"])),
         "runtime_verified": False, "dependency_behavior_verified": False,
+        "development_evaluation_inspected": False,
+        "authorization_granted": False, "publication_performed": False,
         "limitations": [
-            "Product package source only; development scanner harness excluded.",
+            "Product package source only; evaluation/provider/scanner/edition harnesses excluded.",
+            "Default product environment/credential lookup is a finding; external approval is not inferred.",
             "Graph includes syntactic lazy imports; closure is not an observed module-load inventory.",
             "__main__ is excluded from import-time declaration checks, not import/call checks.",
             "Declarative dataclass/Pydantic/re calls are trusted syntax, not audited dependency behavior.",

@@ -72,3 +72,11 @@ have not run. The private-safe share exporter is a separate explicit command;
 it must regenerate safe content from a bound bundle and the supplied original
 plan rather than copying arbitrary stored HTML. See [sharing](SHARING.md) for
 the source interface and its still-unverified activation boundary.
+
+The demo is declared development-synthetic and cannot satisfy the independent
+[consumed-edition gate](CONSUMED-EDITIONS.md), genuine seven-arm measurements or
+release approval. The separate [ledger source](LEDGER.md) offers explicit local
+operator status/reconciliation; the demo itself keeps only mock accounting.
+[Provider activation source](PROVIDER-ACTIVATION.md) remains separately disabled/
+externally admitted and is never activated by this journey. All seven arms remain
+NOT MEASURED; no hidden payload or candidate edition was used/generated.
