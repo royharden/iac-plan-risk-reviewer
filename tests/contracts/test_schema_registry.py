@@ -107,6 +107,79 @@ def test_schema_only_wrapper_does_not_invent_nested_report_validator(registry):
     assert any("dictionary wrapper" in text for text in registry.catalogue()["limitations"])
 
 
+CANONICAL_ADDED = {
+    # stable_id: (type path, wire versions)
+    "report-PrivateProjection": ("iac_review.contracts.report_wire.PrivateProjection", ("1.0.0",)),
+    "report-LegacyPrivateReport": ("iac_review.contracts.report_wire.LegacyPrivateReport", ("1.0.0",)),
+    "shareable-ShareableProjection": ("iac_review.contracts.report_wire.ShareableProjection", ("1.0.0",)),
+    "inventory-BoundManifest": ("iac_review.contracts.report_inventory.BoundManifest", ("1.1.0",)),
+    "inventory-LegacyManifest": ("iac_review.contracts.report_inventory.LegacyManifest", ("1.0.0",)),
+    "inventory-CompleteMarker": ("iac_review.contracts.report_inventory.CompleteMarker", ()),
+    "inventory-AbortedMarker": ("iac_review.contracts.report_inventory.AbortedMarker", ()),
+    "inventory-BundleInventory": ("iac_review.contracts.report_inventory.BundleInventory", ()),
+    "exposure-ExposureCommitAuthorization": ("eval.runner.exposure_journal.ExposureCommitAuthorization", ("1",)),
+    "exposure-InputExposureReceipt": ("eval.runner.exposure_journal.InputExposureReceipt", ("m4-input-exposure-v1",)),
+    "exposure-CommitEnvelope": ("eval.runner.exposure_journal.CommitEnvelope", ("m4-input-exposure-commit-v1",)),
+    "exposure-InputExposureCommit": ("eval.runner.exposure_journal.InputExposureCommit", ("m4-input-exposure-commit-v1",)),
+    "exposure-ExposureJournalStatus": ("eval.runner.exposure_journal.ExposureJournalStatus", ()),
+    "access-PayloadPermission": ("eval.runner.benchmark_access.PayloadPermission", ()),
+    "access-HeldoutAuthorization": ("eval.runner.benchmark_access.HeldoutAuthorization", ("m4-heldout-input-access-v2",)),
+    "frozen-FrozenRunPins": ("eval.runner.frozen_run.FrozenRunPins", ()),
+    "handoff-ArmCaseStatus": ("eval.runner.scoring_handoff.ArmCaseStatus", ()),
+    "handoff-ScoringHandoff": ("eval.runner.scoring_handoff.ScoringHandoff", ("m4-scoring-handoff-v1",)),
+    "release-CompletionReference": ("eval.runner.edition_release.CompletionReference", ("2",)),
+}
+
+
+def test_canonical_types_added_this_run_are_declared_with_real_versions(registry):
+    for stable_id, (type_name, versions) in CANONICAL_ADDED.items():
+        entry = registry.resolve(stable_id)
+        assert entry.type_name == type_name
+        assert entry.wire_versions == versions
+        assert entry.representation == "pydantic_closed"
+    assert registry.resolve("shareable-ShareableProjection").classification == "shareable_shape"
+    for stable_id in ("report-PrivateProjection", "report-LegacyPrivateReport",
+                      "inventory-BundleInventory", "exposure-InputExposureReceipt",
+                      "access-HeldoutAuthorization", "handoff-ScoringHandoff"):
+        assert registry.resolve(stable_id).classification == "private"
+    # Data-only: the declaration table has no duplicate IDs after the additions.
+    ids = [entry.stable_id for entry in registry.declarations()]
+    assert len(ids) == len(set(ids))
+
+
+def test_canonical_types_added_this_run_resolve_to_real_classes(registry):
+    import importlib
+    models = registry.boundary_models()
+    for stable_id, (type_name, _versions) in CANONICAL_ADDED.items():
+        module, name = type_name.rsplit(".", 1)
+        assert models[stable_id] is getattr(importlib.import_module(module), name)
+
+
+def test_report_provenance_declares_both_source_profiles(registry):
+    entry = registry.resolve("provenance-ReportProvenance")
+    assert entry.wire_versions == ("1", "2")
+    assert registry.resolve("provenance-ReportProvenance", wire_version="2") is not None
+    with pytest.raises(ValueError, match="unsupported"):
+        registry.resolve("provenance-ReportProvenance", wire_version="3")
+
+
+def test_old_payload_versions_of_added_wires_are_unsupported(registry):
+    for stable_id, old in (("release-CompletionReference", "1"),
+                           ("access-HeldoutAuthorization", "1"),
+                           ("exposure-InputExposureReceipt", "1"),
+                           ("inventory-BoundManifest", "1.0.0"),
+                           ("report-PrivateProjection", "2.0.0")):
+        with pytest.raises(ValueError, match="unsupported"):
+            registry.resolve(stable_id, wire_version=old)
+
+
+def test_closed_report_and_inventory_gaps_are_no_longer_disclosed_as_open(registry):
+    limitations = registry.catalogue()["limitations"]
+    assert not any("not typed individual report artifacts" in text for text in limitations)
+    assert not any("not a canonical Pydantic inventory model" in text for text in limitations)
+    assert any("pre-access intents" in text for text in limitations)
+
+
 def test_legacy_arm_defaults_remain_ineligible_and_binary_is_explicit(registry):
     from pydantic import ValidationError
     model = registry.boundary_models()["eval-ArmRow"]

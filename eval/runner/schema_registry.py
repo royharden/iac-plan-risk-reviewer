@@ -67,6 +67,22 @@ GROUPS = (
         "AssemblySelection", "ReleasedArtifact", "ReleaseAuthorization", "CopiedArtifact", "AssemblyReceipt")),
     ("release", "private", "pydantic_closed", "eval.runner.edition_release", (
         "ArmCompletion", "CompletionReference")),
+    # Canonical typed report artifacts (report_wire). ReviewReport stays the facade.
+    ("report", "private", "pydantic_closed", "iac_review.contracts.report_wire", (
+        "PrivateProjection", "LegacyPrivateReport")),
+    ("shareable", "shareable_shape", "pydantic_closed", "iac_review.contracts.report_wire", (
+        "ShareableProjection",)),
+    ("inventory", "private", "pydantic_closed", "iac_review.contracts.report_inventory", (
+        "BoundManifest", "LegacyManifest", "CompleteMarker", "AbortedMarker", "BundleInventory")),
+    # Pre-access input exposure (contract S1); distinct from custody-ExposureReceipt.
+    ("exposure", "private", "pydantic_closed", "eval.runner.exposure_journal", (
+        "ExposureCommitAuthorization", "InputExposureReceipt", "CommitEnvelope",
+        "InputExposureCommit", "ExposureJournalStatus")),
+    ("access", "private", "pydantic_closed", "eval.runner.benchmark_access", (
+        "PayloadPermission", "HeldoutAuthorization")),
+    ("frozen", "private", "pydantic_closed", "eval.runner.frozen_run", ("FrozenRunPins",)),
+    ("handoff", "private", "pydantic_closed", "eval.runner.scoring_handoff", (
+        "ArmCaseStatus", "ScoringHandoff")),
     ("provider", "private", "dataclass_description", "eval.model.provider_wire", (
         "ProviderConfig", "ApprovedAttempt")),
     ("activation", "private", "dataclass_description", "eval.model.provider_activation", (
@@ -81,18 +97,36 @@ VERSIONED = {
     "eval-ArmRow": ("1", "2"), "eval-EligibilityManifest": ("2",),
     "bridge-BridgeResult": ("1",), "bridge-UtilityRequest": ("1",),
     "manifest-RunManifest": ("1",), "provenance-LocalConfig": ("1",),
-    "provenance-ReportProvenance": ("1",), "artifact-ExplanationArtifact": ("1",),
+    # Source profile v1 (9 files) and v2 (10 files, adds report_wire); no implicit upgrade.
+    "provenance-ReportProvenance": ("1", "2"), "artifact-ExplanationArtifact": ("1",),
     "artifact-Rubric": ("1",), "capture-_Index": ("1",),
     "batch-AssessmentBatchTransport": ("m4-assessment-batch-transport-v1",),
     "assembly-AssemblySelection": ("1",), "assembly-ReleaseAuthorization": ("1",),
     "assembly-AssemblyReceipt": ("1",), "release-CompletionReference": ("2",),
+    "report-PrivateProjection": ("1.0.0",), "report-LegacyPrivateReport": ("1.0.0",),
+    "shareable-ShareableProjection": ("1.0.0",),
+    "inventory-BoundManifest": ("1.1.0",), "inventory-LegacyManifest": ("1.0.0",),
+    "exposure-ExposureCommitAuthorization": ("1",),
+    "exposure-InputExposureReceipt": ("m4-input-exposure-v1",),
+    "exposure-CommitEnvelope": ("m4-input-exposure-commit-v1",),
+    "exposure-InputExposureCommit": ("m4-input-exposure-commit-v1",),
+    "access-HeldoutAuthorization": ("m4-heldout-input-access-v2",),
+    "handoff-ScoringHandoff": ("m4-scoring-handoff-v1",),
 }
 
 LIMITATIONS = (
     "Schema descriptions are not payload validation, external actor authentication, execution or admission.",
     "Closed root Pydantic records still contain some dict/Any/string payloads; nested semantic closure is not inferred.",
-    "ReviewReport describes the private/shareable dictionary wrapper, not typed individual report artifacts.",
-    "Legacy/new report inventories are checked by source_view, not a canonical Pydantic inventory model.",
+    "core-ReviewReport describes the private/shareable dictionary wrapper; the typed report artifacts are the separate "
+    "report-PrivateProjection, report-LegacyPrivateReport and shareable-ShareableProjection entries.",
+    "inventory-* entries describe the canonical bundle manifest/marker/inventory models; this registry does not assert "
+    "which writers/readers have adopted them.",
+    "LegacyPrivateReport and LegacyManifest describe explicitly unbound legacy reports/bundles; they are never a current bound version.",
+    "Two exposure records exist: exposure-InputExposureReceipt (pre-access intents) and custody-ExposureReceipt "
+    "(post-measurement results). Neither description is input, oracle or scoring permission.",
+    "The consumed-edition edition.json control record (version 2) is a dictionary checked by "
+    "edition_release.check_edition_receipt, not a registered Pydantic root.",
+    "Runtime handles (e.g. the GuardedScannerInput/FrozenRuntime dataclasses and the HeldoutAccess class) are not wires and are excluded.",
     "Standard dataclass TypeAdapter descriptions do not add strict parsing or unknown-field rejection to canonical dataclasses.",
     "Validation schemas may describe private fields excluded by serialization (e.g. verified capture artifacts). No instance is exported.",
     "Runtime clients/callbacks, Result/Observation/PrivateCapture private-instance collections and HTTP body wrappers are excluded.",
@@ -137,6 +171,12 @@ def _canonical_groups() -> dict:
     import eval.runner.assessment_batch as batch
     import eval.runner.bundle as assembly
     import eval.runner.edition_release as release
+    import iac_review.contracts.report_wire as report_wire
+    import iac_review.contracts.report_inventory as report_inventory
+    import eval.runner.exposure_journal as exposure
+    import eval.runner.benchmark_access as access
+    import eval.runner.frozen_run as frozen
+    import eval.runner.scoring_handoff as handoff
     import eval.model.provider_wire as provider
     import eval.model.provider_activation as activation
     import eval.model.provenance as producer
@@ -174,6 +214,17 @@ def _canonical_groups() -> dict:
         "assembly": (assembly.AssemblySelection, assembly.ReleasedArtifact, assembly.ReleaseAuthorization,
                      assembly.CopiedArtifact, assembly.AssemblyReceipt),
         "release": (release.ArmCompletion, release.CompletionReference),
+        "report": (report_wire.PrivateProjection, report_wire.LegacyPrivateReport),
+        "shareable": (report_wire.ShareableProjection,),
+        "inventory": (report_inventory.BoundManifest, report_inventory.LegacyManifest,
+                      report_inventory.CompleteMarker, report_inventory.AbortedMarker,
+                      report_inventory.BundleInventory),
+        "exposure": (exposure.ExposureCommitAuthorization, exposure.InputExposureReceipt,
+                     exposure.CommitEnvelope, exposure.InputExposureCommit,
+                     exposure.ExposureJournalStatus),
+        "access": (access.PayloadPermission, access.HeldoutAuthorization),
+        "frozen": (frozen.FrozenRunPins,),
+        "handoff": (handoff.ArmCaseStatus, handoff.ScoringHandoff),
         "provider": (provider.ProviderConfig, provider.ApprovedAttempt),
         "activation": (activation.StartedAttempt, activation.Activation, activation.Admission),
         "producer": (producer.ExportBundle,), "preflight": (PreflightPins,),

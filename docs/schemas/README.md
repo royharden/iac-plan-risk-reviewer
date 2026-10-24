@@ -19,8 +19,10 @@ that is separate from the offline product's default import graph.
 The [fixed registry](../../eval/runner/schema_registry.py) declares core/report
 wrappers, provenance/RunManifest, accounting, existing finite selector, model-only,
 scanner, scorer/eligibility, custody, utility/producer bridges, private prose/rubric/
-assessment/catalogue/fact/capture-index/batch, assembly/completion release and
-disabled provider-activation metadata. It reuses actual canonical classes. Completed
+assessment/catalogue/fact/capture-index/batch, assembly/completion release,
+canonical typed report artifacts and bundle inventory, pre-access input exposure,
+held-out input access, frozen-run pins, scoring handoff and disabled
+provider-activation metadata: 121 fixed declarations. It reuses actual canonical classes. Completed
 strict/frozen/extra-forbid Pydantic roots get their actual validation schemas;
 frozen ordinary dataclasses use their actual TypeAdapter descriptions, with no
 duplicate model or configuration that pretends their runtime parser is closed.
@@ -44,8 +46,10 @@ private/shareable_shape classification, representation, literal wire_versions an
 wire_version_field, plus declared runtime-unverified compatibility. Catalogue
 contract version `1` is a description revision, not a payload schema upgrade.
 `shareable_shape` does not authorize sending an instance; product semantic/privacy
-validation is still required. All custody/prose/assessment/capture/provider/release
-types and the whole ReviewReport wrapper are classified private.
+validation is still required. All custody/prose/assessment/capture/provider/release/
+exposure/access/handoff types, the private and legacy report artifacts, bundle
+inventory and the whole ReviewReport wrapper are classified private; only
+`ShareableProjection` and the finite selector wires are `shareable_shape`.
 
 `resolve(id, contract_version="1", *, wire_version=None)` dispatches metadata
 explicitly and refuses unknown IDs/contract/wire versions. It never parses or
@@ -69,11 +73,49 @@ failure/crash/ACL/race behavior remains unverified. Schema-only output cannot gr
 payload admission, actor authentication, execution, provider activation, release
 authorization or product acceptance; all those claims are explicitly false.
 
-The real ReviewReport has private/shareable `dict[str, Any]` fields. No completed
-canonical closed per-artifact inventory type exists. Its schema therefore does
-not prove report shape/privacy, and no duplicate model was invented to claim
-otherwise. Actual legacy manifest 1.0.0 versus bound 1.1.0 report inventory/version
-checks remain in [source_view.py](../../src/iac_review/source_view.py). Likewise,
+`core-ReviewReport` is still the private/shareable `dict[str, Any]` facade, so its
+own schema does not prove report shape or privacy. The canonical typed report
+artifacts are now registered separately from
+[report_wire.py](../../src/iac_review/contracts/report_wire.py) and
+[report_inventory.py](../../src/iac_review/contracts/report_inventory.py):
+
+| Stable ID | Literal wire version | Meaning |
+|---|---|---|
+| `report-PrivateProjection` | `1.0.0` | current bound private report (typed provenance) |
+| `report-LegacyPrivateReport` | `1.0.0` | legacy unbound private report; never promoted to bound |
+| `shareable-ShareableProjection` | `1.0.0` | shareable projection, classified `shareable_shape` |
+| `inventory-BoundManifest` | `1.1.0` | eight-file bound bundle `manifest.json` |
+| `inventory-LegacyManifest` | `1.0.0` | seven-file legacy unbound bundle `manifest.json` |
+| `inventory-CompleteMarker`, `inventory-AbortedMarker`, `inventory-BundleInventory` | unversioned | export-state markers and bundle classification |
+
+Registration describes these types; it does not assert which writers/readers have
+adopted them. Bundle inventory checks in
+[source_view.py](../../src/iac_review/source_view.py) remain the actual consumer
+boundary until verified. `provenance-ReportProvenance` declares `("1", "2")`:
+source profile v1 pins nine core files, v2 ten (adding `report_wire.py`). New
+bundles use v2; v1 bundles keep verifying against the v1 profile and are never
+repinned or upgraded.
+
+Contract S1 exposure and run-control roots:
+
+| Stable ID | Literal wire version | Meaning |
+|---|---|---|
+| `exposure-ExposureCommitAuthorization` | `1` | external pre-access intent declaration (seven arms) |
+| `exposure-InputExposureReceipt` | `m4-input-exposure-v1` | per-arm pre-access receipt; intents, never results |
+| `exposure-CommitEnvelope` | `m4-input-exposure-commit-v1` | durable prepared-event envelope |
+| `exposure-InputExposureCommit` | `m4-input-exposure-commit-v1` | verified commit; all permission flags false |
+| `exposure-ExposureJournalStatus` | unversioned | read-only journal status |
+| `access-HeldoutAuthorization` / `access-PayloadPermission` | `m4-heldout-input-access-v2` / unversioned | input-only held-out access permission |
+| `frozen-FrozenRunPins` | unversioned | external frozen-run selection pins |
+| `handoff-ScoringHandoff` / `handoff-ArmCaseStatus` | `m4-scoring-handoff-v1` / unversioned | post-run pins; no oracle/scoring permission |
+| `release-CompletionReference` | `2` | separate input-exposure and post-measurement pins; v1 refused |
+
+`custody-ExposureReceipt` (unversioned, unchanged) remains the post-measurement,
+pre-oracle record whose `measurements_sha256` is the measured-results file hash.
+The consumed-edition `edition.json` control record (version 2) is a dictionary
+checked by `edition_release.check_edition_receipt`, not a registered root.
+Runtime handles (`FrozenRuntime`, `HeldoutAccess`, `GuardedScannerInput`, scanner
+runner objects) are not wires and are not registered. Likewise,
 RunManifest version 1 has separate deterministic/evaluation stages enforced by
 its Python validator; schema availability cannot replace custody/eligibility.
 VerifiedCaptureIndex validation schema can describe private artifacts excluded
@@ -114,6 +156,10 @@ the consumption record. External exclusive custody/permissions and directory
 durability are still required: local metadata cannot authenticate a claimed
 pre-access write, discover omitted prior exposure or prohibit another process.
 Any exposure consumes the edition for later tuning; fresh claims need new gold.
+These scoring-time receipts are the legacy post-measurement `custody-ExposureReceipt`
+rows. The earlier pre-access input exposure is the separate versioned journal record
+(`exposure-InputExposureReceipt`, see [EXPOSURE-LEDGER.md](../EXPOSURE-LEDGER.md));
+neither substitutes for the other.
 
 UtilityRequest holds separate L/P/M pins and all-attempt records; absent sections
 are INCOMPLETE. Its pins must match the authority's build/prompt/rubric/edition and
@@ -145,8 +191,10 @@ missing start/terminal journal digests remain explicitly unconverted. No missing
 digest, L word count, P generated claim inventory or rubric annotation is invented.
 The current producer therefore closes source plumbing only, not live evidence.
 
-Focused tests are authored under tests/eval/test_custody_scoring.py and
-tests/contracts/test_schema_export.py. They use public synthetic metadata, not a
+Focused tests are authored under tests/eval/test_custody_scoring.py,
+tests/contracts/test_schema_export.py and tests/contracts/test_schema_registry.py
+(including the declared IDs, type paths and literal versions of the types added
+this run). They use public synthetic metadata, not a
 hidden oracle or gold generator. Test execution, generated schema inspection,
 real model/scanner receipt import, independent semantic execution, authenticated
 custody and finished-product acceptance remain deferred.

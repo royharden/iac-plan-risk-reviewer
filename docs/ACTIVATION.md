@@ -60,10 +60,20 @@ The [share exporter](SHARING.md) and [private demo](DEMO.md) need fresh separate
 outputs and authoritative COMPLETE markers. Exercise stale bound source refusal,
 canonical regeneration and all privacy/failure boundaries after authorization.
 
+Held-out order (contract S1) must be exercised in sequence, each step independently
+authorized: commit the [pre-access input-exposure journal](EXPOSURE-LEDGER.md) while
+the edition is `sealed`; admit input-only access through `HeldoutAuthorization` v2
+(sealed plus a verified `InputExposureCommit`); run the frozen arms; pin the
+`ScoringHandoff` with the actual measured-results hash; only then write legacy
+post-measurement `ExposureReceipt` rows for scoring. Validate locking, crash and
+torn-journal refusal, legacy WIP-journal refusal and that no step grants oracle or
+scoring permission by itself.
+
 Only after all seven genuine measurements exist may an external controller approve
 [consumed-edition preparation](CONSUMED-EDITIONS.md). Separate release/completion
-pins bind the full consumed inventory and global frozen identities before payload
-reads. Keep all measured FAIL/negative/unknown and costs. Missing/mock/not-run arms
+pins (`CompletionReference` v2, with separately named input-exposure and
+post-measurement exposure pins) bind the full consumed inventory and global frozen
+identities before payload reads. Keep all measured FAIL/negative/unknown and costs. Missing/mock/not-run arms
 block preparation. No actual candidate generation or publication is authorized by
 these commands/docs; all seven remain NOT MEASURED.
 
@@ -83,8 +93,12 @@ generating descriptions into a fresh separate directory. The exporter retains
 and authoritative COMPLETE marker. Do not run it during open Dirty Mode.
 
 Inspect actual output for references/aliases/private classification and custom
-validator gaps. The report wrapper's dictionary projections are not a closed
-per-artifact safety schema; existing viewer inventory checks remain required.
+validator gaps. The ReviewReport wrapper is still a dictionary facade; the typed
+`report_wire` projections and `report_inventory` models are registered separately.
+Validate actual produced bundles against them (bound 1.1.0 and legacy 1.0.0) and
+keep the existing viewer inventory checks until that adoption is verified.
+Exercise both report-provenance source profiles (v1 nine files, v2 ten files) and
+confirm old v1 bundles still verify without being repinned.
 Exact batch version dispatch, deterministic/evaluation separation and genuine
 external custody/eligibility stay separate gates. A schema catalogue does not
 authenticate actors/execution, admit a payload, activate a provider or authorize

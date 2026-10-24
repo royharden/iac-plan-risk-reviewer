@@ -20,10 +20,8 @@ Terraform version strings in test inputs do not claim tested compatibility.
 | `tests/attempts/` | F2 timeout pending/replay/conservative accounting and explicit reconciliation |
 | `tests/integration/` | CLI 3/2/1/0, finalization deadline, occupied output, default model/network/process guards, mutation abort, offline explain boundary |
 
-Shared `tests/eval/` and other `tests/contracts/` files generally belong to other
-leads. D7 has individual grants for its annotation/assessment bridge tests,
-`tests/eval/test_edition_release.py` and `tests/contracts/test_product_boundaries.py`;
-no directory-wide ownership or independent acceptance follows.
+Shared `tests/eval/` and other `tests/contracts/` files are owned per package
+grant, not per directory; listing a file here implies no independent acceptance.
 `tests/conftest.py` supplies only uniquely prefixed
 `core_change`/`core_plan_file` helpers; no global autouse behavior or environment
 mutation affects other test groups.
@@ -151,8 +149,43 @@ eight-file bound 1.1.0; changing a version cannot retain the wrong inventory or
 upgrade a legacy bundle's trust. They also distinguish deterministic RunManifest
 from schema-valid evaluation declarations requiring separate preflight admission.
 Batch transport requires its exact explicit version; dataclass descriptions do not
-gain strict/unknown-field rejection from being listed. Dictionary report projections
-and private fields excluded by serialization remain documented schema limits.
+gain strict/unknown-field rejection from being listed. The ReviewReport dictionary
+facade and private fields excluded by serialization remain documented schema
+limits; the typed report projections and bundle inventory models are now separate
+registered roots. Registry regressions also pin the stable IDs, canonical type
+paths and literal versions of the types added this run (report_wire,
+report_inventory, input-exposure journal, held-out access v2, frozen-run pins,
+scoring handoff, CompletionReference v2) plus report-provenance profiles 1/2, and
+refuse undeclared payload versions for them (including CompletionReference 1 and
+HeldoutAuthorization 1).
+
+## Held-out exposure, access, frozen run and release (authored, not run)
+
+| Source | Boundaries |
+|---|---|
+| `tests/contracts/test_report_wire.py`, `tests/contracts/test_report_inventory.py`, `tests/report/test_report_wire_integration.py` | Typed private/shareable/legacy projections, bound/legacy inventory classification, no silent upgrade |
+| `tests/eval/test_exposure_journal.py` | `InputExposureReceipt` intents-not-results, legacy/unversioned refusal, torn/partial journals, legacy WIP paths, public seam fails closed with ValueError |
+| `tests/eval/test_benchmark_access.py`, `tests/eval/test_frozen_run.py`, `tests/eval/test_frozen_run_boundaries.py`, `tests/eval/test_scanner_heldout_admission.py` | v2 input-only permission, committed-exposure binding, guarded reads, scanner held-out admission |
+| `tests/eval/test_scoring_handoff.py` | Post-run pins, no oracle/scoring permission |
+| `tests/eval/test_edition_release.py` | CompletionReference v2/v1 refusal, edition.json v2 separation, hex/schema gate, input-before-results ordering |
+
+```powershell
+uv run --project .\iac-plan-risk-reviewer pytest --import-mode=importlib `
+  .\iac-plan-risk-reviewer\tests\contracts\test_report_wire.py `
+  .\iac-plan-risk-reviewer\tests\contracts\test_report_inventory.py `
+  .\iac-plan-risk-reviewer\tests\report\test_report_wire_integration.py `
+  .\iac-plan-risk-reviewer\tests\eval\test_exposure_journal.py `
+  .\iac-plan-risk-reviewer\tests\eval\test_benchmark_access.py `
+  .\iac-plan-risk-reviewer\tests\eval\test_frozen_run.py `
+  .\iac-plan-risk-reviewer\tests\eval\test_frozen_run_boundaries.py `
+  .\iac-plan-risk-reviewer\tests\eval\test_scanner_heldout_admission.py `
+  .\iac-plan-risk-reviewer\tests\eval\test_scoring_handoff.py `
+  .\iac-plan-risk-reviewer\tests\eval\test_edition_release.py
+```
+
+Future authorized selection only; none of these has been collected or run. Some
+files were still being edited by other packages when this list was written; confirm
+each exists in the activated source before relying on the selection.
 
 Future selection after authorization, with outer cwd unchanged:
 

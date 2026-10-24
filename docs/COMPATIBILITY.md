@@ -18,8 +18,11 @@ Inline `aws_security_group.ingress` and `aws_vpc_security_group_ingress_rule` ar
 | Integrated run metadata | Separate RunManifest/preflight library, binary-target scoring and schema-export bindings now present | Actual schema generation, metadata/payload trust boundaries and end-to-end consumption |
 | Ledger operation | [Operator source](LEDGER.md): read-only status/pinned append-only reconciliation | Replay/ownership/receipt/crash/concurrency execution |
 | Safe sharing | [Canonical regeneration source](SHARING.md), explicit plan/current bound core pins | Privacy/HTML/rollback/fresh identity execution; stale bundles require reinspection |
-| Consumed edition | [Local preparation source](CONSUMED-EDITIONS.md), separate external release/completion pins | Genuine seven-arm records, independent authorization, copy/failure/privacy/expiry/crash behavior |
-| Schema catalogue | [Fixed actual types](schemas/README.md), catalogue v1/export manifest v2, legacy callable/--out retention | Actual schema generation/references/alias/validator/strictness compatibility; no payload/authority admission |
+| Typed report artifacts | `report_wire` Private/Shareable/LegacyPrivate projections 1.0.0; `report_inventory` bound 1.1.0 / legacy 1.0.0 manifests and markers | Writer/reader adoption, actual validation of produced bundles, privacy/escaping behavior |
+| Pre-access input exposure | [Journal source](EXPOSURE-LEDGER.md): `InputExposureReceipt` `m4-input-exposure-v1`, commit `m4-input-exposure-commit-v1`, authorization 1 | Locking, crash durability, Windows/POSIX semantics, real custody |
+| Held-out access / frozen run / scoring handoff | `HeldoutAuthorization` `m4-heldout-input-access-v2` (v1 refused), `FrozenRunPins`, `ScoringHandoff` `m4-scoring-handoff-v1` | Real authorization, guarded reads, actual frozen run and scoring |
+| Consumed edition | [Local preparation source](CONSUMED-EDITIONS.md), `CompletionReference` v2 (v1 refused), `edition.json` v2 | Genuine seven-arm records, independent authorization, copy/failure/privacy/expiry/crash behavior |
+| Schema catalogue | [Fixed actual types](schemas/README.md), 121 declarations, catalogue v1/export manifest v2, legacy callable/--out retention | Actual schema generation/references/alias/validator/strictness compatibility; no payload/authority admission |
 
 No cell in this table advertises a tested version. JSON format and provider shape
 support are separate axes; passing synthetic parser examples later cannot by itself
@@ -34,8 +37,17 @@ still require rejection or explicit incomplete status under v2 pins.
 
 Version namespaces remain distinct. Report JSON stays 1.0.0; its artifact inventory
 is legacy 1.0.0 (seven files, unbound) or bound 1.1.0 (eight files including private
-run-manifest descriptor). Both are handled by [source_view](../src/iac_review/source_view.py)
-with exact inventory checks; legacy integrity does not become provenance binding.
+run-manifest descriptor). Canonical types for both now exist in
+[report_inventory](../src/iac_review/contracts/report_inventory.py) (`BoundManifest`
+1.1.0, `LegacyManifest` 1.0.0) and the typed report projections in
+[report_wire](../src/iac_review/contracts/report_wire.py); [source_view](../src/iac_review/source_view.py)
+remains the exact inventory consumer boundary. Legacy integrity does not become provenance binding.
+Report provenance declares source profiles `1` (nine files) and `2` (ten files,
+adding report_wire); v2 is a deliberate new version, never an implicit upgrade of
+v1 bundles.
+Exposure namespaces are separate: pre-access `m4-input-exposure-v1` intents versus
+the unversioned legacy post-measurement `ExposureReceipt` results; consumed-edition
+`CompletionReference`/`edition.json` version 2 name both separately and refuse v1.
 Share regeneration requires a bound current bundle and refuses legacy/stale source.
 RunManifest schema_version 1 separately distinguishes deterministic/evaluation
 stages with actual validators; a schema-valid evaluation declaration is not custody
@@ -50,4 +62,5 @@ dataclass TypeAdapter output is descriptive and does not add extra-field rejecti
 Pydantic root closure does not prove nested dict/Any privacy. Existing exported
 schema filenames/API/--out remain, while the export manifest explicitly becomes
 version 2 for its separate catalogue pin and COMPLETE marker. No schema has been
-generated and no compatibility pass is claimed.
+generated and no compatibility pass is claimed. Literal versions in the registry
+were read from committed source (static inspection), not from imported modules.
