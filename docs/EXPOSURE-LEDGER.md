@@ -108,6 +108,7 @@ The `scripts/record_exposure.py` `record`/`status` commands are source only.
   crash durability, Windows/POSIX lock semantics, permissions and consumer integration are unverified.
 - Committing input exposure does not change the manifest's declared `edition_state`;
   preflight derives `consumed_holdout` only from legacy post-measurement receipts.
-  Reconciling the consumed-edition release record with both records is a separate
-  package (`eval/runner/edition_release.py`).
+  The consumed-edition release (`eval/runner/edition_release.py`, `CompletionReference` v2,
+  `edition.json` v2) binds both records as separately named fields; see `docs/CONSUMED-EDITIONS.md`.
+  Input access is admitted from `sealed` plus a verified `InputExposureCommit` (INT decision S1.6, D4).
 - Metadata digests and actor/custodian fields do not authenticate a person.

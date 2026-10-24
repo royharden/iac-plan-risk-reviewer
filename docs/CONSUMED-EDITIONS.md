@@ -21,9 +21,22 @@ destination roots and byte/time bounds. No automatic unblinding follows from
 preflight or a consumed state alone.
 
 The narrow additional `CompletionReference` is externally pinned separately. Its
-fields are schema_version, run_manifest_sha256, authority_sha256, seal_sha256,
-exposure_sha256, eligibility_sha256, rubric_sha256, row_inventory_sha256,
-row_inventory, arms and consumed_at. Each `ArmCompletion` binds arm, artifact_id,
+fields are schema_version (`2`), run_manifest_sha256, authority_sha256, seal_sha256,
+input_exposure_authorization_sha256, input_exposure_commit_sha256,
+input_exposure_receipt_file_sha256, post_measurement_exposure_sha256,
+eligibility_sha256, rubric_sha256, row_inventory_sha256, row_inventory, arms and
+consumed_at. Version 1 documents, with one ambiguous `exposure_sha256`, are refused
+by the closed schema and never reinterpreted.
+
+Two exposure events are bound separately (contract S1, see
+[EXPOSURE-LEDGER.md](EXPOSURE-LEDGER.md)):
+
+| Event | Record | Pin meaning | Completion fields |
+|---|---|---|---|
+| Pre-access input exposure | D6 journal `InputExposureCommit` / `InputExposureReceipt` (`m4-input-exposure-v1`) under `metadata/input-exposure*.json*` | per-arm declared measurement **intents**, frozen before any heldout input was read | `input_exposure_authorization_sha256`, `input_exposure_commit_sha256`, `input_exposure_receipt_file_sha256` |
+| Post-measurement, pre-oracle exposure | legacy `custody.ExposureReceipt` list, manifest `exposure` artifact | `measurements_sha256` = actual measured-results file hash | `post_measurement_exposure_sha256` |
+
+Each `ArmCompletion` binds arm, artifact_id,
 artifact_sha256, score_status, score_result_sha256 and expected_rows. The complete
 ordered row inventory contains case/resource/rule triples. Its digest uses ASCII
 JSON, compact separators, with tuples represented as arrays. All seven rows point
@@ -39,10 +52,14 @@ completion, expected_completion_sha256)` performs these bounded stages:
    inventory, all seven arms and genuine terminal invocation/eligibility coverage.
 2. Run metadata-only preflight. Bind actual authority/seal/global build, policy,
    corpus, prompt/rubric, semantic and eligibility identities; require all seven
-   consumed exposure receipts. The completion pins the exact exposure artifact and
-   seven actual measured artifacts separately; it does not reinterpret pre-access
-   exposure measurement references as hashes of future result bytes. Preserve those
-   original pins. Reuse the separate release authorization before payload access.
+   post-measurement exposure receipts. The completion pins the exact post-measurement
+   exposure artifact and seven actual measured artifacts separately. Then verify the
+   committed pre-access input-exposure journal (metadata only) against the completion's
+   three input-exposure pins and current custody: same run/edition/authority/seal/
+   build/oracle/custodian and authorization policy/build, all seven arms, committed at or after the seal and no later
+   than each arm's post-measurement exposure or completion. Intents are never treated
+   as result hashes and results never as intents. Preserve both original pin sets.
+   Reuse the separate release authorization before payload access.
 3. Require exactly one approved input per consumed case hash, one exact pinned
    oracle artifact and seven exact approved measurement artifacts. Reject missing,
    extra or duplicate payload scope and bounds. No unused heldout input is read.
@@ -62,6 +79,12 @@ The candidate contains hashed opaque input/expected filenames, exact approved
 input/oracle bytes, full sealed lineage inventory, complete row inventory, and
 bounded edition controls with every arm's counts/failed rows/predictions/unknowns,
 all declared attempts and costs, original result/artifact pins and lineage pins.
+`edition.json` is `schema_version` 2. It carries `input_exposure` (schema version,
+authorization/commit/receipt-file pins, seven `intent_pins`) and
+`post_measurement_exposure` (`artifact_sha256` of the legacy exposure artifact, seven `result_pins`) as separate
+blocks. The v1 field `exposure_measurement_pins` is gone. `check_edition_receipt(value)`
+is the pure reader gate, and the writer runs it on its own record before writing: it refuses v1, unversioned and mixed records rather than
+reading their pins as either intents or results.
 It does not copy raw model prose, private maps, actor/assessor identity records,
 credentials, arbitrary metadata files or original measurement envelopes. The
 original unfiltered score results remain pinned in private custody; every failed
@@ -82,7 +105,9 @@ No command or candidate has actually been executed/generated.
 
 [Development regression source](../tests/eval/test_edition_release.py) checks
 external-pin refusal before access, missing/mock/pending arms, eligibility/inventory
-loss, inconsistent full-result pins and measured-failure distinctions. It has not
+loss, inconsistent full-result pins and measured-failure distinctions, v1 completion
+refusal, edition.json v2 intent/result separation, and input-exposure ordering and
+custody binding. It has not
 run and cannot satisfy real custody. Later activation must exercise independently
 authorized complete records, exact byte copies, privacy/cost/failure retention,
 deadline/expiry, filesystem races, partial writes and crash recovery. Cooperative

@@ -45,12 +45,21 @@ class CompletionReference(ManifestWire):
     The independent controller freezes this digest separately from the submitted
     bundle. It attests full scorer/failure coverage and actual execution. The
     existing ReleaseAuthorization separately authorizes exact payload disclosure.
+
+    v2 (contract S1) names the two exposure events separately: the PRE-ACCESS
+    input-exposure commit (declared measurement intents, D6 exposure journal) and
+    the POST-MEASUREMENT, pre-oracle legacy exposure artifact (actual measured-
+    results hashes). v1 documents with one ambiguous `exposure_sha256` are refused
+    by the closed schema, never reinterpreted.
     """
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     run_manifest_sha256: Digest
     authority_sha256: Digest
     seal_sha256: Digest
-    exposure_sha256: Digest
+    input_exposure_authorization_sha256: Digest
+    input_exposure_commit_sha256: Digest
+    input_exposure_receipt_file_sha256: Digest
+    post_measurement_exposure_sha256: Digest
     eligibility_sha256: Digest
     rubric_sha256: Digest
     # Entire frozen oracle identity inventory, not favorable/supported rows only.
@@ -63,6 +72,78 @@ class CompletionReference(ManifestWire):
 
 def _row_hash(rows) -> str:
     return sha256(json.dumps(rows, separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+
+
+# edition.json v2 carries `input_exposure` and `post_measurement_exposure` as
+# separate fields. v1 carried one ambiguous `exposure_measurement_pins` list.
+EDITION_RECEIPT_VERSION = 2
+_EDITION_EXPOSURE_FIELDS = {
+    "input_exposure": {"schema_version", "authorization_sha256", "commit_sha256",
+                       "receipt_file_sha256", "intent_pins"},
+    "post_measurement_exposure": {"artifact_sha256", "result_pins"},
+}
+
+
+def check_edition_receipt(value: dict) -> dict:
+    """Pure reader gate for a candidate's edition.json control record.
+
+    v1 records are refused: their `exposure_measurement_pins` cannot be told apart
+    as intents or results, and are never reinterpreted as either. A v2 record must
+    carry both exposure events with all seven arms each. This checks shape only;
+    it does not authenticate the candidate or re-verify custody.
+    """
+    if (type(value) is not dict or type(value.get("schema_version")) is not int
+            or value["schema_version"] != EDITION_RECEIPT_VERSION):
+        raise ValueError("legacy or unversioned edition receipt refused; not reinterpreted")
+    if "exposure_measurement_pins" in value or "exposure_sha256" in value:
+        raise ValueError("ambiguous legacy exposure fields in edition receipt")
+    for name, keys in _EDITION_EXPOSURE_FIELDS.items():
+        block = value.get(name)
+        if type(block) is not dict or set(block) != keys:
+            raise ValueError(f"edition receipt {name} block missing or malformed")
+    intents = value["input_exposure"]["intent_pins"]
+    results = value["post_measurement_exposure"]["result_pins"]
+    for rows, field in ((intents, "measurement_intents_sha256"), (results, "measurements_sha256")):
+        if (type(rows) is not list or [row.get("arm") if type(row) is dict else None
+                                       for row in rows] != list(ARMS)
+                or any(set(row) != {"arm", field} for row in rows)):
+            raise ValueError("edition receipt exposure pins must cover all seven arms once")
+    return value
+
+
+def _input_exposure(root: Path, manifest: RunManifest, pins: PreflightPins,
+                    completion: CompletionReference, authority: CustodyAuthority,
+                    seal: Seal, exposure: tuple[ExposureReceipt, ...]):
+    """Bind the externally pinned PRE-ACCESS input-exposure commit (metadata only).
+
+    Reads only the D6 journal's metadata files. The input commit must precede both
+    the post-measurement legacy receipts and completion, and match current custody.
+    """
+    # Lazy import mirrors the other optional eval paths in this module.
+    from eval.runner.exposure_journal import INPUT_EXPOSURE_SCHEMA, _verify_committed
+    commit = _verify_committed(root, completion.input_exposure_authorization_sha256,
+                               completion.input_exposure_commit_sha256)
+    legacy_at = {row.arm: row.exposed_at for row in exposure}
+    if (commit.receipt_file_sha256 != completion.input_exposure_receipt_file_sha256
+            or commit.authorization.run_id != manifest.run_id
+            or commit.authorization.edition_id != manifest.edition_id
+            or commit.authorization.policy_sha256 != manifest.policy_sha256
+            or commit.authorization.build_sha256 != manifest.build_sha256
+            or {row.arm for row in commit.receipts} != set(ARMS)
+            or any(row.schema_version != INPUT_EXPOSURE_SCHEMA
+                   or row.run_id != manifest.run_id
+                   or row.edition_id != manifest.edition_id
+                   or row.authority_sha256 != pins.authority_sha256
+                   or row.seal_sha256 != metadata_digest(seal)
+                   or row.build_sha256 != authority.frozen_build_sha256
+                   or row.oracle_sha256 != authority.oracle_sha256
+                   or row.custodian != authority.custodian
+                   or row.committed_at < seal.sealed_at
+                   or row.committed_at > legacy_at[row.arm]
+                   or row.committed_at > completion.consumed_at
+                   for row in commit.receipts)):
+        raise ValueError("pre-access input exposure commit binding mismatch")
+    return commit
 
 
 def check_completion(manifest: RunManifest, completion: CompletionReference,
@@ -166,13 +247,14 @@ def prepare_consumed_edition(root: Path, out: Path, manifest: RunManifest,
                      for row in read_metadata(root, metadata["exposure"]))
     eligible = EligibilityManifest.model_validate_json(json.dumps(read_metadata(root, metadata["eligibility"])))
     if (completion.seal_sha256 != metadata_digest(seal)
-            or completion.exposure_sha256 != metadata["exposure"].sha256
+            or completion.post_measurement_exposure_sha256 != metadata["exposure"].sha256
             or completion.rubric_sha256 != authority.rubric_sha256
             or authorization.custodian != seal.custodian
             or authorization.exposure_artifact_sha256 != metadata["exposure"].sha256
             or {row.arm for row in exposure} != set(ARMS)
             or any(row.exposed_at > completion.consumed_at for row in exposure)):
         raise ValueError("completion custody/rubric/exposure binding mismatch")
+    input_commit = _input_exposure(root, manifest, pins, completion, authority, seal, exposure)
     payloads = [ref for ref in selected if ref.role in {"case_input", "oracle", "measurements"}]
     inputs = [ref for ref in payloads if ref.role == "case_input"]
     oracles = [ref for ref in payloads if ref.role == "oracle"]
@@ -269,7 +351,8 @@ def prepare_consumed_edition(root: Path, out: Path, manifest: RunManifest,
     data["inventory.json"] = _bytes([row.model_dump(mode="json") for row in seal.inventory])
     data["row-inventory.json"] = _bytes(completion.row_inventory)
     receipt = {
-        "schema_version": 1, "state": "LOCAL_CANDIDATE", "edition_id": manifest.edition_id,
+        "schema_version": EDITION_RECEIPT_VERSION, "state": "LOCAL_CANDIDATE",
+        "edition_id": manifest.edition_id,
         "source_run_manifest_sha256": pins.run_manifest_sha256,
         "authority_sha256": pins.authority_sha256, "seal_sha256": completion.seal_sha256,
         "completion_sha256": expected_completion_sha256,
@@ -279,9 +362,21 @@ def prepare_consumed_edition(root: Path, out: Path, manifest: RunManifest,
         "prompt_sha256": authority.prompt_sha256, "rubric_sha256": authority.rubric_sha256,
         "corpus_sha256": authority.inventory_sha256, "oracle_sha256": authority.oracle_sha256,
         "semantic_suite_sha256": pins.semantic_suite_sha256, "eligibility_sha256": pins.eligibility_sha256,
-        "exposure_sha256": completion.exposure_sha256,
-        "exposure_measurement_pins": [{"arm": row.arm, "measurements_sha256": row.measurements_sha256}
-                                      for row in exposure],
+        # Two distinct events; neither pin set is a substitute for the other.
+        "input_exposure": {
+            "schema_version": input_commit.receipts[0].schema_version,
+            "authorization_sha256": completion.input_exposure_authorization_sha256,
+            "commit_sha256": input_commit.commit_sha256,
+            "receipt_file_sha256": input_commit.receipt_file_sha256,
+            "intent_pins": [{"arm": row.arm,
+                             "measurement_intents_sha256": row.measurement_intents_sha256}
+                            for row in sorted(input_commit.receipts, key=lambda r: ARMS.index(r.arm))],
+        },
+        "post_measurement_exposure": {
+            "artifact_sha256": completion.post_measurement_exposure_sha256,
+            "result_pins": [{"arm": row.arm, "measurements_sha256": row.measurements_sha256}
+                            for row in sorted(exposure, key=lambda r: ARMS.index(r.arm))],
+        },
         "row_inventory_sha256": completion.row_inventory_sha256,
         "arms": arm_controls, "copied": copied, "attempt_accounting": status["costs"],
         "attempts": [{"attempt_id": row.attempt_id, "arm": row.arm, "status": row.status,
@@ -296,6 +391,7 @@ def prepare_consumed_edition(root: Path, out: Path, manifest: RunManifest,
         "fresh_holdout": False, "product_acceptance": False,
         "authorization_authenticated": False, "publication_performed": False,
     }
+    check_edition_receipt(receipt)  # Writer output must pass its own reader gate.
     data["edition.json"] = _bytes(receipt)
     data["edition.sha256"] = (sha256(data["edition.json"]).hexdigest() + "\n").encode("ascii")
     if sum(len(raw) for raw in data.values()) + 1024 > selection.max_total_bytes:

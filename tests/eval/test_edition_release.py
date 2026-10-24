@@ -5,9 +5,11 @@ cannot supply independent execution/custody, approved payloads or product accept
 """
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 from iac_review.contracts.manifest import RunManifest
 from eval.runner import edition_release as release
@@ -47,7 +49,9 @@ def edition_metadata():
     rows = (("case", "resource", "R1"),)
     completion = release.CompletionReference(
         run_manifest_sha256=metadata_digest(manifest), authority_sha256=H,
-        seal_sha256=H, exposure_sha256=H, eligibility_sha256=H, rubric_sha256=H,
+        seal_sha256=H, input_exposure_authorization_sha256=H,
+        input_exposure_commit_sha256=H, input_exposure_receipt_file_sha256=H,
+        post_measurement_exposure_sha256=H, eligibility_sha256=H, rubric_sha256=H,
         row_inventory=rows, row_inventory_sha256=release._row_hash(rows),
         arms=tuple(release.ArmCompletion(arm=arm, artifact_id=arm, artifact_sha256=H,
                     score_status="FAIL", score_result_sha256=H, expected_rows=1) for arm in ARMS),
@@ -127,6 +131,94 @@ def test_dropped_case_and_missing_eligibility_refuse(edition_metadata):
     bad = completion.model_copy(update={"row_inventory": (("foreign", "resource", "R1"),)})
     with pytest.raises(ValueError, match="inventory"):
         release.check_completion(changed, bad, metadata_digest(bad))
+
+
+def test_v1_completion_with_ambiguous_exposure_pin_is_refused(edition_metadata):
+    _manifest, completion = edition_metadata
+    wire = completion.model_dump(mode="json")
+    for name in ("input_exposure_authorization_sha256", "input_exposure_commit_sha256",
+                 "input_exposure_receipt_file_sha256", "post_measurement_exposure_sha256"):
+        del wire[name]
+    wire.update({"schema_version": 1, "exposure_sha256": H})
+    with pytest.raises(ValidationError):
+        release.CompletionReference.model_validate_json(json.dumps(wire))
+
+
+def _edition_receipt():
+    return {"schema_version": 2,
+            "input_exposure": {"schema_version": "m4-input-exposure-v1",
+                               "authorization_sha256": H, "commit_sha256": H,
+                               "receipt_file_sha256": H,
+                               "intent_pins": [{"arm": arm, "measurement_intents_sha256": H}
+                                               for arm in ARMS]},
+            "post_measurement_exposure": {"artifact_sha256": H,
+                                          "result_pins": [{"arm": arm, "measurements_sha256": "b" * 64}
+                                                          for arm in ARMS]}}
+
+
+def test_edition_receipt_v2_keeps_intents_and_results_separate():
+    assert release.check_edition_receipt(_edition_receipt())["schema_version"] == 2
+    legacy = {"schema_version": 1, "exposure_sha256": H,
+              "exposure_measurement_pins": [{"arm": arm, "measurements_sha256": H} for arm in ARMS]}
+    with pytest.raises(ValueError, match="legacy or unversioned"):
+        release.check_edition_receipt(legacy)
+    mixed = {**_edition_receipt(), "exposure_measurement_pins": []}
+    with pytest.raises(ValueError, match="ambiguous legacy"):
+        release.check_edition_receipt(mixed)
+    swapped = _edition_receipt()
+    swapped["input_exposure"]["intent_pins"] = swapped["post_measurement_exposure"]["result_pins"]
+    with pytest.raises(ValueError, match="seven arms"):
+        release.check_edition_receipt(swapped)
+    missing = _edition_receipt()
+    missing["post_measurement_exposure"]["result_pins"].pop()
+    with pytest.raises(ValueError, match="seven arms"):
+        release.check_edition_receipt(missing)
+
+
+def _input_commit(at):
+    rows = tuple(SimpleNamespace(arm=arm, schema_version="m4-input-exposure-v1", run_id="synthetic",
+        edition_id="edition", authority_sha256=H, seal_sha256="c" * 64,
+        build_sha256=H, oracle_sha256=H, custodian="custodian", committed_at=at,
+        measurement_intents_sha256=H) for arm in ARMS)
+    return SimpleNamespace(receipts=rows, receipt_file_sha256=H, commit_sha256=H,
+        authorization=SimpleNamespace(run_id="synthetic", edition_id="edition",
+                                      policy_sha256=H, build_sha256=H))
+
+
+def test_input_exposure_must_precede_post_measurement_and_match_custody(edition_metadata, monkeypatch):
+    manifest, completion = edition_metadata
+    from eval.runner.preflight import PreflightPins
+    pins = PreflightPins(run_manifest_sha256=metadata_digest(manifest), authority_sha256=H,
+                         semantic_suite_sha256=H, eligibility_sha256=H)
+    sealed = datetime(2026, 10, 22, tzinfo=timezone.utc)
+    later = datetime(2026, 10, 22, 12, tzinfo=timezone.utc)
+    authority = SimpleNamespace(frozen_build_sha256=H, oracle_sha256=H, custodian="custodian")
+    seal = SimpleNamespace(sealed_at=sealed)
+    monkeypatch.setattr(release, "metadata_digest", lambda _seal: "c" * 64)
+    exposure = tuple(SimpleNamespace(arm=arm, exposed_at=later) for arm in ARMS)
+    commit = _input_commit(sealed)
+    monkeypatch.setattr("eval.runner.exposure_journal._verify_committed", lambda *a: commit)
+    assert release._input_exposure(Path("."), manifest, pins, completion, authority,
+                                   seal, exposure) is commit
+    # 18:00 is after post-measurement exposure (12:00) but before completion (next day
+    # 00:00), so only the input-before-results ordering check can refuse it.
+    for bad in (_input_commit(datetime(2026, 10, 22, 18, tzinfo=timezone.utc)),  # after results
+                _input_commit(datetime(2026, 10, 21, tzinfo=timezone.utc))):    # before seal
+        monkeypatch.setattr("eval.runner.exposure_journal._verify_committed", lambda *a, c=bad: c)
+        with pytest.raises(ValueError, match="pre-access input exposure"):
+            release._input_exposure(Path("."), manifest, pins, completion, authority, seal, exposure)
+    foreign = _input_commit(sealed)
+    foreign.receipt_file_sha256 = "d" * 64
+    monkeypatch.setattr("eval.runner.exposure_journal._verify_committed", lambda *a: foreign)
+    with pytest.raises(ValueError, match="pre-access input exposure"):
+        release._input_exposure(Path("."), manifest, pins, completion, authority, seal, exposure)
+
+
+def test_release_source_never_writes_ambiguous_exposure_pins():
+    source = (Path(__file__).parents[2] / "eval" / "runner" / "edition_release.py").read_text(encoding="utf-8")
+    receipt_block = source.split("receipt = {", 1)[1].split("data[\"edition.json\"]", 1)[0]
+    assert '"exposure_measurement_pins"' not in receipt_block
+    assert '"input_exposure"' in receipt_block and '"post_measurement_exposure"' in receipt_block
 
 
 def test_inconsistent_unfiltered_score_pin_refuses(edition_metadata):

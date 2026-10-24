@@ -85,7 +85,7 @@ VERSIONED = {
     "artifact-Rubric": ("1",), "capture-_Index": ("1",),
     "batch-AssessmentBatchTransport": ("m4-assessment-batch-transport-v1",),
     "assembly-AssemblySelection": ("1",), "assembly-ReleaseAuthorization": ("1",),
-    "assembly-AssemblyReceipt": ("1",), "release-CompletionReference": ("1",),
+    "assembly-AssemblyReceipt": ("1",), "release-CompletionReference": ("2",),
 }
 
 LIMITATIONS = (
