@@ -5,7 +5,7 @@ Local producer code is trusted; the inference boundary receives Request only.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import json
 import math
 import os
@@ -24,6 +24,7 @@ from eval.model.transport import INSTRUCTIONS, Reply, Request, Transport
 from eval.runner.scoring import ARMS, ArmRow
 from eval.scanners.driver import compare as scanner_compare
 from eval.scanners.runner import CHECK_ID, SHA256, bounded_read, strict_json
+from eval.scanners.runner import BoundedSubprocessRunner, manifest_digest
 from eval.scanners.run_manifest import ScannerRunContext, adapt_scanner_report
 from eval.scanners.scoring_bridge import report_digest
 from iac_review.contracts.manifest import (ArtifactRef, AttemptMetadata, CaseBinding,
@@ -75,10 +76,19 @@ class ProductResult:
 def product_adapter(case: CaseSpec, build_sha256: str) -> ProductResult:
     """Actual parser/rules/report path; no model/scanner/gold dependency."""
     from iac_review.ingest import load_plan
+    plan = load_plan(case.plan_path)
+    return _product_from_plan(case, build_sha256, plan)
+
+
+def product_adapter_from_bytes(case: CaseSpec, build_sha256: str, data: bytes) -> ProductResult:
+    from iac_review.ingest import load_plan_bytes
+    plan = load_plan_bytes(data, source_path=case.plan_path, expected_sha256=case.plan_sha256)
+    return _product_from_plan(case, build_sha256, plan)
+
+
+def _product_from_plan(case: CaseSpec, build_sha256: str, plan: PlanDocument) -> ProductResult:
     from iac_review.rules import evaluate
     from iac_review.report import build_report
-
-    plan = load_plan(case.plan_path)
     evaluations = evaluate(plan)
     report = build_report(plan, evaluations)
     shared, private = report.shareable, report.private
@@ -127,10 +137,17 @@ class BenchmarkResult:
     live_eligible: bool = field(default=False, init=False)
 
 
-def validate_config(config: BenchmarkConfig) -> None:
+def validate_config(config: BenchmarkConfig, *, approved_mode: bool = False, _frozen_reader=None) -> None:
     """Run before reading any raw case: hidden scope has no construction accessor."""
-    if (tuple(ARMS) != FIXED_ARMS or config.input_scope != "development_synthetic"
-            or config.fake_only is not True or config.synthetic_input_attested is not True):
+    expected_scope = "development_synthetic"
+    if _frozen_reader is not None:
+        from eval.runner.benchmark_access import GuardedCaseReader
+        if type(_frozen_reader) is not GuardedCaseReader or not approved_mode:
+            raise ValueError("actual_frozen_reader_and_explicit_mode_required")
+        expected_scope = "heldout"
+        _frozen_reader.check_inventory(config.cases, config.build_sha256)
+    if (tuple(ARMS) != FIXED_ARMS or config.input_scope != expected_scope
+            or config.fake_only is not (not approved_mode) or config.synthetic_input_attested is not True):
         raise ValueError("development_fake_only_scope_required_before_payload_access")
     for value in (config.run_id, config.edition_id):
         if not OPAQUE.fullmatch(value):
@@ -183,6 +200,134 @@ def validate_config(config: BenchmarkConfig) -> None:
                 raise ValueError("closed_pinned_fake_fixture_required")
 
 
+@dataclass(frozen=True)
+class SyntheticAuthority:
+    """Exact external metadata approval; a hash match does not authenticate its owner."""
+    record_json: str
+    approved_bytes_sha256: str
+
+
+def load_synthetic_authority(raw: bytes, *, expected_sha256: str) -> SyntheticAuthority:
+    keys = {"schema_version", "run_id", "edition_id", "build_sha256", "config_file_sha256",
+            "corpus_sha256", "arm_inventory_sha256", "provider_sha256", "price_sha256",
+            "budget_sha256", "model_limits_sha256", "configuration_sha256", "data_transfer_sha256", "scanner_grants",
+            "dirty_mode_closed", "synthetic_only", "execution_explicitly_approved"}
+    if len(raw) > 256 * 1024 or not SHA256.fullmatch(expected_sha256) or digest(raw) != expected_sha256:
+        raise ValueError("external_synthetic_authority_pin_required")
+    value = strict_json(raw)
+    if (not isinstance(value, dict) or set(value) != keys
+            or value["schema_version"] != "m4-approved-synthetic-benchmark-v1"
+            or any(value[key] is not True for key in ("dirty_mode_closed", "synthetic_only", "execution_explicitly_approved"))
+            or any(not isinstance(value[key], str) or not SHA256.fullmatch(value[key])
+                   for key in keys if key.endswith("sha256"))
+            or any(not isinstance(value[key], str) or not OPAQUE.fullmatch(value[key]) for key in ("run_id", "edition_id"))
+            or not isinstance(value["scanner_grants"], dict)
+            or not 0 < len(value["scanner_grants"]) <= 256
+            or any(not OPAQUE.fullmatch(key) or not isinstance(pin, str) or not SHA256.fullmatch(pin)
+                   for key, pin in value["scanner_grants"].items())):
+        raise ValueError("closed_explicit_synthetic_authority_required")
+    return SyntheticAuthority(canonical(value), expected_sha256)
+
+
+@dataclass(frozen=True)
+class PinnedController:
+    """Bind the actual D5 controller's per-start Admission to one run approval.
+
+    D5 still validates the exact start/request/IP/permit before any key or connector.
+    This wrapper neither creates approvals nor reads credentials or payload files.
+    """
+    authority: SyntheticAuthority
+    delegate: Callable = field(repr=False)
+
+    def __call__(self, request, start, config):
+        from eval.model.provider_activation import Admission
+        value = self.delegate(request, start, config)
+        record = json.loads(self.authority.record_json)
+        if (not isinstance(value, Admission)
+                or value.activation.approval_sha256 != self.authority.approved_bytes_sha256
+                or any(getattr(value.activation, key) != record[key] for key in
+                       ("provider_sha256", "price_sha256", "budget_sha256", "data_transfer_sha256"))):
+            raise ValueError("provider_admission_outside_benchmark_authority")
+        return value
+
+
+@dataclass(frozen=True)
+class ApprovedScanner:
+    """Predeclared exact manifest and the existing externally granted local runner."""
+    manifest_json: str = field(repr=False)
+    runner: BoundedSubprocessRunner = field(repr=False)
+
+
+def benchmark_config_digest(config: BenchmarkConfig) -> str:
+    return digest(canonical({"run_id": config.run_id, "edition_id": config.edition_id,
+        "build_sha256": config.build_sha256, "input_scope": config.input_scope,
+        "fake_only": config.fake_only, "synthetic_input_attested": config.synthetic_input_attested,
+        "cases": [dict(asdict(case), plan_path=str(case.plan_path)) for case in config.cases],
+        "budget": config.budget.model_dump(mode="json"), "model_limits": asdict(config.model_limits),
+        "scanner_arms": json.loads(config.scanner_arms_json)}))
+
+
+def _approved_scope(config, authority, transport, journal, scanners, config_file_pin, build_verifier):
+    from eval.model.provider_http import ProviderTransport
+    if (type(authority) is not SyntheticAuthority or type(transport) is not ProviderTransport
+            or type(transport.controller) is not PinnedController or transport.enabled is not True
+            or transport.controller.authority != authority or not callable(transport.controller.delegate)
+            or type(journal) is not AttemptJournal or build_verifier is not source_build_digest):
+        raise ValueError("explicit_actual_approved_runtime_bindings_required")
+    record = json.loads(authority.record_json)
+    # Revalidate the immutable record shape without treating canonical reserialization
+    # as the external original-byte pin. The original pin remains separate.
+    load_synthetic_authority(authority.record_json.encode(), expected_sha256=digest(authority.record_json))
+    if not SHA256.fullmatch(authority.approved_bytes_sha256):
+        raise ValueError("external_original_authority_pin_required")
+    corpus = digest(canonical([(c.case_id, c.plan_sha256, c.configuration_id, c.family_id, c.mutation_lineage)
+                               for c in config.cases]))
+    expected = {"run_id": config.run_id, "edition_id": config.edition_id, "build_sha256": config.build_sha256,
+                "config_file_sha256": config_file_pin, "corpus_sha256": corpus,
+                "configuration_sha256": benchmark_config_digest(config),
+                "arm_inventory_sha256": digest(canonical(FIXED_ARMS)),
+                "provider_sha256": digest(canonical(asdict(transport.config))),
+                "price_sha256": digest(journal.price.model_dump_json()),
+                "budget_sha256": digest(journal.budget.model_dump_json()),
+                "model_limits_sha256": digest(canonical(asdict(config.model_limits)))}
+    if (any(record[key] != value for key, value in expected.items())
+            or journal.budget != config.budget or config.scanner_arms_json != "{}"
+            or (journal.price.provider, journal.price.model) != (transport.identity.provider, transport.identity.model)
+            or set(scanners) != {case.case_id for case in config.cases}
+            or set(record["scanner_grants"]) != set(scanners)):
+        raise ValueError("approved_run_corpus_config_arm_model_price_budget_mismatch")
+    for case in config.cases:
+        binding = scanners[case.case_id]
+        if type(binding) is not ApprovedScanner or type(binding.runner) is not BoundedSubprocessRunner:
+            raise ValueError("actual_pinned_scanner_binding_required")
+        if len(binding.manifest_json.encode()) > 2 * 1024 * 1024:
+            raise ValueError("approved_scanner_manifest_bound")
+        manifest = strict_json(binding.manifest_json.encode())
+        binding.runner.verify_manifest(manifest)  # Metadata only, no invocation/process.
+        declared = manifest.get("cases")
+        if (binding.runner.execution_grant.approved_bytes_sha256 != record["scanner_grants"][case.case_id]
+                or not isinstance(declared, list) or len(declared) != 1
+                or declared[0].get("case_id") != case.case_id
+                or declared[0].get("plan_sha256") != case.plan_sha256
+                or declared[0].get("plan_path") != str(case.plan_path)
+                or set(manifest.get("arms", {})) != {"C", "C-custom", "T"}
+                or {item.arm for item in binding.runner.execution_grant.invocations} != {"C", "C-custom", "T"}):
+            raise ValueError("approved_exact_scanner_manifest_mismatch")
+    return record
+
+
+def _scanner_aliases(binding: ApprovedScanner, product: ProductResult) -> dict[str, str]:
+    resources = strict_json(binding.manifest_json.encode())["cases"][0]["resources"]
+    declared = {r["resource_id"]: r["address"] for r in resources}
+    actual = {address: rid for rid, address in product.scanner_resources}
+    if (len(declared) != len(resources) or len(set(declared.values())) != len(declared)
+            or len(actual) != len(product.scanner_resources) or len(set(actual.values())) != len(actual)
+            or any(not isinstance(value, str) or not OPAQUE.fullmatch(value) for value in (*declared, *actual.values()))
+            or set(declared.values()) != set(actual)):
+        raise ValueError("approved_scanner_resource_join_mismatch")
+    return {rid: actual[address] for rid, address in declared.items()}
+
+
 def verify_case(case: CaseSpec) -> None:
     if digest(bounded_read(case.plan_path, 16 * 1024 * 1024)) != case.plan_sha256:
         raise ValueError("raw_case_changed")
@@ -204,13 +349,20 @@ def source_build_digest() -> str:
                               for path in sorted(set(files))]))
 
 
-def _manifest_scope(config: BenchmarkConfig, context: RunManifest | None, expected_pin: str | None) -> None:
+def _manifest_scope(config: BenchmarkConfig, context: RunManifest | None, expected_pin: str | None, frozen_reader=None) -> None:
     if (context is None) != (expected_pin is None):
         raise ValueError("typed_manifest_context_and_external_pin_required_together")
     if context is None:
         return
     if not isinstance(context, RunManifest):
         raise ValueError("actual_shared_RunManifest_context_required")
+    if frozen_reader is not None:
+        if (context != frozen_reader.manifest or digest(canonical(context.model_dump(mode="json"))) != expected_pin
+                or context.split != "heldout" or context.edition_state != "consumed_holdout"
+                or context.attempts or any(row.attempt_ids for row in context.invocations)
+                or any(row.claimed_eligible for row in context.eligibility)):
+            raise ValueError("exact_preaccess_consumed_manifest_required")
+        return
     if (digest(canonical(context.model_dump(mode="json"))) != expected_pin
             or context.run_id != config.run_id or context.edition_id != config.edition_id
             or context.build_sha256 != config.build_sha256 or context.split != "dev"
@@ -266,7 +418,7 @@ def _typed_candidate(context: RunManifest | None, *, source: dict, statuses: lis
     if len(components) != len(context.components):
         raise ValueError("duplicate_manifest_component_id")
     for arm in FIXED_ARMS:
-        version_kind = "source" if arm == "D" else "model" if arm in {"L", "P", "M"} else "scanner"
+        version_kind = "rules" if arm == "D" else "model" if arm in {"L", "P", "M"} else "scanner"
         if (f"{arm}_version" not in components or f"{arm}_config" not in components
                 or components[f"{arm}_config"].kind != "config"
                 or components[f"{arm}_version"].kind != version_kind):
@@ -291,20 +443,27 @@ def _typed_candidate(context: RunManifest | None, *, source: dict, statuses: lis
             input_tokens=snapshot["input_tokens"], output_tokens=snapshot["output_tokens"]))
         grouped[key].append(entry["attempt_id"])
     for export in source["scanner_exports"]:
+        if export.get("alias_status") == "incomplete":
+            missing.add("scanner_alias_admission_incomplete")
         for capture in export["normalized_report"]["capture_receipts"]:
-            if capture["execution_kind"] != "fake" or capture["elapsed_seconds"] is None:
+            if capture["execution_kind"] not in {"fake", "live"} or capture["elapsed_seconds"] is None:
                 continue  # not_run/pre-admission is not a fabricated scanner attempt.
             key = export["case_id"], capture["arm"]
-            attempt_id = "scanmock_" + digest(canonical([key, capture["capture_sha256"]]))
+            if (key not in invocation_ids or capture.get("case_id") != key[0]
+                    or capture.get("plan_sha256") not in (None, cases[key[0]].raw_source_sha256)):
+                missing.add("scanner_attempt_case_arm_raw_unmatched")
+                continue
+            attempt_id = ("scanmock_" if capture["execution_kind"] == "fake" else "scancapture_") + digest(canonical([key, capture["capture_sha256"]]))
             attempts.append(AttemptMetadata(attempt_id=attempt_id, invocation_id=invocation_ids[key], arm=capture["arm"],
-                status=capture["status"], kind="mock", raw_source_sha256=cases[key[0]].raw_source_sha256,
+                status=capture["status"], kind="mock" if capture["execution_kind"] == "fake" else "unverified",
+                raw_source_sha256=cases[key[0]].raw_source_sha256,
                 elapsed_ms=int(capture["elapsed_seconds"] * 1000)))
             grouped[key].append(attempt_id)
     for status in statuses:
         key = status.case_id, status.arm
         state = status.status if status.status in {"ok", "invalid", "timeout", "error", "cancelled", "not_run"} else "not_run"
         invocations.append(InvocationMetadata(invocation_id=invocation_ids[key], arm=status.arm, status=state,
-            kind="unverified" if status.arm == "D" else "mock" if source["transport_kind"] == "mock" or status.arm in {"C", "C-custom", "T"} else "unverified",
+            kind="unverified" if status.arm == "D" else "mock" if source["transport_kind"] == "mock" or (status.arm in {"C", "C-custom", "T"} and not source.get("execution_authority_sha256")) else "unverified",
             case_ids=(status.case_id,), config_component_id=f"{status.arm}_config", version_component_id=f"{status.arm}_version",
             attempt_ids=tuple(grouped[key]), all_attempts_attested=False))
     seen = set()
@@ -336,7 +495,7 @@ def _typed_candidate(context: RunManifest | None, *, source: dict, statuses: lis
         references.append(proposed)
     if missing:
         return None, missing
-    manifest = RunManifest(run_id=context.run_id, edition_id=context.edition_id, edition_state="development", split="dev",
+    manifest = RunManifest(run_id=context.run_id, edition_id=context.edition_id, edition_state=context.edition_state, split=context.split,
         build_sha256=context.build_sha256, policy_sha256=context.policy_sha256, authority_sha256=context.authority_sha256,
         semantic_suite_sha256=context.semantic_suite_sha256, eligibility_sha256=context.eligibility_sha256,
         components=context.components, cases=context.cases, invocations=tuple(invocations), attempts=tuple(attempts),
@@ -349,12 +508,14 @@ class CheckedTransport:
     def __init__(self, transport: Transport, case: CaseSpec,
                  journal: AttemptJournal | None = None, budget: Budget | None = None,
                  *, plan: PlanDocument | None = None, shareable_json: str | None = None,
-                 links: tuple[FindingLink, ...] = (), limits: ModelLimits = ModelLimits()) -> None:
+                 links: tuple[FindingLink, ...] = (), limits: ModelLimits = ModelLimits(), _frozen_reader=None) -> None:
         if transport.identity.kind not in {"mock", "protocol"}:
             raise ValueError("live_model_adapter_not_authorized")
         self._transport, self._case = transport, case
+        self._authority = transport.controller.authority if type(getattr(transport, "controller", None)) is PinnedController else None
         self._journal, self._budget = journal, budget
         self._limits = limits
+        self._verify_case = verify_case if _frozen_reader is None else _frozen_reader.verify
         shared = json.loads(shareable_json) if shareable_json is not None else None
         self._capsules = {digest(canonical(build_capsule(shared, link.finding_id).model_dump(mode="json")))
                           for link in links} if shared is not None else set()
@@ -379,8 +540,8 @@ class CheckedTransport:
     def identity(self):
         return self._transport.identity
 
-    def complete(self, request: Request) -> Reply:
-        verify_case(self._case)
+    def _before(self, request: Request) -> None:
+        self._verify_case(self._case)
         if self._journal is not None and self._journal.budget != self._budget:
             raise ValueError("run_wide_budget_changed")
         if not isinstance(request, Request) or request.arm not in {"L", "P", "M"}:
@@ -403,15 +564,37 @@ class CheckedTransport:
             parsed = ExplanationCapsule.model_validate_json(request.payload_json)
             if digest(canonical(parsed.model_dump(mode="json"))) not in self._capsules:
                 raise ValueError("L_P_capsule_not_the_frozen_safe_D_projection")
-        reply = self._transport.complete(request)
-        verify_case(self._case)
+
+    def _after(self) -> None:
+        self._verify_case(self._case)
         if self._journal is not None and self._journal.budget != self._budget:
             raise ValueError("run_wide_budget_changed")
+
+    def complete(self, request: Request) -> Reply:
+        if getattr(self._transport, "network_capable", False):
+            raise ValueError("provider_requires_durable_started_dispatch")
+        self._before(request)
+        reply = self._transport.complete(request)
+        self._after()
+        return reply
+
+    def complete_started(self, request: Request, *, journal: AttemptJournal, attempt_id: str,
+                         deadline_monotonic: float) -> Reply:
+        if not getattr(self._transport, "network_capable", False):
+            return self.complete(request)
+        from eval.model.provider_http import ProviderTransport
+        if (type(self._transport) is not ProviderTransport or type(self._transport.controller) is not PinnedController
+                or journal is not self._journal or self._transport.controller.authority != self._authority):
+            raise ValueError("actual_pinned_provider_and_same_journal_required")
+        self._before(request)
+        reply = self._transport.complete_started(request, journal=journal, attempt_id=attempt_id,
+                                                  deadline_monotonic=deadline_monotonic)
+        self._after()
         return reply
 
 
-def _missing_rows(product: ProductResult, arms: tuple[str, ...], reason: str) -> tuple[ArmRow, ...]:
-    return tuple(ArmRow(schema_version=2, measurement_kind="mock", case_id=base.case_id,
+def _missing_rows(product: ProductResult, arms: tuple[str, ...], reason: str, *, kind="mock") -> tuple[ArmRow, ...]:
+    return tuple(ArmRow(schema_version=2, measurement_kind=kind, case_id=base.case_id,
                         resource_id=base.resource_id, rule_id=base.rule_id, arm=arm, status="not_run",
                         reason_code=reason, source_sha256=base.source_sha256, build_sha256=base.build_sha256,
                         measurement_ref="sha256:" + digest(canonical([arm, reason, base.measurement_ref])))
@@ -444,14 +627,31 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
                scanners: Callable = scanner_compare, manifest_context: RunManifest | None = None,
                expected_manifest_context_sha256: str | None = None,
                build_verifier: Callable[[], str] | None = None,
-               operator_config_sha256: str | None = None) -> BenchmarkResult:
+               operator_config_sha256: str | None = None,
+               execution_mode: str = "fake", execution_authority: SyntheticAuthority | None = None,
+               approved_scanners: dict[str, ApprovedScanner] | None = None, _frozen_reader=None) -> BenchmarkResult:
     """One owned journal across all cases. Fixed producers, no scorer/gold phase.
 
     Injected local implementations are trusted fake test seams, not plugin paths.
     Actual model Transport identity remains mock/protocol and always ineligible.
     """
-    validate_config(config)
-    _manifest_scope(config, manifest_context, expected_manifest_context_sha256)
+    if execution_mode not in {"fake", "approved_synthetic", "frozen_heldout"}:
+        raise ValueError("explicit_fixed_execution_mode_required")
+    approved_mode = execution_mode != "fake"
+    if (execution_mode == "frozen_heldout") != (_frozen_reader is not None):
+        raise ValueError("explicit_frozen_mode_and_authorized_reader_required_together")
+    validate_config(config, approved_mode=approved_mode, _frozen_reader=_frozen_reader)
+    verify_input = verify_case if _frozen_reader is None else _frozen_reader.verify
+    if not approved_mode and (execution_authority is not None or approved_scanners is not None
+                              or getattr(transport, "network_capable", False)):
+        raise ValueError("fake_mode_refuses_runtime_authority_or_provider")
+    approved_scanners = dict(approved_scanners or {})
+    if approved_mode:
+        if product is not product_adapter or models is not run_experiments or scanners is not scanner_compare:
+            raise ValueError("approved_mode_requires_fixed_actual_producers")
+        _approved_scope(config, execution_authority, transport, journal, approved_scanners,
+                        operator_config_sha256, build_verifier)
+    _manifest_scope(config, manifest_context, expected_manifest_context_sha256, _frozen_reader)
     if operator_config_sha256 is not None and not SHA256.fullmatch(operator_config_sha256):
         raise ValueError("invalid_operator_config_file_pin")
     if build_verifier is not None and build_verifier() != config.build_sha256:
@@ -462,7 +662,7 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
         raise ValueError("live_model_adapter_not_authorized")
     rows, statuses, exports, scanner_parts, scanner_exports, spans = [], [], [], [], [], []
     export_cases, export_admission_missing = [], set()
-    case_bindings = [CaseBinding(case_id=case.case_id, split="dev", configuration_id=case.configuration_id,
+    case_bindings = list(_frozen_reader.manifest.cases) if _frozen_reader is not None else [CaseBinding(case_id=case.case_id, split="dev", configuration_id=case.configuration_id,
                                  family_id=case.family_id, mutation_lineage=case.mutation_lineage,
                                  raw_source_sha256=case.plan_sha256) for case in config.cases]
     bindings_by_id = {binding.case_id: binding for binding in case_bindings}
@@ -482,12 +682,12 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
         start_count = journal.summary()["requests"]
         if start_count < last_count or journal.budget != config.budget or journal.price != frozen_price:
             raise ValueError("run_wide_budget_reset_detected")
-        produced = None
+        produced, baseline_admitted = None, False
         try:
-            verify_case(case)
+            verify_input(case)
             verified_raw_inputs.add(case.plan_sha256)
-            produced = product(case, config.build_sha256)
-            verify_case(case)
+            produced = product(case, config.build_sha256) if _frozen_reader is None else product_adapter_from_bytes(case, config.build_sha256, _frozen_reader.read(case))
+            verify_input(case)
             if (produced.plan.identity.sha256 != case.plan_sha256
                     or not produced.baseline or len(produced.baseline) * 7 + len(rows) > 100_000
                     or any(row.arm != "D" or row.source_sha256 != case.plan_sha256
@@ -501,6 +701,7 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
                     or len(produced.baseline) != len(expected_cells)):
                 raise ValueError("deterministic_required_cells_missing")
             baseline_sha = digest(canonical([row.model_dump(mode="json") for row in produced.baseline]))
+            baseline_admitted = True
             local_rows.extend(produced.baseline)
             local_status["D"] = ArmStatus(case.case_id, "D", "mock" if produced.mock else "ok",
                                           "local_D_without_external_admission", baseline_sha)
@@ -510,19 +711,22 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
             public_cases.add(public_case)
             if journal.budget != config.budget:
                 raise ValueError("run_wide_budget_changed")
+            if approved_mode:
+                _scanner_aliases(approved_scanners[case.case_id], produced)  # Before any model key/connector.
             if model_halt or journal.summary()["new_requests_blocked"]:
                 local_rows.extend(_missing_rows(produced, ("L", "P", "M"), "run_wide_liability_blocks_models"))
                 for arm in ("L", "P", "M"):
                     local_status[arm] = ArmStatus(case.case_id, arm, "not_run", "run_wide_liability_blocks_models")
             else:
                 try:
-                    verify_case(case)
+                    verify_input(case)
                     model_context = Context(config.build_sha256, case.plan_sha256, corpus, config_sha)
                     result: ModelResult = models(plan=produced.plan, shareable=json.loads(produced.shareable_json),
                         baseline=produced.baseline, links=produced.links, resource_links=produced.resource_links,
                         context=model_context,
                         transport=CheckedTransport(transport, case, journal, config.budget, plan=produced.plan,
-                            shareable_json=produced.shareable_json, links=produced.links, limits=config.model_limits),
+                            shareable_json=produced.shareable_json, links=produced.links, limits=config.model_limits,
+                            _frozen_reader=_frozen_reader),
                         journal=journal, limits=config.model_limits,
                         capture_private_prose=False)
                     bundle = export_bundle(result)
@@ -549,7 +753,7 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
                     local_rows.extend(_missing_rows(produced, ("L", "P", "M"), "model_producer_incomplete"))
                     for arm in ("L", "P", "M"):
                         local_status[arm] = ArmStatus(case.case_id, arm, "not_run", "model_producer_incomplete")
-            verify_case(case)
+            verify_input(case)
             if digest(canonical([row.model_dump(mode="json") for row in produced.baseline])) != baseline_sha:
                 raise ValueError("D_baseline_changed")
             # Scanner results are created only AFTER model inference has returned.
@@ -558,46 +762,83 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
                 if "fake_fixtures" in setting:
                     fixture = setting["fake_fixtures"].get(case.case_id)
                     setting["fake_fixtures"] = {public_case: fixture} if fixture is not None else {}
-            scanner_manifest = {"schema_version": "m4-scanner-run-v1", "input_scope": "development_synthetic",
+            scanner_manifest = {"schema_version": "m4-scanner-run-v1", "input_scope": config.input_scope,
                 "build_sha256": config.build_sha256, "cases": [{"case_id": public_case,
                 "plan_path": str(case.plan_path), "plan_sha256": case.plan_sha256,
                 "resources": [{"resource_id": rid, "address": address} for rid, address in produced.scanner_resources]}],
                 "arms": settings}
             try:
-                scan = scanners(scanner_manifest, fake_only=True)
-                if scan.get("fake_only") is not True or any(
-                        receipt.get("execution_kind") not in {"fake", "none"} for receipt in scan["capture_receipts"]):
+                aliases = {}
+                exported_scan = None
+                if approved_mode:
+                    binding = approved_scanners[case.case_id]
+                    approved_manifest = strict_json(binding.manifest_json.encode())
+                    # Scanner-local opaque IDs are predeclared with raw addresses;
+                    # deterministic source facts are never used to enrich a scanner.
+                    aliases = _scanner_aliases(binding, produced)
+                    _approved_scope(config, execution_authority, transport, journal, approved_scanners,
+                                    operator_config_sha256, build_verifier)
+                    scan = scanners(approved_manifest, runner=binding.runner, fake_only=False)
+                else:
+                    scan = scanners(scanner_manifest, fake_only=True)
+                if scan.get("fake_only") is not (not approved_mode) or any(
+                        receipt.get("execution_kind") not in ({"live", "none"} if approved_mode else {"fake", "none"})
+                        for receipt in scan["capture_receipts"]):
                     raise ValueError("scanner_fake_mode_cannot_promote_execution")
+                if approved_mode:
+                    # Retain original captures even if a later alias/cell admission fails.
+                    exported_scan = {"case_id": case.case_id, "normalized_report": scan,
+                                     "resource_aliases": [], "alias_status": "incomplete"}
+                    scanner_exports.append(exported_scan)
                 context = ScannerRunContext("scanner_" + case.case_id, config.edition_id,
                                              cases=(bindings_by_id[case.case_id],))
                 adapted = adapt_scanner_report(scan, expected_report_sha256=report_digest(scan), context=context)
-                scan_keys = {(row.arm, row.case_id, row.resource_id, row.rule_id) for row in adapted.bridge.rows}
-                expected_scan_keys = {(arm, row.case_id, row.resource_id, row.rule_id)
-                                      for arm in ("C", "C-custom", "T") for row in produced.baseline}
-                if (scan_keys != expected_scan_keys or len(adapted.bridge.rows) != len(expected_scan_keys)
+                scanner_rows = adapted.bridge.rows  # Preserve original scanner-local IDs/pins.
+                if approved_mode:
+                    exported_scan["unadmitted_rows"] = [row.model_dump(mode="json") for row in scanner_rows]
+                scan_keys = {(row.arm, row.case_id, row.resource_id, row.rule_id) for row in scanner_rows}
+                expected_scan_keys = ({(arm, case.case_id, rid, rule) for arm in ("C", "C-custom", "T")
+                                       for rid in aliases for rule in RULES} if approved_mode else
+                                      {(arm, row.case_id, row.resource_id, row.rule_id)
+                                       for arm in ("C", "C-custom", "T") for row in produced.baseline})
+                if (scan_keys != expected_scan_keys or len(scanner_rows) != len(expected_scan_keys)
                         or any(row.source_sha256 != case.plan_sha256 or row.build_sha256 != config.build_sha256
-                               for row in adapted.bridge.rows)):
+                               for row in scanner_rows)):
                     raise ValueError("scanner_foreign_or_missing_required_cells")
                 scanner_parts.append(json.loads(adapted.public_summary_json))
-                scanner_exports.append({"case_id": case.case_id, "normalized_report": scan})
-                local_rows.extend(adapted.bridge.rows)
+                if approved_mode:
+                    exported_scan["resource_aliases"] = [{"case_id": case.case_id, "arm": arm,
+                        "raw_input_sha256": case.plan_sha256, "scanner_resource_id": rid,
+                        "public_resource_id": public_id} for arm in ("C", "C-custom", "T")
+                        for rid, public_id in aliases.items()]
+                    exported_scan["alias_status"] = "bijective_unadmitted"
+                    local_rows.extend(_missing_rows(produced, ("C", "C-custom", "T"),
+                                                    "scanner_alias_binding_unadmitted", kind="unverified"))
+                else:
+                    scanner_exports.append({"case_id": case.case_id, "normalized_report": scan})
+                    local_rows.extend(scanner_rows)
                 for arm in ("C", "C-custom", "T"):
-                    local_status[arm] = ArmStatus(case.case_id, arm, "not_run", "scanner_fake_or_missing_not_measured",
+                    local_status[arm] = ArmStatus(case.case_id, arm, "not_run", "scanner_unadmitted_not_measured" if approved_mode else "scanner_fake_or_missing_not_measured",
                                                   adapted.bridge.source_report_sha256)
             except (ValueError, OSError, TypeError, KeyError, RuntimeError):
                 local_rows.extend(_missing_rows(produced, ("C", "C-custom", "T"), "scanner_admission_incomplete"))
                 for arm in ("C", "C-custom", "T"):
                     local_status[arm] = ArmStatus(case.case_id, arm, "not_run", "scanner_admission_incomplete")
-            verify_case(case)
+            verify_input(case)
             rows.extend(local_rows)
         except (ValueError, OSError, TypeError, KeyError, RuntimeError, KeyboardInterrupt) as error:
             changed = False
             try:
-                verify_case(case)
+                verify_input(case)
             except (ValueError, OSError):
                 changed = True
             cancelled = isinstance(error, KeyboardInterrupt)
             aborted |= changed or cancelled
+            if approved_mode and baseline_admitted and not changed:
+                rows.extend(local_rows)
+                present = {row.arm for row in local_rows}
+                rows.extend(_missing_rows(produced, tuple(arm for arm in FIXED_ARMS if arm not in present),
+                                          "case_admission_incomplete", kind="unverified"))
             local_status = {arm: ArmStatus(case.case_id, arm, "invalid" if changed else "cancelled" if cancelled else "not_run",
                                            "input_identity_abort" if changed else "operator_cancelled" if cancelled else "case_admission_failed")
                             for arm in FIXED_ARMS}
@@ -641,6 +882,9 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
               "run_accounting": {"basis": "single cumulative journal; per-invocation exports not added again",
                                  "summary": snapshot["summary"], "complete_snapshot": not snapshot.get("snapshot_unavailable", False)},
               "aborted": aborted, "product_acceptance": False, "live_eligible": False}
+    if approved_mode:
+        source["execution_authority_sha256"] = execution_authority.approved_bytes_sha256
+        source["execution_mode"] = "frozen_heldout_unverified" if _frozen_reader is not None else "approved_synthetic_unverified"
     typed, manifest_missing = _typed_candidate(manifest_context, source=source, statuses=statuses,
                                                rows=rows, model_attempts=model_attempts, missing=provenance_missing)
     candidate = {"schema_version": "m4-seven-arm-run-manifest-candidate-v1", "status": "DRAFT_INCOMPLETE" if typed is None else "METADATA_ONLY",
@@ -651,7 +895,8 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
                  "missing": sorted(manifest_missing), "product_acceptance": False,
                  "genuine_all_arm_admission": False}
     public = {"schema_version": "m4-seven-arm-benchmark-summary-v1", "run_id": config.run_id,
-              "mode": "development_fake_only", "required_arms": list(FIXED_ARMS), "case_count": len(config.cases),
+              "mode": "frozen_heldout_unverified" if _frozen_reader is not None else "approved_synthetic_unverified" if approved_mode else "development_fake_only",
+              "required_arms": list(FIXED_ARMS), "case_count": len(config.cases),
               "case_record_count": len(config.cases),
               "declared_distinct_raw_inputs": len({case.plan_sha256 for case in config.cases}),
               "verified_distinct_raw_byte_identities": len(verified_raw_inputs),

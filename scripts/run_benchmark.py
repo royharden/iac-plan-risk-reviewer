@@ -1,4 +1,4 @@
-"""Fixed development fake/protocol benchmark source; no provider/plugin/live mode.
+"""Fixed synthetic benchmark SOURCE: fake default, separately admitted programmatic route.
 
 Do not run during Dirty Mode. Successful plumbing is still NOT_MEASURED/exit 2.
 """
@@ -16,12 +16,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from iac_review.attempts import AttemptJournal, Budget, PriceIdentity  # noqa: E402
 from eval.model.experiment import Limits as ModelLimits, canonical, digest  # noqa: E402
 from eval.model.transport import FakeTransport, Reply, Usage  # noqa: E402
-from eval.runner.benchmark import (BenchmarkConfig, CaseSpec, coordinate, source_build_digest, validate_config)  # noqa: E402
+from eval.runner.benchmark import (BenchmarkConfig, CaseSpec, coordinate, source_build_digest, validate_config,
+                                   load_synthetic_authority)  # noqa: E402
 from eval.scanners.runner import SHA256, bounded_read, strict_json  # noqa: E402
 from iac_review.contracts.manifest import RunManifest  # noqa: E402
 
 
-def config_from_json(value: dict) -> BenchmarkConfig:
+def config_from_json(value: dict, *, approved_mode: bool = False) -> BenchmarkConfig:
     required = {"schema_version", "run_id", "edition_id", "build_sha256", "input_scope", "fake_only",
                 "synthetic_input_attested", "cases", "budget"}
     if (not isinstance(value, dict) or not required <= set(value)
@@ -46,25 +47,39 @@ def config_from_json(value: dict) -> BenchmarkConfig:
         scanner_arms_json=json.dumps(value.get("scanner_arms", {}), allow_nan=False),
         input_scope=value["input_scope"], fake_only=value["fake_only"],
         synthetic_input_attested=value["synthetic_input_attested"])
-    validate_config(config)
+    validate_config(config, approved_mode=approved_mode)
     return config
 
 
-def main() -> int:
+def main(argv: list[str] | None = None, *, approved_transport=None, approved_scanners=None,
+         approved_price: PriceIdentity | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--mode", choices=("fake", "approved_synthetic"), default="fake")
+    parser.add_argument("--execution-authority", type=Path)
+    parser.add_argument("--execution-authority-sha256", help="separate external digest of exact approval file bytes")
     parser.add_argument("--config-sha256", required=True, help="external SHA256 of exact configuration file bytes")
     parser.add_argument("--manifest-context", type=Path, help="optional shared typed metadata-only RunManifest context")
     parser.add_argument("--manifest-context-sha256", help="external canonical record digest, not raw file digest")
     parser.add_argument("--out", type=Path, required=True, help="new run directly under product results/")
     parser.add_argument("--fake-scenario", choices=("valid", "unknown-usage", "timeout", "error"), default="valid")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
+        approved_mode = args.mode == "approved_synthetic"
+        if approved_mode:
+            if (approved_transport is None or approved_scanners is None or approved_price is None
+                    or args.execution_authority is None or args.execution_authority_sha256 is None):
+                raise ValueError("approved_mode_requires_external_admitted_objects_and_approval")
+        elif (any(item is not None for item in (approved_transport, approved_scanners, approved_price,
+                                               args.execution_authority, args.execution_authority_sha256))):
+            raise ValueError("fake_mode_refuses_execution_bindings")
+        authority = None if not approved_mode else load_synthetic_authority(
+            bounded_read(args.execution_authority, 256 * 1024), expected_sha256=args.execution_authority_sha256)
         raw_config = bounded_read(args.config, 2 * 1024 * 1024)
         if not SHA256.fullmatch(args.config_sha256) or digest(raw_config) != args.config_sha256:
             raise ValueError("external_configuration_file_pin_mismatch")
         value = strict_json(raw_config)
-        config = config_from_json(value)  # Scope rejects before any case/output access.
+        config = config_from_json(value, approved_mode=approved_mode)  # Scope rejects before case access.
         if (args.manifest_context is None) != (args.manifest_context_sha256 is None):
             raise ValueError("manifest_context_and_external_pin_required_together")
         context = None
@@ -88,6 +103,8 @@ def main() -> int:
         price = PriceIdentity(provider=identity.provider, model=identity.model,
                               price_id="mock-zero-not-provider-price", price_date=date.today().isoformat(),
                               input_usd_per_million=Decimal(0), output_usd_per_million=Decimal(0))
+        if approved_mode:
+            transport, price = approved_transport, approved_price
         output.mkdir(parents=True, exist_ok=False)
         (output / "private").mkdir()
         (output / "shareable").mkdir()
@@ -96,7 +113,8 @@ def main() -> int:
         with AttemptJournal(journal_path, config.budget, price) as journal:
             result = coordinate(config, journal=journal, transport=transport, manifest_context=context,
                 expected_manifest_context_sha256=args.manifest_context_sha256,
-                build_verifier=source_build_digest, operator_config_sha256=args.config_sha256)
+                build_verifier=source_build_digest, operator_config_sha256=args.config_sha256,
+                execution_mode=args.mode, execution_authority=authority, approved_scanners=approved_scanners)
             files = (("private/provenance.json", result.private_provenance_json),
                      ("private/run-manifest-candidate.json", result.manifest_candidate_json),
                      ("shareable/summary.json", result.public_summary_json))
@@ -121,7 +139,7 @@ def main() -> int:
                 stream.flush()
                 os.fsync(stream.fileno())
         print(result.public_summary_json)
-        return 2  # No fake/protocol run closes measurement or product acceptance.
+        return 2  # Neither plumbing route closes measurement or product acceptance.
     except (ValueError, OSError, TypeError, KeyError, RuntimeError):
         print("benchmark refused or incomplete; preserve any partial private journal for reconciliation", file=sys.stderr)
         return 3

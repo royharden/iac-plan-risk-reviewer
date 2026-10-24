@@ -1,0 +1,293 @@
+"""Narrow future consumed-heldout access SOURCE; no automatic unblinding or execution.
+
+Actual custody/preflight metadata gates plus independent explicit access permission.
+The external custodian commits/pins consumption BEFORE invoking this controller.
+No inference/scorer orchestration, gold authoring, connector or credential access.
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+from typing import Callable, Literal
+
+from pydantic import Field, model_validator
+
+from iac_review.contracts.manifest import ArtifactRef, Digest, ManifestWire, OpaqueId, RunManifest
+from eval.model.experiment import canonical, digest
+from eval.runner.bundle import root_digest
+from eval.runner.custody import (CustodyAuthority, ExposureReceipt, Seal, metadata_digest,
+                                validate_exposure)
+from eval.runner.preflight import PreflightPins, checked_path, preflight, read_metadata
+from eval.runner.scoring import ARMS
+
+
+class PayloadPermission(ManifestWire):
+    artifact_id: OpaqueId
+    role: Literal["case_input", "oracle"]
+    sha256: Digest
+    case_id: OpaqueId | None = None
+
+
+class HeldoutAuthorization(ManifestWire):
+    schema_version: Literal[1] = 1
+    purpose: Literal["consumed_heldout_evaluation"]
+    run_id: OpaqueId
+    edition_id: OpaqueId
+    run_manifest_sha256: Digest
+    source_root_sha256: Digest
+    authority_sha256: Digest
+    seal_sha256: Digest
+    semantic_suite_sha256: Digest
+    build_sha256: Digest
+    inventory_sha256: Digest
+    prompt_sha256: Digest
+    rubric_sha256: Digest
+    arm_inventory_sha256: Digest
+    exposure_artifact_sha256: Digest
+    # Preserve actual ExposureReceipt.measurements_sha256 semantics; supplied
+    # externally, never derived from an input/request or invented before measurement.
+    measurements_sha256: dict[str, Digest] = Field(min_length=7, max_length=7)
+    custodian: str = Field(min_length=1, max_length=160)
+    authorized_by: str = Field(min_length=1, max_length=160)
+    consumption_committed_before_access: Literal[True]
+    tuning_forbidden: Literal[True]
+    valid_from: datetime
+    valid_until: datetime
+    payloads: tuple[PayloadPermission, ...] = Field(min_length=2, max_length=512)
+
+    @model_validator(mode="after")
+    def bounded_permission(self):
+        if (self.valid_from.tzinfo is None or self.valid_until.tzinfo is None
+                or self.valid_from.utcoffset() is None or self.valid_until.utcoffset() is None
+                or self.valid_until <= self.valid_from or set(self.measurements_sha256) != set(ARMS)
+                or len({row.artifact_id for row in self.payloads}) != len(self.payloads)
+                or any((row.role == "case_input") != (row.case_id is not None) for row in self.payloads)):
+            raise ValueError("bounded_exact_all_arm_heldout_permission_required")
+        return self
+
+
+def arm_inventory_digest(manifest: RunManifest) -> str:
+    """Bind actual all-arm version/config declarations; never hash payloads here."""
+    components = {row.component_id: row for row in manifest.components}
+    cases = {row.case_id for row in manifest.cases}
+    result = []
+    for arm in ARMS:
+        invocations = [row for row in manifest.invocations if row.arm == arm]
+        if not invocations or {case for row in invocations for case in row.case_ids} != cases:
+            raise ValueError("frozen_all_arm_case_inventory_missing")
+        result.append({"arm": arm, "bindings": [{
+            "invocation_id": row.invocation_id, "case_ids": list(row.case_ids),
+            "version": components[row.version_component_id].model_dump(mode="json"),
+            "config": components[row.config_component_id].model_dump(mode="json")}
+            for row in invocations]})
+    return digest(canonical(result))
+
+
+def _event(path: Path, run_id: str, status: str, code: str, artifact_id: str | None = None, *, create=False):
+    """Future explicit call only: payload-free durable local denial/access journal.
+
+    A log failure stops access. This log is NOT the external consumption receipt.
+    Existing model/scanner journals are never changed, reset, copied or reconciled.
+    """
+    path = path.absolute()
+    if any(p.is_symlink() or (hasattr(p, "is_junction") and p.is_junction()) for p in (path, *path.parents)):
+        raise ValueError("access_journal_link_forbidden")
+    raw = (canonical({"schema_version": 1, "run_id": run_id, "status": status,
+                      "reason_code": code, "artifact_id": artifact_id,
+                      "at": datetime.now(timezone.utc).isoformat(), "live_eligible": False}) + "\n").encode()
+    with path.open("xb" if create else "ab") as stream:
+        stream.write(raw)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def _gate(root: Path, manifest: RunManifest, pins: PreflightPins,
+          permission: HeldoutAuthorization, expected_permission_sha256: str):
+    # External explicit permission gate comes BEFORE even custody metadata reads.
+    if ".." in root.parts or str(root.absolute()).startswith("\\\\"):
+        raise ValueError("local_exact_access_root_required")
+    now = datetime.now(timezone.utc)
+    if (type(permission) is not HeldoutAuthorization or type(manifest) is not RunManifest
+            or metadata_digest(permission) != expected_permission_sha256
+            or permission.run_id != manifest.run_id or permission.edition_id != manifest.edition_id
+            or permission.run_manifest_sha256 != pins.run_manifest_sha256
+            or permission.source_root_sha256 != root_digest(root)
+            or manifest.stage != "evaluation" or manifest.split != "heldout"
+            or manifest.edition_state != "consumed_holdout"
+            or not permission.valid_from <= now <= permission.valid_until):
+        raise ValueError("explicit_externally_pinned_consumed_access_required")
+    status = preflight(root, manifest, pins)  # Actual metadata-only API, never permission.
+    if status["edition_state"] != "consumed_holdout" or status["payloads_opened"] != 0:
+        raise ValueError("durable_consumption_required_before_payload")
+    refs = {ref.role: ref for ref in manifest.artifacts if ref.role in {"authority", "seal", "exposure"}}
+    if set(refs) != {"authority", "seal", "exposure"}:
+        raise ValueError("persisted_exposure_metadata_missing")
+    authority = CustodyAuthority.model_validate_json(json.dumps(read_metadata(root, refs["authority"])))
+    seal = Seal.model_validate_json(json.dumps(read_metadata(root, refs["seal"])))
+    receipt_values = read_metadata(root, refs["exposure"])
+    if not isinstance(receipt_values, list) or len(receipt_values) != 7:
+        raise ValueError("all_seven_durable_consumption_receipts_required")
+    receipts = tuple(ExposureReceipt.model_validate_json(json.dumps(row)) for row in receipt_values)
+    validate_exposure(authority, seal, receipts, pins.authority_sha256, requested_fresh=False)
+    expected = {"authority_sha256": pins.authority_sha256, "seal_sha256": metadata_digest(seal),
+                "semantic_suite_sha256": pins.semantic_suite_sha256, "build_sha256": manifest.build_sha256,
+                "inventory_sha256": authority.inventory_sha256, "prompt_sha256": authority.prompt_sha256,
+                "rubric_sha256": authority.rubric_sha256, "arm_inventory_sha256": arm_inventory_digest(manifest),
+                "exposure_artifact_sha256": refs["exposure"].sha256, "custodian": authority.custodian}
+    if (any(getattr(permission, key) != value for key, value in expected.items())
+            or permission.authorized_by != authority.custodian
+            or {row.arm for row in receipts} != set(ARMS)
+            or any(row.measurements_sha256 != permission.measurements_sha256[row.arm] for row in receipts)):
+        raise ValueError("frozen_permission_custody_inventory_exposure_mismatch")
+    by_id, selected = {ref.artifact_id: ref for ref in manifest.artifacts}, {}
+    bindings = {case.case_id: case for case in manifest.cases}
+    input_cases, oracles = [], []
+    for allowed in permission.payloads:
+        ref = by_id.get(allowed.artifact_id)
+        if (ref is None or ref.role != allowed.role or ref.sha256 != allowed.sha256 or ref.visibility != "private"
+                or not ref.path.startswith("private/synthetic/" + ("inputs/" if ref.role == "case_input" else "oracle/"))
+                or any(part in ref.path.casefold() for part in ("credential", "secret", "private_map", "private-map", "auth.json", "token"))):
+            raise ValueError("exact_private_payload_allowlist_required")
+        checked_path(root, ref)  # Path validation only; no payload stat/open/read.
+        if ref.role == "case_input":
+            case = bindings.get(allowed.case_id)
+            if case is None or ref.sha256 != case.raw_source_sha256:
+                raise ValueError("case_input_raw_identity_mismatch")
+            input_cases.append(allowed.case_id)
+        else:
+            oracles.append(ref)
+        selected[ref.artifact_id] = ref
+    if (len(input_cases) != len(set(input_cases)) or set(input_cases) != set(bindings)
+            or len(oracles) != 1 or oracles[0].sha256 != authority.oracle_sha256):
+        raise ValueError("whole_frozen_input_and_oracle_inventory_required")
+    return selected
+
+
+class HeldoutAccess:
+    """Private local accessor. Input and scoring-only oracle paths stay separate.
+
+    It does NOT run coordinate or expose a provider Request. Core coordinate still
+    denies heldout. A future externally approved orchestrator must preserve the
+    existing inference projection boundary; this object is never a transport arg.
+    """
+    def __init__(self, root, manifest, pins, permission, expected_pin, event_path):
+        self._root, self._manifest, self._pins = root.absolute(), manifest, pins
+        self._permission, self._expected_pin, self._event_path = permission, expected_pin, event_path
+        self._used, self._halted = set(), False
+
+    def check_authorized(self):
+        if self._halted:
+            raise ValueError("access_halted_no_retry")
+        return _gate(self._root, self._manifest, self._pins, self._permission, self._expected_pin)
+
+    def _read(self, artifact_id: str, role: str) -> bytes:
+        if self._halted:
+            raise ValueError("access_halted_no_retry")
+        try:
+            selected = _gate(self._root, self._manifest, self._pins, self._permission, self._expected_pin)
+            ref = selected.get(artifact_id)
+            if ref is None or ref.role != role or artifact_id in self._used:
+                raise ValueError("wrong_role_or_reused_access")
+            self._used.add(artifact_id)  # Failed reads cannot authorize a retry.
+            _event(self._event_path, self._manifest.run_id, "pending", "authorized_payload_read", artifact_id)
+            path = checked_path(self._root, ref)
+            if datetime.now(timezone.utc) > self._permission.valid_until:
+                raise ValueError("access_permission_expired")
+            if not path.is_file() or path.stat().st_size > ref.bytes_upper:
+                raise ValueError("authorized_payload_missing_or_oversized")
+            with path.open("rb") as stream:
+                raw = stream.read(ref.bytes_upper + 1)
+            if len(raw) > ref.bytes_upper or digest(raw) != ref.sha256:
+                raise ValueError("authorized_payload_hash_mismatch")
+            _gate(self._root, self._manifest, self._pins, self._permission, self._expected_pin)
+            _event(self._event_path, self._manifest.run_id, "read", "verified_payload_read", artifact_id)
+            return raw
+        except (ValueError, OSError, TypeError, KeyError):
+            self._halted = True
+            _event(self._event_path, self._manifest.run_id, "not_run", "access_incomplete", None)
+            raise ValueError("heldout_access_incomplete") from None
+
+    def read_case_input(self, case_id: str) -> bytes:
+        allowed = [row for row in self._permission.payloads if row.role == "case_input" and row.case_id == case_id]
+        if len(allowed) != 1:
+            self._halted = True
+            _event(self._event_path, self._manifest.run_id, "not_run", "unknown_case_access")
+            raise ValueError("unknown_case_access")
+        return self._read(allowed[0].artifact_id, "case_input")
+
+    def deliver_oracle_to_scoring(self, scoring_sink: Callable[[bytes], None]) -> None:
+        if not callable(scoring_sink):
+            raise ValueError("explicit_separate_scoring_sink_required")
+        allowed = [row for row in self._permission.payloads if row.role == "oracle"]
+        if len(allowed) != 1:
+            raise ValueError("exact_oracle_permission_required")
+        raw = self._read(allowed[0].artifact_id, "oracle")
+        try:
+            scoring_sink(raw)  # Return value deliberately withheld; no inference path.
+        except Exception:
+            self._halted = True
+            _event(self._event_path, self._manifest.run_id, "not_run", "scoring_sink_incomplete")
+            raise ValueError("scoring_sink_incomplete") from None
+
+
+def authorize_heldout_access(root: Path, manifest: RunManifest, pins: PreflightPins,
+                             permission: HeldoutAuthorization, *, expected_permission_sha256: str,
+                             event_path: Path) -> HeldoutAccess:
+    """Explicit future caller only. No automatic controller/approval/consumption creation."""
+    # Restrict the NEW event log away from input/oracle/metadata paths and existing
+    # journals, preventing a denial write from mutating externally pinned evidence.
+    log = event_path.absolute()
+    base = root.absolute()
+    if log.parent != base / "private" / "access-events" or log.exists():
+        raise ValueError("fresh_separate_access_event_log_required")
+    try:
+        _gate(base, manifest, pins, permission, expected_permission_sha256)
+        _event(log, manifest.run_id, "authorized", "consumed_metadata_and_permission_verified", create=True)
+    except (ValueError, OSError, TypeError, KeyError):
+        _event(log, manifest.run_id, "not_run", "authorization_incomplete", create=True)
+        raise ValueError("heldout_access_not_authorized") from None
+    return HeldoutAccess(base, manifest, pins, permission, expected_permission_sha256, log)
+
+
+class GuardedCaseReader:
+    """Private, in-memory fixed-byte reader capability for the shared coordinator.
+
+    Each payload is opened once through HeldoutAccess. Subsequent arm checks recheck
+    permission/custody and the immutable byte identity, without reopening/copying it.
+    No payload/private path enters public metadata or inference requests.
+    """
+    def __init__(self, access: HeldoutAccess):
+        if type(access) is not HeldoutAccess:
+            raise ValueError("actual_authorized_heldout_accessor_required")
+        self._access, self._bytes = access, {}
+
+    @property
+    def manifest(self):
+        return self._access._manifest
+
+    def check_inventory(self, cases, build_sha256):
+        selected = self._access.check_authorized()
+        actual = {row.case_id: row for row in self.manifest.cases}
+        if (build_sha256 != self.manifest.build_sha256 or {case.case_id for case in cases} != set(actual)
+                or len(cases) != len(actual)):
+            raise ValueError("guarded_frozen_inventory_mismatch")
+        for case in cases:
+            binding = actual[case.case_id]
+            permitted = [row for row in self._access._permission.payloads if row.case_id == case.case_id]
+            if (len(permitted) != 1 or case.plan_path != checked_path(self._access._root, selected[permitted[0].artifact_id])
+                    or (case.plan_sha256, case.configuration_id, case.family_id, case.mutation_lineage) !=
+                       (binding.raw_source_sha256, binding.configuration_id, binding.family_id, binding.mutation_lineage)):
+                raise ValueError("guarded_case_raw_lineage_path_mismatch")
+
+    def verify(self, case):
+        self._access.check_authorized()
+        if case.case_id not in self._bytes:
+            self._bytes[case.case_id] = self._access.read_case_input(case.case_id)
+        if digest(self._bytes[case.case_id]) != case.plan_sha256:
+            raise ValueError("guarded_case_raw_identity_mismatch")
+
+    def read(self, case) -> bytes:
+        self.verify(case)
+        return self._bytes[case.case_id]

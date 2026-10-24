@@ -177,6 +177,26 @@ def load_plan(path: Path) -> PlanDocument:
     """Normalize explicit supported facts and retain unsupported scope as coverage."""
     started = time.monotonic()
     data = read_source_bytes(path)
+    return _normalize_plan_bytes(data, path, started)
+
+
+def load_plan_bytes(data: bytes, *, source_path: Path, expected_sha256: str | None = None) -> PlanDocument:
+    """Normalize already permission-gated bytes; source_path is private metadata only.
+
+    No stat/open/copy or source-path reopening occurs. Admission/decoder/masks and
+    source identity use the same normalizer as load_plan, without relaxed limits.
+    """
+    started = time.monotonic()
+    if type(data) is not bytes or len(data) > MAX_BYTES:
+        raise InputError("input_byte_limit")
+    if expected_sha256 is not None and (not isinstance(expected_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+            or hashlib.sha256(data).hexdigest() != expected_sha256):
+        raise SourceChangedError("source_identity_mismatch")
+    return _normalize_plan_bytes(data, source_path, started)
+
+
+def _normalize_plan_bytes(data: bytes, path: Path, started: float) -> PlanDocument:
     raw = decode_source(data, started)
     version = raw.get("format_version")
     if not isinstance(version, str) or re.fullmatch(r"[0-9]+\.[0-9]+", version) is None:
@@ -264,4 +284,4 @@ def load_plan(path: Path) -> PlanDocument:
                         resources=tuple(resources), coverage=tuple(dict.fromkeys(coverage)))
 
 
-__all__ = ["InputError", "SourceChangedError", "decode_source", "load_plan", "read_source_bytes"]
+__all__ = ["InputError", "SourceChangedError", "decode_source", "load_plan", "load_plan_bytes", "read_source_bytes"]

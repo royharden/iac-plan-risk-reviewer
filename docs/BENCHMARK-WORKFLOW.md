@@ -15,8 +15,8 @@ liability bounds remain in the cumulative journal; unknown liability blocks late
 model starts even when the fake price is zero. Per-invocation accounting is not
 summed as if each cumulative journal snapshot were a separate run.
 
-The current entrypoint accepts only explicitly attested public development-synthetic
-cases and fake/protocol model identity. Scope rejects BEFORE raw payload access.
+The default entrypoint accepts only explicitly attested public development-synthetic
+cases and non-network fake/protocol model identity. Scope rejects BEFORE raw payload access.
 There is no heldout accessor or scoring/gold phase. A future heldout controller must
 have external freeze/custody pins and durable consumption authorization BEFORE any
 payload read; metadata preflight success or changing a split flag is insufficient.
@@ -55,7 +55,8 @@ mutation_lineage, with optional externally supplied case_record_sha256. Budget u
 max_requests, max_input_tokens, max_output_tokens and decimal
 max_usd; model_limits and scanner_arms are optional fixed-shape settings. Scanner
 settings accept check_ids and explicit pinned fake_fixtures only. No gold/split,
-provider key, HCL, live scanner binary or arbitrary import option is accepted.
+provider key, HCL, live scanner binary or arbitrary import option is accepted in
+this default configuration.
 
 `scripts/run_benchmark.py --config <metadata> --config-sha256 <external raw-file pin>
 --out <new product results/run>` is a
@@ -77,7 +78,8 @@ canonical digest of the actual shared RunManifest record. Its development case
 inventory, run, edition and build must match exactly before case access. It cannot
 import prior invocation/attempt/eligibility records or hidden/oracle payload refs.
 Fixed component IDs are `<arm>_version` and `<arm>_config`; version kind is source
-for D, model for L/P/M and scanner for C/C-custom/T. Configuration kind is config.
+for D's primary build component, rules for D_version, model for L/P/M and scanner
+for C/C-custom/T, matching actual preflight invocation bindings. Configuration kind is config.
 All mandatory authority/semantic/eligibility/component pins come from the external
 caller; missing pins remain DRAFT_INCOMPLETE. A complete metadata candidate still
 sets every all_attempts_attested and claimed_eligible flag false. No execution
@@ -171,7 +173,91 @@ require the appropriate independent external pin. No substitution or repinning.
 
 This v1 wire retains compatible field names/types. The case-binding correction
 removes dependence on nonempty rows and keeps original failed exports intact.
-The optional D5 complete_started provider seam remains disabled here: the fixed
-benchmark uses its shared journal and fake/protocol Request-only transport, with
-no provider-mode option and no live eligibility. D6 owns the separate consumer,
+The default route keeps the D5 complete_started provider seam disabled: it uses
+the shared journal and fake/protocol Request-only transport. The separate explicit
+approved-synthetic source route below still cannot claim live eligibility. D6 owns the separate consumer,
 assessment and bounded batch CLI; this producer does not read gold or authorize it.
+
+## Future explicitly approved synthetic route (SOURCE ONLY)
+
+No activation, approval, price/version pin, credential, connector, scanner process,
+corpus or output has been created or exercised. Dirty Mode remains OPEN. This route
+is future source for use only under a later genuine external execution grant.
+Fake is still the CLI/API default. Setting config.fake_only=false alone refuses.
+The separate `coordinate(..., execution_mode="approved_synthetic", ...)` mode needs
+config.fake_only=false plus exact external SyntheticAuthority, an enabled actual
+D5 ProviderTransport with PinnedController, existing ApprovedScanner bindings for
+every case and an actual owned shared AttemptJournal. Injected replacement product,
+model or scanner producers are refused in this mode. Heldout remains refused.
+
+`load_synthetic_authority(raw_bytes, expected_sha256=external_raw_byte_pin)` checks
+the bounded closed record `m4-approved-synthetic-benchmark-v1`. Fields are run_id,
+edition_id, build_sha256, config_file_sha256, configuration_sha256, corpus_sha256,
+arm_inventory_sha256, provider_sha256, price_sha256, budget_sha256,
+model_limits_sha256, data_transfer_sha256 and scanner_grants (case_id -> externally
+pinned original scanner-grant bytes digest). It requires dirty_mode_closed,
+synthetic_only and execution_explicitly_approved all true. These are declarations,
+not identity authentication. The code never manufactures them or closes Dirty Mode.
+Configuration SHA is `benchmark_config_digest(config)`, binding complete normalized
+case metadata including raw paths/external case-record pins and exact configured
+limits. Corpus SHA retains the existing canonical case/raw/config/family/mutation
+inventory convention. Arm SHA binds all seven IDs. Provider SHA binds actual
+ProviderConfig asdict via D5 canonical/digest; price and budget SHA bind actual
+model_dump_json strings of the one journal. Model limits use canonical asdict.
+Raw configuration-file and external data-transfer pins remain separate identities.
+
+Use the existing D5 ProviderTransport(config, enabled=True,
+controller=PinnedController(authority, externally_owned_controller), ...).
+No second provider transport exists here. Before each possible key/connector read,
+the guarded fixed Request boundary checks its safe capsule/projection and raw
+input, then delegates complete_started with the SAME actual journal, durable
+attempt_id and original deadline. D5's actual controller returns Admission after
+the durable start. PinnedController requires its approval/provider/price/budget/
+transfer identities match this run; D5 separately validates the original permit,
+exact start/request/journal/endpoint/IP/deadline before reading a key or creating a
+connector. Refusal preserves the started attempt and unresolved liability; no retry
+or journal reset occurs. Model exports remain unverified/not_run for scoring.
+
+Each ApprovedScanner carries an immutable original manifest_json and the existing
+BoundedSubprocessRunner with externally pinned LocalExecutionGrant. Exact synthetic
+case path/raw/build, all three C/C-custom/T arms, grant identity and manifest hash
+are checked before inference. The existing runner verifies invocation argv,
+environment, executable/dependency/config/policy/check pins and bounds before its
+sole subprocess implementation. No scanner runtime code is duplicated. Manifest
+resource IDs may be predeclared scanner-local opaque IDs: exact raw address-set
+equality supplies only a local ID join to the product's fresh public IDs. This join
+is validated before model key access and again before scanners. No D facts/labels
+or safe model projection enrich scanner input. The original normalized_report and
+its capture pins are retained unchanged; approved-only scanner_exports adds
+resource_aliases as a private list of records with exact fields
+`{case_id: string, arm: C|C-custom|T, raw_input_sha256: string,
+scanner_resource_id: string, public_resource_id: string}`. Each case/arm/raw domain
+has a bijective join; ambiguous addresses, duplicate IDs and many-to-one public IDs
+refuse. No record crosses case/arm/raw identity or overwrites another domain.
+The original bridge rows remain unchanged in approved-only private
+`unadmitted_rows: list<ArmRow JSON>` alongside normalized_report. The separate
+`alias_status` is incomplete or bijective_unadmitted. Main comparison output uses
+explicit not_run/unverified placeholders with no prediction, rather than rewriting
+original scanner-local row IDs or treating a join as execution eligibility. Original
+capture/report/mapping/measurement pins stay intact. A later externally admitted
+consumer must validate alias bindings separately; no receipt is repinned to conceal
+a changed source report. Missing/foreign/ambiguous joins preserve available original
+reports/rows/attempts privately and retain explicit incomplete comparison cells.
+Aliases never enter inference or public summary output.
+
+Approved-only v1 optional top fields are execution_mode=
+approved_synthetic_unverified and execution_authority_sha256 (original external
+approval bytes pin). Existing fake v1 fields are unchanged. Actual capture attempts
+remain unverified in typed metadata, with all_attempts_attested=false and no
+eligibility claim; an actual process return or provider response cannot establish
+correctness, genuine measurement, semantic coverage or independent acceptance.
+
+The CLI source accepts explicit --mode approved_synthetic and separately pinned
+--execution-authority/--execution-authority-sha256 metadata. Its programmatic
+main(argv, approved_transport=..., approved_scanners=..., approved_price=...) must
+also receive already configured external objects. Bare CLI flags cannot construct
+an external controller, load arbitrary modules, discover prices or enable provider
+credentials; absent objects refuse before key/process start. Price is the exact
+caller-supplied PriceIdentity, never the default mock-zero price. Output remains
+private metadata plus status-only summary; exit 2 still means NOT_MEASURED. No part
+of this source interface is permission to run during Dirty Mode.
