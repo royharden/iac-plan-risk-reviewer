@@ -29,11 +29,17 @@ plan digest and local case ID bind the descriptor to the exact private report.
 | Profile | Files | `source` component version | Status |
 |---|---|---|---|
 | 1 | Nine core files: contracts/__init__, contracts/manifest, ingest, evidence, rules, report, provenance, source_view, cli | `content-v1` | Existing bundles; still verify |
-| 2 | Profile 1 plus `contracts/report_wire.py` (ten files) | `content-v2` | Written by new reports |
+| 2 | Profile 1 plus `contracts/report_wire.py` and `contracts/report_inventory.py` (eleven files) | `content-v2` | Written by new reports |
+
+Profile 2 was amended in place on 2026-10-24 (INT decision) to add
+`contracts/report_inventory.py`, before any profile 2 bundle had been produced:
+nothing executed in this construction phase. So no profile 2 archive exists with
+the earlier ten-file inventory, and none is reinterpreted. Once a profile 2
+bundle exists, any further inventory change needs a new profile.
 
 Adding the canonical report wire to the fingerprint is a deliberate profile
 change (INT seam S3), not a silent repin. A profile 1 descriptor must list
-exactly its nine files and `content-v1`; a profile 2 descriptor exactly its ten
+exactly its nine files and `content-v1`; a profile 2 descriptor exactly its eleven
 files and `content-v2`. Mixed inventories are refused. The constructor default
 stays profile 1, so only the local producer explicitly claims profile 2. No
 archive is upgraded, re-hashed or reinterpreted. The shareable exporter compares
@@ -52,8 +58,9 @@ checked with the separate `validate_legacy_private_report` plus
 The graph is acyclic:
 
 1. Private run-manifest.json describes source/config/input and contains no
-   artifact references or report digest. Pinning report_wire.py hashes its
-   bytes only; provenance never imports it (report_wire imports provenance).
+   artifact references or report digest. Pinning report_wire.py and
+   report_inventory.py hashes their bytes only; provenance never imports them
+   (both import provenance).
 2. private.json holds that typed descriptor and its exact serialized digest.
    Shareable/provider projections receive neither descriptor nor raw-plan/source
    identity or private mapping. Existing opaque run/finding IDs and safe facts

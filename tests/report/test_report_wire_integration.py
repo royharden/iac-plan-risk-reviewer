@@ -135,7 +135,9 @@ def test_new_reports_pin_profile_two_with_report_wire(tmp_path):
     descriptor = _descriptor(report)
     assert CURRENT_PROFILE == 2 and descriptor.schema_version == 2
     assert {row.path for row in descriptor.source_files} == set(CORE_FILES_V2)
-    assert "contracts/report_wire.py" in CORE_FILES_V2 and "contracts/report_wire.py" not in CORE_FILES_V1
+    assert len(CORE_FILES_V1) == 9 and len(CORE_FILES_V2) == 11
+    for added in ("contracts/report_wire.py", "contracts/report_inventory.py"):
+        assert added in CORE_FILES_V2 and added not in CORE_FILES_V1
     source = next(c for c in descriptor.run_manifest.components if c.kind == "source")
     assert source.version == "content-v2"
 
@@ -159,8 +161,9 @@ def test_profile_one_descriptor_still_verifies_without_repin(tmp_path):
 
 
 @pytest.mark.parametrize("schema_version,paths,source_version", [
-    (1, CORE_FILES_V2, "content-v1"),   # v1 claiming ten files
-    (2, CORE_FILES_V1, "content-v2"),   # v2 missing report_wire
+    (1, CORE_FILES_V2, "content-v1"),   # v1 claiming eleven files
+    (2, CORE_FILES_V1, "content-v2"),   # v2 missing report_wire and inventory
+    (2, CORE_FILES_V1 + ("contracts/report_wire.py",), "content-v2"),  # pre-amendment ten-file v2
     (1, CORE_FILES_V1, "content-v2"),   # profile/source version mismatch
     (2, CORE_FILES_V2, "content-v1"),
 ])

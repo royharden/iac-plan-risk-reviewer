@@ -18,9 +18,11 @@ CORE_FILES_V1 = (
     "evidence/__init__.py", "rules/__init__.py", "report/__init__.py",
     "provenance.py", "source_view.py", "cli.py",
 )
-# Profile 2 deliberately adds the canonical report wire. Profile 1 descriptors keep
-# verifying against their nine files; no archive is upgraded or repinned.
-CORE_FILES_V2 = CORE_FILES_V1 + ("contracts/report_wire.py",)
+# Profile 2 deliberately adds the canonical report wire and bundle inventory
+# (amended in place to include the inventory before any v2 bundle existed).
+# Profile 1 descriptors keep verifying against their nine files; no archive is
+# upgraded or repinned.
+CORE_FILES_V2 = CORE_FILES_V1 + ("contracts/report_wire.py", "contracts/report_inventory.py")
 SOURCE_PROFILES = {1: CORE_FILES_V1, 2: CORE_FILES_V2}
 SOURCE_PROFILE_VERSIONS = {1: "content-v1", 2: "content-v2"}
 CURRENT_PROFILE = 2
@@ -35,6 +37,7 @@ class SourceFilePin(ManifestWire):
         "contracts/__init__.py", "contracts/manifest.py", "ingest/__init__.py",
         "evidence/__init__.py", "rules/__init__.py", "report/__init__.py",
         "provenance.py", "source_view.py", "cli.py", "contracts/report_wire.py",
+        "contracts/report_inventory.py",
     ]
     sha256: Digest
 
@@ -47,11 +50,11 @@ class LocalConfig(ManifestWire):
 
 class ReportProvenance(ManifestWire):
     # schema_version selects the source profile. The default stays 1 so an
-    # unversioned constructor never silently claims the ten-file profile.
+    # unversioned constructor never silently claims the eleven-file profile.
     schema_version: Literal[1, 2] = 1
     kind: Literal["private_deterministic_descriptor"] = "private_deterministic_descriptor"
     run_manifest: RunManifest
-    source_files: tuple[SourceFilePin, ...] = Field(min_length=9, max_length=10)
+    source_files: tuple[SourceFilePin, ...] = Field(min_length=9, max_length=11)
     config: LocalConfig
     producer_authenticated: Literal[False] = False
     benchmark_execution_verified: Literal[False] = False
