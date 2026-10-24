@@ -22,6 +22,9 @@ from iac_review.contracts import (
     PARSER_VERSION, POLICY_VERSION, EvidenceRef, PlanDocument, ReviewReport,
     RuleEvaluation, ValueState,
 )
+from iac_review.contracts.report_inventory import (
+    BOUND_PAYLOADS, PRIVACY_TEXT, AbortedMarker, classify_bundle, validate_export_state,
+)
 from iac_review.evidence import resolve, verify_unchanged
 from iac_review.ingest import InputError, MAX_BYTES, MAX_SECONDS
 from iac_review.provenance import (
@@ -427,11 +430,23 @@ def write_report(report: ReviewReport, out: Path, *, deadline: float | None = No
             "plan_sha256": private["plan"]["sha256"],
             "parser_version": PARSER_VERSION, "policy_version": POLICY_VERSION,
             "artifacts": {name: sha256(data).hexdigest() for name, data in payloads.items()},
-            "privacy": "Private files and this manifest remain local. Share only the two shareable files.",
+            "privacy": PRIVACY_TEXT,
         }
         manifest_bytes = _json_bytes(private_manifest)
         payloads["manifest.json"] = manifest_bytes
         payloads["manifest.sha256"] = (sha256(manifest_bytes).hexdigest() + "\n").encode("ascii")
+        complete_state = _json_bytes({"state": "COMPLETE", "exit_code": report.exit_code})
+        # Self-check against the canonical inventory before anything is staged:
+        # the published bundle must classify as a bound COMPLETE bundle.
+        if type(validate_export_state(aborted)) is not AbortedMarker:
+            raise ValueError("report_inventory_invalid")
+        inventory = classify_bundle(
+            {*payloads, "export-state.json"}, state=complete_state, manifest=manifest_bytes,
+            receipt=payloads["manifest.sha256"],
+            artifact_hashes={name: sha256(payloads[name]).hexdigest() for name in BOUND_PAYLOADS})
+        if inventory.kind != "bound" or inventory.exit_code != report.exit_code:
+            raise ValueError("report_inventory_invalid")
+        check_deadline()
         for name, data in payloads.items():
             check_deadline()
             destination = pending / name
@@ -455,7 +470,7 @@ def write_report(report: ReviewReport, out: Path, *, deadline: float | None = No
         final_state = out / ".export-state.pending"
         with final_state.open("xb") as stream:
             staged.append(final_state)
-            stream.write(_json_bytes({"state": "COMPLETE", "exit_code": report.exit_code}))
+            stream.write(complete_state)
             stream.flush()
             os.fsync(stream.fileno())
         # No deadline rejection may occur after this publication boundary.

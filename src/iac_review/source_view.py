@@ -22,11 +22,15 @@ from iac_review.contracts.report_wire import validate_legacy_private_report, val
 from iac_review.evidence import make_ref, resolve, verify_unchanged
 from iac_review.ingest import InputError, MAX_BYTES, MAX_RESOURCES, MAX_SECONDS
 from iac_review.ingest import decode_source, load_plan, read_source_bytes
-from iac_review.provenance import CORE_ARTIFACTS, DESCRIPTOR_FILE, verify_descriptor
+from iac_review.contracts.report_inventory import (
+    BOUND_FILES, BOUND_PAYLOADS, LEGACY_FILES, LEGACY_PAYLOADS, classify_bundle,
+)
+from iac_review.provenance import DESCRIPTOR_FILE, verify_descriptor
 
-_ARTIFACTS = frozenset({"private.json", "private.html", "shareable.json", "shareable.html"})
-_FILES = _ARTIFACTS | {"manifest.json", "manifest.sha256", "export-state.json"}
-_BOUND_FILES = CORE_ARTIFACTS | {"manifest.json", "manifest.sha256", "export-state.json"}
+# Closed layouts come from the canonical inventory contract, not a local mirror.
+_ARTIFACTS = LEGACY_PAYLOADS
+_FILES = LEGACY_FILES
+_BOUND_FILES = BOUND_FILES
 _HASH = re.compile(r"[0-9a-f]{64}")
 _ID = re.compile(r"[0-9a-f]{32}")
 _ACTIONS = {"no-op", "create", "read", "update", "delete"}
@@ -174,7 +178,7 @@ def _load_bundle(path: Path, deadline: float) -> _Bundle:
         raise InputError("bundle_timestamp_invalid") from None
     catalog = manifest["artifacts"]
     bound = manifest["schema_version"] == "1.1.0"
-    artifacts = CORE_ARTIFACTS if bound else _ARTIFACTS
+    artifacts = BOUND_PAYLOADS if bound else _ARTIFACTS
     _directory(path, _BOUND_FILES if bound else _FILES)
     _require(type(catalog) is dict and set(catalog) == artifacts,
              "bundle_artifact_catalog_invalid")
@@ -195,6 +199,21 @@ def _load_bundle(path: Path, deadline: float) -> _Bundle:
             reports[name] = _json(data, deadline)
         if name == DESCRIPTOR_FILE:
             descriptor_raw = data
+    # The staged checks above give specific error codes; the canonical inventory
+    # is the final authority. Only it yields COMPLETE, and legacy never classifies bound.
+    names = []
+    for item in path.iterdir():
+        names.append(item.name)
+        _require(len(names) <= len(_BOUND_FILES), "bundle_layout_invalid")
+    try:
+        inventory = classify_bundle(names, state=state_bytes, manifest=manifest_bytes, receipt=receipt,
+                                    artifact_hashes={name: hashes[name] for name in artifacts})
+    except ValueError:
+        raise InputError("bundle_inventory_invalid") from None
+    _require(inventory.kind == ("bound" if bound else "legacy")
+             and inventory.exit_code == state["exit_code"] and inventory.run_id == manifest["run_id"]
+             and inventory.plan_sha256 == manifest["plan_sha256"], "bundle_inventory_invalid")
+    _check(deadline)
     private, shared = reports["private.json"], reports["shareable.json"]
     _require(private.get("projection") == "private" and private.get("sensitive") is True
              and shared.get("projection") == "shareable" and shared.get("sensitive") is False,

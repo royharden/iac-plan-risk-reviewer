@@ -64,6 +64,14 @@ The graph is acyclic:
    bundle inventory is eight files, including export-state.json. No source plan
    or private map is copied into it.
 
+Bundle layouts and control files are the canonical
+`contracts/report_inventory.py` types. Before staging, the writer checks its
+ABORTED marker, manifest, LF receipt and COMPLETE marker with them, and requires
+`classify_bundle` to return a bound COMPLETE result. The viewer keeps its staged
+checks, which give specific error codes, and then requires `classify_bundle` to
+agree (`bundle_inventory_invalid`). Legacy seven-file bundles classify only as
+legacy.
+
 The viewer checks that exact inventory, typed stage, descriptor/private-report
 digest and run/case/config/raw-source bindings. Legacy v1.0.0 seven-file bundles
 remain readable as explicitly unbound archives; they are not promoted to bound
