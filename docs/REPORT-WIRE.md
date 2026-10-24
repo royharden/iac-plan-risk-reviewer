@@ -151,4 +151,4 @@ receipt as these types, and the writer checks its own bundle with `classify_bund
 - No real bundle or archive was read to confirm the inventory types against writer output.
 - Pydantic strict JSON-mode behaviour for literal/union edge cases, and full producer
   compatibility of the added invariants, are unverified until tests run.
-- Source fingerprint profile v2 (`provenance.py`) includes `report_wire.py`; v1 descriptors keep verifying against the nine-file v1 profile.
+- Source fingerprint profile v2 (`provenance.py`) includes `report_wire.py` and `report_inventory.py` (eleven files); v1 descriptors keep verifying against the nine-file v1 profile.

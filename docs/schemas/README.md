@@ -92,7 +92,7 @@ Registration describes these types; it does not assert which writers/readers hav
 adopted them. Bundle inventory checks in
 [source_view.py](../../src/iac_review/source_view.py) remain the actual consumer
 boundary until verified. `provenance-ReportProvenance` declares `("1", "2")`:
-source profile v1 pins nine core files, v2 ten (adding `report_wire.py`). New
+source profile v1 pins nine core files, v2 eleven (adding `report_wire.py` and `report_inventory.py`). New
 bundles use v2; v1 bundles keep verifying against the v1 profile and are never
 repinned or upgraded.
 

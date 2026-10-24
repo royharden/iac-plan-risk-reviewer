@@ -24,7 +24,7 @@ plan file -> ingest -> rules -> evidence -> report -> write_report -> bundle
 | `rules/` | R1-R4 applicability, outcome, severity and reason codes; unknown required facts stay indeterminate |
 | `evidence/` | Reopens only the digest-pinned document; resolves RFC 6901 pointers with mask, side and identity checks (`resolved`, `unknown`, `sensitive`, `missing`, `mismatch`) |
 | `report/` | `build_report`: binds references to their resource, withholds unverified decision evidence (outcome becomes indeterminate), computes exit precedence, builds both projections and escaped HTML; `write_report` stages and publishes the bundle |
-| `provenance.py` | `ReportProvenance` descriptor (`run-manifest.json`) pinning installed core source files; source profile v2 (ten files, including `report_wire.py`) is current, while v1 (nine files) descriptors keep verifying against v1 |
+| `provenance.py` | `ReportProvenance` descriptor (`run-manifest.json`) pinning installed core source files; source profile v2 (eleven files, including `report_wire.py` and `report_inventory.py`) is current, while v1 (nine files) descriptors keep verifying against v1 |
 | `source_view.py` | Read-only verification of COMPLETE bundles; legacy bundles stay explicitly unbound; one selected fact via an explicitly supplied original plan |
 | `shareable_export.py` | Regenerates safe-only output with fresh IDs from a bound private bundle and the original plan; no retained mapping |
 | `explain/` | Validates finite template/fact/limitation selections; deterministic fallback; cannot change a rule outcome |
