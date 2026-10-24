@@ -20,6 +20,7 @@ from eval.runner.custody import metadata_digest
 from eval.runner.exposure_journal import (ExposureCommitAuthorization, InputExposureCommit,
     InputExposureReceipt, verify_committed_exposure)
 from eval.runner.preflight import PreflightPins
+from eval.runner.scoring import EligibilityManifest, record_digest
 
 
 class FrozenRunPins(ManifestWire):
@@ -53,6 +54,11 @@ class FrozenRuntime:
     transport: object = field(repr=False)
     scanners: dict[str, ApprovedScanner] = field(repr=False)
     access_event_path: Path
+    # Optional EXTERNALLY pinned scanner execution eligibility (EligibilityManifest, pin).
+    # Never derived from this run. Absent: heldout scanner arms stay
+    # scanner_admission_incomplete (fail closed). Not part of FrozenRunPins, so existing
+    # selection digests are unchanged; it is bound by its own pin and the edition.
+    heldout_scanner_eligibility: tuple[EligibilityManifest, str] | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -95,6 +101,17 @@ def _selection(runtime: FrozenRuntime, pins: FrozenRunPins, expected_pin: str):
             or pins.run_manifest_sha256 != runtime.preflight_pins.run_manifest_sha256
             or pins.build_sha256 != source_build_digest()):
         raise ValueError("frozen_selection_metadata_or_source_mismatch")
+    check_scanner_eligibility(runtime.heldout_scanner_eligibility, runtime.config.edition_id)
+
+
+def check_scanner_eligibility(eligibility, edition_id: str) -> None:
+    """None is allowed (fail-closed scanner arms); otherwise exact typed record, own pin, edition."""
+    if eligibility is not None and (
+            not isinstance(eligibility, tuple) or len(eligibility) != 2
+            or type(eligibility[0]) is not EligibilityManifest or not isinstance(eligibility[1], str)
+            or record_digest(eligibility[0]) != eligibility[1]
+            or eligibility[0].edition_id != edition_id):
+        raise ValueError("exact_external_heldout_scanner_eligibility_pin_required")
 
 
 def run_frozen(runtime: FrozenRuntime, pins: FrozenRunPins, *, expected_pins_sha256: str) -> FrozenRunResult:
@@ -132,7 +149,8 @@ def run_frozen(runtime: FrozenRuntime, pins: FrozenRunPins, *, expected_pins_sha
             manifest_context=runtime.manifest, expected_manifest_context_sha256=pins.run_manifest_sha256,
             build_verifier=source_build_digest, operator_config_sha256=pins.config_file_sha256,
             execution_mode="frozen_heldout", execution_authority=runtime.execution_authority,
-            approved_scanners=runtime.scanners, _frozen_reader=reader)
+            approved_scanners=runtime.scanners, _frozen_reader=reader,
+            heldout_scanner_eligibility=runtime.heldout_scanner_eligibility)
     except (ValueError, OSError, TypeError, KeyError, RuntimeError, KeyboardInterrupt):
         reason = "frozen_admission_or_execution_incomplete"
     try:
@@ -155,8 +173,11 @@ def run_frozen(runtime: FrozenRuntime, pins: FrozenRunPins, *, expected_pins_sha
         "benchmark_provenance_json": benchmark.private_provenance_json if benchmark else None,
         "manifest_candidate_json": benchmark.manifest_candidate_json if benchmark else None,
         "rows": [row.model_dump(mode="json") for row in benchmark.rows] if benchmark else [],
+        "heldout_scanner_eligibility_sha256": (runtime.heldout_scanner_eligibility[1]
+                                               if runtime.heldout_scanner_eligibility is not None else None),
         "live_eligible": False, "product_acceptance": False, "oracle_opened": False,
-        "missing": [reason] if reason else ["external_execution_eligibility_and_scoring_required"]}
+        "missing": ([reason] if reason else ["external_execution_eligibility_and_scoring_required"])
+                   + (["heldout_scanner_eligibility_absent"] if runtime.heldout_scanner_eligibility is None else [])}
     raw = canonical(outcome)
     public = canonical({"schema_version": "m4-frozen-run-summary-v1", "run_id": runtime.config.run_id,
         "split": "heldout", "status": "INCOMPLETE", "required_arms": list(FIXED_ARMS),

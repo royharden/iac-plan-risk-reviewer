@@ -91,9 +91,14 @@ metadata uses the heldout split and the given edition state.
 
 The frozen coordinator passes this context automatically and takes the eligibility
 only through the optional `coordinate(..., heldout_scanner_eligibility=(EligibilityManifest, pin))`,
-which is refused outside frozen mode. **Gap:** `frozen_run.run_frozen` (outside this
-package's paths) does not pass it yet, so frozen runs still record heldout scanner
-cells as incomplete until it is wired through `FrozenRuntime`. Even when admitted,
+which is refused outside frozen mode. `run_frozen` passes it through from the optional
+`FrozenRuntime.heldout_scanner_eligibility = (EligibilityManifest, pin)` (D4 assignment 3).
+The pair must be the exact typed record, `record_digest(manifest) == pin`, and the
+config's edition. It is supplied externally and never derived from the run. It is not
+part of `FrozenRunPins`, so existing selection digests stay valid. The outcome records
+`heldout_scanner_eligibility_sha256`. When it's absent, the outcome lists
+`heldout_scanner_eligibility_absent` and the scanner arms stay
+`scanner_admission_incomplete`. Even when admitted,
 the coordinator keeps scanner arm status `scanner_unadmitted_not_measured` with
 alias placeholders. The scanner-local to public alias join still needs its own later
 admission. Nothing here is a measurement.

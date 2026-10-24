@@ -187,3 +187,61 @@ def test_committed_intent_mismatch_never_activates_accessor(tmp_path, monkeypatc
     outcome = json.loads(result.private_outcome_json)
     assert all(row["status"] == "not_run" for row in outcome["statuses"])
     assert outcome["oracle_opened"] is False and result.status == "INCOMPLETE"
+
+
+def test_scanner_eligibility_requires_exact_external_pin_and_edition():
+    """what_bug_this_catches: an unpinned, re-pinned or other-edition eligibility unlocks heldout scanner admission."""
+    from eval.runner.frozen_run import check_scanner_eligibility
+    from eval.runner.scoring import EligibilityManifest, record_digest
+    manifest = EligibilityManifest(edition_id="fixture_edition", rows=())
+    check_scanner_eligibility(None, "fixture_edition")  # Absent is allowed: arms stay fail-closed.
+    check_scanner_eligibility((manifest, record_digest(manifest)), "fixture_edition")
+    for bad in ((manifest, "b" * 64), (manifest,), [manifest, record_digest(manifest)],
+                ({"edition_id": "fixture_edition", "rows": []}, record_digest(manifest))):
+        with pytest.raises(ValueError, match="eligibility_pin_required"):
+            check_scanner_eligibility(bad, "fixture_edition")
+    with pytest.raises(ValueError, match="eligibility_pin_required"):
+        check_scanner_eligibility((manifest, record_digest(manifest)), "other_edition")
+
+
+def frozen_pass_through(tmp_path, monkeypatch, eligibility):
+    """Drive run_frozen to coordinate with stubs; capture the scanner eligibility it passes."""
+    config, path, price = fixture(tmp_path)
+    config = replace(config, input_scope="heldout", fake_only=False, synthetic_input_attested=False)
+    manifest, pins_, permission, exposure = metadata_with_exposure(tmp_path)
+    values = {name: "a" * 64 for name in FrozenRunPins.model_fields}
+    values["exposure_authorization_sha256"] = metadata_digest(exposure)
+    pins = FrozenRunPins(**values)
+    seen = {}
+    monkeypatch.setattr("eval.runner.frozen_run._selection", lambda *a: None)
+    monkeypatch.setattr("eval.runner.frozen_run.verify_committed_exposure", lambda *a, **k: committed("a" * 64))
+    monkeypatch.setattr("eval.runner.frozen_run.authorize_heldout_access", lambda *a, **k: object())
+    monkeypatch.setattr("eval.runner.frozen_run.GuardedCaseReader", lambda access: "fixture_reader")
+    def stop(*a, **k):
+        seen.update(k)
+        raise ValueError("fixture stops before any payload")
+    monkeypatch.setattr("eval.runner.frozen_run.coordinate", stop)
+    with AttemptJournal(path, config.budget, price) as journal:
+        runtime = FrozenRuntime(tmp_path, config, manifest, pins_, permission, exposure, None,
+                                journal, FakeTransport(), {}, tmp_path / "events.jsonl", eligibility)
+        result = run_frozen(runtime, pins, expected_pins_sha256="a" * 64)
+    return seen, json.loads(result.private_outcome_json)
+
+
+def test_frozen_run_passes_pinned_scanner_eligibility_to_coordinate(tmp_path, monkeypatch):
+    """what_bug_this_catches: externally pinned eligibility is dropped, so heldout scanners can never be admitted."""
+    from eval.runner.scoring import EligibilityManifest, record_digest
+    manifest = EligibilityManifest(edition_id="fixture_edition", rows=())
+    pair = (manifest, record_digest(manifest))
+    seen, outcome = frozen_pass_through(tmp_path, monkeypatch, pair)
+    assert seen["heldout_scanner_eligibility"] == pair and seen["_frozen_reader"] == "fixture_reader"
+    assert outcome["heldout_scanner_eligibility_sha256"] == pair[1]
+    assert "heldout_scanner_eligibility_absent" not in outcome["missing"]
+
+
+def test_absent_scanner_eligibility_is_passed_as_none_and_reported(tmp_path, monkeypatch):
+    """what_bug_this_catches: missing eligibility is replaced by one derived from the run, or silently omitted."""
+    seen, outcome = frozen_pass_through(tmp_path, monkeypatch, None)
+    assert seen["heldout_scanner_eligibility"] is None
+    assert outcome["heldout_scanner_eligibility_sha256"] is None
+    assert "heldout_scanner_eligibility_absent" in outcome["missing"]
