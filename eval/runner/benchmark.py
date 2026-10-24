@@ -22,7 +22,7 @@ from eval.model.experiment import (Context, FindingLink, Limits as ModelLimits, 
 from eval.model.provenance import ExportBundle, export_bundle
 from eval.model.protocol import ModelOnlyRequest, model_only_input
 from eval.model.transport import INSTRUCTIONS, Reply, Request, Transport
-from eval.runner.scoring import ARMS, ArmRow
+from eval.runner.scoring import ARMS, ArmRow, EligibilityManifest
 from eval.scanners.driver import GuardedScannerInput, compare as scanner_compare
 from eval.scanners.runner import CHECK_ID, SHA256, bounded_read, strict_json
 from eval.scanners.runner import BoundedSubprocessRunner, manifest_digest
@@ -665,7 +665,8 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
                build_verifier: Callable[[], str] | None = None,
                operator_config_sha256: str | None = None,
                execution_mode: str = "fake", execution_authority: SyntheticAuthority | None = None,
-               approved_scanners: dict[str, ApprovedScanner] | None = None, _frozen_reader=None) -> BenchmarkResult:
+               approved_scanners: dict[str, ApprovedScanner] | None = None, _frozen_reader=None,
+               heldout_scanner_eligibility: tuple[EligibilityManifest, str] | None = None) -> BenchmarkResult:
     """One owned journal across all cases. Fixed producers, no scorer/gold phase.
 
     Injected local implementations are trusted fake test seams, not plugin paths.
@@ -676,6 +677,13 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
     approved_mode = execution_mode != "fake"
     if (execution_mode == "frozen_heldout") != (_frozen_reader is not None):
         raise ValueError("explicit_frozen_mode_and_authorized_reader_required_together")
+    if heldout_scanner_eligibility is not None and (
+            _frozen_reader is None or not isinstance(heldout_scanner_eligibility, tuple)
+            or len(heldout_scanner_eligibility) != 2
+            or type(heldout_scanner_eligibility[0]) is not EligibilityManifest
+            or not isinstance(heldout_scanner_eligibility[1], str)
+            or not SHA256.fullmatch(heldout_scanner_eligibility[1])):
+        raise ValueError("heldout_scanner_eligibility_only_with_frozen_mode_and_exact_pin")
     validate_config(config, approved_mode=approved_mode, _frozen_reader=_frozen_reader)
     verify_input = verify_case if _frozen_reader is None else _frozen_reader.verify
     if not approved_mode and (execution_authority is not None or approved_scanners is not None
@@ -833,9 +841,20 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
                     exported_scan = {"case_id": case.case_id, "normalized_report": scan,
                                      "resource_aliases": [], "alias_status": "incomplete"}
                     scanner_exports.append(exported_scan)
-                context = ScannerRunContext("scanner_" + case.case_id, config.edition_id,
-                                             cases=(bindings_by_id[case.case_id],))
-                adapted = adapt_scanner_report(scan, expected_report_sha256=report_digest(scan), context=context)
+                if _frozen_reader is None:
+                    context = ScannerRunContext("scanner_" + case.case_id, config.edition_id,
+                                                 cases=(bindings_by_id[case.case_id],))
+                    adapted = adapt_scanner_report(scan, expected_report_sha256=report_digest(scan), context=context)
+                else:
+                    # Guarded heldout admission: exact manifest + access pin + external pinned
+                    # eligibility (A1). Absent eligibility refuses -> scanner_admission_incomplete.
+                    eligibility, eligibility_pin = heldout_scanner_eligibility or (None, None)
+                    context = ScannerRunContext("scanner_" + case.case_id, config.edition_id,
+                        cases=(bindings_by_id[case.case_id],), edition_state=_frozen_reader.manifest.edition_state,
+                        heldout_access_authorization_sha256=_frozen_reader._access._expected_pin,
+                        heldout_scanner_manifest_json=binding.manifest_json)
+                    adapted = adapt_scanner_report(scan, expected_report_sha256=report_digest(scan), context=context,
+                                                   eligibility=eligibility, expected_eligibility_sha256=eligibility_pin)
                 scanner_rows = adapted.bridge.rows  # Preserve original scanner-local IDs/pins.
                 if approved_mode:
                     exported_scan["unadmitted_rows"] = [row.model_dump(mode="json") for row in scanner_rows]

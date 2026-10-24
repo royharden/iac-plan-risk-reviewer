@@ -152,3 +152,37 @@ def test_forged_incomplete_arm_list_is_refused_at_scoring():
     with pytest.raises(ValueError, match="scoring_handoff_pins_differ"):
         sh.check_handoff_for_scoring(forged, edition_id="fixture_edition", build_sha256=PIN,
                                      receipts=receipts_for(actual), measurement_sha256=actual, measured=[])
+
+
+def completion(commit):
+    """Fully valid artificial v2 completion reference (no real release exists)."""
+    from datetime import datetime, timezone
+    from eval.runner.edition_release import ArmCompletion, CompletionReference
+    arms = tuple(ArmCompletion(arm=arm, artifact_id="artifact_" + arm.replace("-", "_"), artifact_sha256=PIN,
+                               score_status="FAIL", score_result_sha256=PIN, expected_rows=1) for arm in ARMS)
+    return CompletionReference(run_manifest_sha256=PIN, authority_sha256=PIN, seal_sha256=PIN,
+        input_exposure_authorization_sha256=PIN, input_exposure_commit_sha256=commit,
+        input_exposure_receipt_file_sha256=PIN, post_measurement_exposure_sha256=PIN,
+        eligibility_sha256=PIN, rubric_sha256=PIN, row_inventory_sha256=PIN,
+        row_inventory=(("case_one", "resource_one", "R1"),), arms=arms,
+        consumed_at=datetime(2026, 10, 24, tzinfo=timezone.utc))
+
+
+def test_completion_reference_naming_another_input_commit_is_refused():
+    """what_bug_this_catches: scoring and release silently describe different pre-access input exposures."""
+    from eval.runner.custody import metadata_digest
+    raw, pin = outcome()
+    handoff, _ = prepare(raw, pin)
+    same, other = completion(PIN), completion("d" * 64)
+    assert sh.check_completion_reference(handoff, same,
+                                         expected_completion_sha256=metadata_digest(same))["cross_checked"] is True
+    with pytest.raises(ValueError, match="completion_reference_input_exposure_commit_mismatch"):
+        sh.check_completion_reference(handoff, other, expected_completion_sha256=metadata_digest(other))
+
+
+def test_completion_reference_pin_must_match():
+    """what_bug_this_catches: an unpinned or substituted completion record passes the cross-check."""
+    raw, pin = outcome()
+    handoff, _ = prepare(raw, pin)
+    with pytest.raises(ValueError, match="completion_reference_input_exposure_commit_mismatch"):
+        sh.check_completion_reference(handoff, completion(PIN), expected_completion_sha256="b" * 64)

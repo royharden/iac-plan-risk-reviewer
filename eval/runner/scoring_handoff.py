@@ -274,3 +274,22 @@ def check_handoff_for_scoring(handoff: ScoringHandoff, *, edition_id: str, build
             "unresolved_attempts": handoff.unresolved_attempts,
             "journal_summary": json.loads(handoff.journal_summary_json),
             "eligibility_status": handoff.eligibility_status}
+
+
+def check_completion_reference(handoff: ScoringHandoff, completion, *,
+                               expected_completion_sha256: str) -> dict:
+    """End-to-end cross-check with D6's release `CompletionReference` (read-only).
+
+    Where both records exist they must name the SAME pre-access input-exposure
+    commit; otherwise scoring and release describe different runs. The completion
+    type is D6-owned and only read here; nothing in it grants scoring permission.
+    """
+    from eval.runner.edition_release import CompletionReference  # Lazy, read-only D6 type.
+    if (type(handoff) is not ScoringHandoff or type(completion) is not CompletionReference
+            or not isinstance(expected_completion_sha256, str)
+            or metadata_digest(completion) != expected_completion_sha256
+            or completion.input_exposure_commit_sha256 != handoff.input_exposure_commit_sha256):
+        raise ValueError("completion_reference_input_exposure_commit_mismatch")
+    return {"completion_reference_sha256": expected_completion_sha256,
+            "input_exposure_commit_sha256": completion.input_exposure_commit_sha256,
+            "cross_checked": True}

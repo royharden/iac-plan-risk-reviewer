@@ -20,7 +20,7 @@ from pydantic import Field, model_validator
 
 from iac_review.contracts.manifest import ArtifactRef, Digest, ManifestWire, OpaqueId, RunManifest
 from eval.model.experiment import canonical, digest
-from eval.runner.bundle import root_digest
+from eval.runner.bundle import PAYLOAD_PREFIXES, root_digest
 from eval.runner.custody import CustodyAuthority, Seal, metadata_digest, validate_seal
 from eval.runner.preflight import PreflightPins, checked_path, preflight, read_metadata
 from eval.runner.scoring import ARMS
@@ -187,7 +187,10 @@ def _gate(root: Path, manifest: RunManifest, pins: PreflightPins,
         ref = by_id.get(allowed.artifact_id)
         if (ref is None or ref.role != "case_input" or allowed.role != "case_input"
                 or ref.sha256 != allowed.sha256 or ref.visibility != "private"
-                or not ref.path.startswith("private/synthetic/inputs/")
+                # Shared bundle namespace (bundle.PAYLOAD_PREFIXES); "synthetic" in the path is a
+                # legacy layout name, NOT a scope claim. Heldout identity comes from the manifest
+                # split/edition state and this v2 permission, never from the path.
+                or not ref.path.startswith(PAYLOAD_PREFIXES["case_input"])
                 or any(part in ref.path.casefold() for part in ("credential", "secret", "private_map", "private-map", "auth.json", "token"))):
             raise ValueError("exact_private_input_allowlist_required")
         checked_path(root, ref)  # Path validation only; no payload stat/open/read.

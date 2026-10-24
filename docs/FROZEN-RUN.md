@@ -73,13 +73,42 @@ never oracle, scoring or tuning permission.
 `eval/scanners/scoring_bridge.bridge_report` now accepts source `input_scope` in
 {`development_synthetic`, `heldout`} only. A heldout source additionally requires the
 externally pinned `eligibility` and `expected_eligibility_sha256`; otherwise it
-raises. Development-synthetic behavior is unchanged. Consequence: inside the frozen
-coordinator the scanner report is adapted without eligibility, and
-`eval/scanners/run_manifest.adapt_scanner_report` additionally admits only dev-split
-case bindings. Heldout C/C-custom/T cells therefore always stay
-`scanner_admission_incomplete` (NOT_RUN; original captures retained) until BOTH a
-pinned eligibility exists AND a heldout-aware `run_manifest` follow-up is granted.
-That is fail-closed, not a measurement.
+raises. Development-synthetic behavior is unchanged.
+
+## Heldout scanner admission (D4 assignment 2)
+
+`eval/scanners/run_manifest.adapt_scanner_report` is now scope-aware. A
+`development_synthetic` report keeps the dev split and refuses any heldout context.
+A `heldout` report requires a `ScannerRunContext` carrying all of:
+`edition_state` in {`sealed`, `consumed_holdout`}, the exact
+`heldout_access_authorization_sha256` (v2 permission pin) and the exact
+`heldout_scanner_manifest_json`. That manifest must satisfy the heldout-manifest
+predicate for that pin and match the report's `manifest_sha256` and build. The context
+also needs the externally pinned eligibility (A1), and heldout-split case bindings
+only. Anything missing raises, and the coordinator records that as
+`scanner_admission_incomplete` (NOT_RUN, original captures retained). The typed
+metadata uses the heldout split and the given edition state.
+
+The frozen coordinator passes this context automatically and takes the eligibility
+only through the optional `coordinate(..., heldout_scanner_eligibility=(EligibilityManifest, pin))`,
+which is refused outside frozen mode. **Gap:** `frozen_run.run_frozen` (outside this
+package's paths) does not pass it yet, so frozen runs still record heldout scanner
+cells as incomplete until it is wired through `FrozenRuntime`. Even when admitted,
+the coordinator keeps scanner arm status `scanner_unadmitted_not_measured` with
+alias placeholders. The scanner-local to public alias join still needs its own later
+admission. Nothing here is a measurement.
+
+## Heldout input layout (decision)
+
+Heldout case inputs stay at `private/synthetic/inputs/<file>` inside the run bundle,
+the case_input role prefix of the shared `eval/runner/bundle.PAYLOAD_PREFIXES`
+(oracle `private/synthetic/oracle/`, measurements `private/synthetic/measurements/`).
+The gate reads that constant instead of a second copy. "synthetic" in the path is a
+legacy bundle namespace name, not a scope claim. Heldout identity comes only from the
+manifest (`split="heldout"`, edition state) plus the v2 input-access permission and
+D6's committed input exposure, never from a path. Renaming the namespace would change
+`bundle.py`, edition release and existing archives. That would be a deliberate
+versioned migration owned elsewhere, not a silent change.
 
 ## Scoring is separate
 

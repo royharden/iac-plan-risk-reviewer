@@ -2,6 +2,10 @@
 
 No payload/source/gold discovery, scanner execution or eligibility issuance.
 Unknown required pins yield an explicit draft, never placeholder component hashes.
+Two scopes: development_synthetic (dev split, unchanged) and guarded heldout. Heldout
+admission requires the exact heldout scanner manifest (bound to the v2 input-access
+permission pin) and the externally pinned eligibility (Amendment A1); otherwise it
+refuses, which the coordinator records as scanner_admission_incomplete.
 """
 from __future__ import annotations
 
@@ -13,7 +17,7 @@ from iac_review.contracts.manifest import (ArtifactRef, AttemptMetadata, CaseBin
     ComponentVersion, EvaluationEligibility, InvocationMetadata, RunManifest)
 from eval.runner.scoring import EligibilityManifest, measurement_eligible
 from .driver import ComparisonRow
-from .runner import SHA256, Limits, digest
+from .runner import SHA256, Limits, _heldout_manifest, digest, manifest_digest, strict_json
 from .scoring_bridge import BridgeBatch, _receipt, bridge_report, measurement_ref
 
 OPAQUE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
@@ -41,6 +45,10 @@ class ScannerRunContext:
     cases: tuple[CaseBinding, ...] = ()
     artifacts: tuple[ArtifactRef, ...] = ()
     known_components: tuple[ScannerComponents, ...] = ()
+    # Guarded heldout only (all three required together; absent for development).
+    edition_state: str = "development"
+    heldout_access_authorization_sha256: str | None = None
+    heldout_scanner_manifest_json: str | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +79,24 @@ def _component(kind: str, name: str, sha: str, *, version: str | None = None) ->
                             compatibility="unverified")
 
 
+def _heldout_scope(source: dict, context: ScannerRunContext,
+                   expected_eligibility_sha256: str | None) -> None:
+    """Bind a heldout report to its exact guarded manifest, access pin and eligibility."""
+    pin, raw = context.heldout_access_authorization_sha256, context.heldout_scanner_manifest_json
+    if (pin is None or raw is None or expected_eligibility_sha256 is None
+            or context.edition_state not in {"sealed", "consumed_holdout"}):
+        raise ValueError("heldout scanner admission pins missing")
+    if not isinstance(raw, str) or len(raw.encode()) > 2 * 1024 * 1024:
+        raise ValueError("bounded heldout scanner manifest required")
+    manifest = strict_json(raw.encode())
+    if (not isinstance(manifest, dict) or not _heldout_manifest(manifest, pin)
+            or manifest_digest(manifest) != source.get("manifest_sha256")
+            or manifest.get("build_sha256") != source.get("build_sha256")
+            or [(row.case_id, row.raw_source_sha256) for row in context.cases]
+               != [(manifest["cases"][0].get("case_id"), manifest["cases"][0].get("plan_sha256"))]):
+        raise ValueError("heldout report differs from its guarded manifest/access pin")
+
+
 def adapt_scanner_report(report: dict, *, expected_report_sha256: str, context: ScannerRunContext,
                          eligibility: EligibilityManifest | None = None,
                          expected_eligibility_sha256: str | None = None,
@@ -87,14 +113,23 @@ def adapt_scanner_report(report: dict, *, expected_report_sha256: str, context: 
     bridge = bridge_report(source, expected_report_sha256=expected_report_sha256,
                            edition_id=context.edition_id, eligibility=eligibility,
                            expected_eligibility_sha256=expected_eligibility_sha256, bounds=bounds)
+    heldout = source.get("input_scope") == "heldout"
+    if heldout:
+        _heldout_scope(source, context, expected_eligibility_sha256)
+    elif (context.edition_state != "development" or context.heldout_access_authorization_sha256 is not None
+            or context.heldout_scanner_manifest_json is not None):
+        raise ValueError("development report cannot carry heldout context")
+    split = "heldout" if heldout else "dev"
     missing: set[str] = set()
     for name, value in (("policy", context.policy_sha256), ("authority", context.authority_sha256),
                         ("semantic_suite", context.semantic_suite_sha256),
                         ("eligibility", expected_eligibility_sha256)):
         _pin(value, name, missing)
     cases = {row.case_id: row for row in context.cases}
-    if len(cases) != len(context.cases) or any(row.split != "dev" for row in context.cases):
-        raise ValueError("unique development-only typed case bindings required")
+    if len(cases) != len(context.cases) or any(row.split != split for row in context.cases):
+        # Dev wording preserved for existing callers/tests; heldout gets its own label.
+        raise ValueError(("unique heldout" if heldout else "unique development-only")
+                         + " typed case bindings of the report scope required")
     artifacts, paths, artifact_ids = {}, set(), set()
     for artifact in context.artifacts:
         if (artifact.visibility != "private" or not artifact.path.startswith("private/")
@@ -224,7 +259,7 @@ def adapt_scanner_report(report: dict, *, expected_report_sha256: str, context: 
     manifest = None
     if not missing:
         manifest = RunManifest(run_id=context.run_id, edition_id=context.edition_id,
-                   edition_state="development", split="dev", build_sha256=source["build_sha256"],
+                   edition_state=context.edition_state, split=split, build_sha256=source["build_sha256"],
                    policy_sha256=context.policy_sha256, authority_sha256=context.authority_sha256,
                    semantic_suite_sha256=context.semantic_suite_sha256, eligibility_sha256=expected_eligibility_sha256,
                    components=tuple(components.values()), cases=context.cases, invocations=tuple(invocations),

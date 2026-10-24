@@ -57,6 +57,18 @@ Two exposure events are kept separate:
    no favorable-score gate, and no detector-derived gold is ever introduced. The
    existing order (exposure record durably written before any hidden read) is unchanged.
 
+## Release cross-check (D6 `CompletionReference`)
+
+When a release completion reference exists, pass `--completion-reference <file>
+--completion-reference-sha256 <pin>` together (one without the other refuses). These
+flags are only accepted with a heldout scoring handoff. Before the exposure record is
+written or anything hidden is read, `check_completion_reference` verifies the pin
+(`metadata_digest`). It then requires
+`CompletionReference.input_exposure_commit_sha256 == ScoringHandoff.input_exposure_commit_sha256`,
+so scoring and release must describe the same pre-access input exposure. The
+completion type is D6-owned (`eval/runner/edition_release.py`) and is only read here.
+The result records `completion_reference_check`.
+
 ## Not done / deferred
 
 Nothing ran (imports, schemas, `tests/eval/test_scoring_handoff.py`, exclusive-create

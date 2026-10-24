@@ -15,7 +15,9 @@ from eval.runner.custody import (  # noqa: E402
     validate_exposure, validate_independence, validate_seal, validate_semantics,
 )
 from eval.runner.model_bridge import UtilityRequest, utility_summaries  # noqa: E402
-from eval.runner.scoring_handoff import ScoringHandoff, check_handoff_for_scoring  # noqa: E402
+from eval.runner.scoring_handoff import (  # noqa: E402
+    ScoringHandoff, check_completion_reference, check_handoff_for_scoring)
+from eval.runner.edition_release import CompletionReference  # noqa: E402  (read-only D6 type)
 
 MAX_BYTES = 16 * 1024 * 1024
 
@@ -161,6 +163,9 @@ def main(argv: list[str] | None = None) -> int:
     # Heldout only: pinned post-run handoff (eval/runner/scoring_handoff.py, docs/SCORING-HANDOFF.md).
     parser.add_argument("--scoring-handoff", type=Path)
     parser.add_argument("--scoring-handoff-sha256")
+    # Optional release completion reference: when present, cross-checked with the handoff.
+    parser.add_argument("--completion-reference", type=Path)
+    parser.add_argument("--completion-reference-sha256")
     parser.add_argument("--allow-sealed-exposure", action="store_true",
                         help="requires externally persisted receipt; never makes an exposed edition fresh")
     args = parser.parse_args(argv)
@@ -198,6 +203,14 @@ def main(argv: list[str] | None = None) -> int:
                     or handoff.edition_id != edition.edition_id
                     or handoff.build_sha256 != edition.frozen_build_sha256):
                 raise ValueError("scoring handoff pin/edition mismatch")
+        if (args.completion_reference is None) != (args.completion_reference_sha256 is None):
+            raise ValueError("completion reference and its external pin are required together")
+        completion_check = None
+        if args.completion_reference is not None:
+            if handoff is None:
+                raise ValueError("completion reference cross-check requires a heldout scoring handoff")
+            completion_check = check_completion_reference(handoff, model(args.completion_reference, CompletionReference),
+                expected_completion_sha256=args.completion_reference_sha256)
         # Before any oracle/measurement bytes are read, reserve a fresh local output
         # and flush a durable consumption record. Parse/hash failure never removes it.
         if args.out.exists() or any(p.is_symlink() for p in (args.out, *args.out.parents)):
@@ -211,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
                      "build_sha256": edition.frozen_build_sha256,
                      "external_exposure_receipts": [row.model_dump(mode="json") for row in receipts],
                      "scoring_handoff_sha256": args.scoring_handoff_sha256 if handoff is not None else None,
+                     "completion_reference_check": completion_check,
                      "authorship_authenticated": False}
         durable_json(args.out / "exposure.json", preaccess)
         # Parent directory fsync/ACL locking and receipt retention remain custody-controller duties.
@@ -292,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
             if "D" in handoff_summary["incomplete_arms"]:
                 result["deterministic_exact_gate"] = False
             result["scoring_handoff"] = handoff_summary
+            result["completion_reference_check"] = completion_check
         result.update({"provenance": preaccess, "custody": custody,
                        "exposure": exposure, "utility": utility,
                        "authorship_authenticated": False, "product_acceptance": False})
