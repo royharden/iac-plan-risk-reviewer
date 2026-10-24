@@ -13,11 +13,18 @@ from iac_review.contracts.manifest import (
     CaseBinding, ComponentVersion, Digest, InvocationMetadata, ManifestWire, RunManifest,
 )
 
-CORE_FILES = (
+CORE_FILES_V1 = (
     "contracts/__init__.py", "contracts/manifest.py", "ingest/__init__.py",
     "evidence/__init__.py", "rules/__init__.py", "report/__init__.py",
     "provenance.py", "source_view.py", "cli.py",
 )
+# Profile 2 deliberately adds the canonical report wire. Profile 1 descriptors keep
+# verifying against their nine files; no archive is upgraded or repinned.
+CORE_FILES_V2 = CORE_FILES_V1 + ("contracts/report_wire.py",)
+SOURCE_PROFILES = {1: CORE_FILES_V1, 2: CORE_FILES_V2}
+SOURCE_PROFILE_VERSIONS = {1: "content-v1", 2: "content-v2"}
+CURRENT_PROFILE = 2
+CORE_FILES = SOURCE_PROFILES[CURRENT_PROFILE]
 REPORT_FILES = frozenset({"private.json", "private.html", "shareable.json", "shareable.html"})
 DESCRIPTOR_FILE = "run-manifest.json"
 CORE_ARTIFACTS = REPORT_FILES | {DESCRIPTOR_FILE}
@@ -27,7 +34,7 @@ class SourceFilePin(ManifestWire):
     path: Literal[
         "contracts/__init__.py", "contracts/manifest.py", "ingest/__init__.py",
         "evidence/__init__.py", "rules/__init__.py", "report/__init__.py",
-        "provenance.py", "source_view.py", "cli.py",
+        "provenance.py", "source_view.py", "cli.py", "contracts/report_wire.py",
     ]
     sha256: Digest
 
@@ -39,10 +46,12 @@ class LocalConfig(ManifestWire):
 
 
 class ReportProvenance(ManifestWire):
-    schema_version: Literal[1] = 1
+    # schema_version selects the source profile. The default stays 1 so an
+    # unversioned constructor never silently claims the ten-file profile.
+    schema_version: Literal[1, 2] = 1
     kind: Literal["private_deterministic_descriptor"] = "private_deterministic_descriptor"
     run_manifest: RunManifest
-    source_files: tuple[SourceFilePin, ...] = Field(min_length=9, max_length=9)
+    source_files: tuple[SourceFilePin, ...] = Field(min_length=9, max_length=10)
     config: LocalConfig
     producer_authenticated: Literal[False] = False
     benchmark_execution_verified: Literal[False] = False
@@ -53,11 +62,15 @@ class ReportProvenance(ManifestWire):
         if run.stage != "deterministic":
             raise ValueError("core report descriptor must be deterministic only")
         files = {row.path: row.sha256 for row in self.source_files}
-        if set(files) != set(CORE_FILES) or len(files) != len(self.source_files):
+        profile = SOURCE_PROFILES[self.schema_version]
+        if set(files) != set(profile) or len(files) != len(self.source_files):
             raise ValueError("source file pin inventory mismatch")
         if run.build_sha256 != content_digest(files):
             raise ValueError("installed core source digest mismatch")
         components = {row.kind: row for row in run.components}
+        source = components.get("source")
+        if source is None or source.version != SOURCE_PROFILE_VERSIONS[self.schema_version]:
+            raise ValueError("source profile version mismatch")
         expected = {
             "source": run.build_sha256, "parser": files["ingest/__init__.py"],
             "rules": files["rules/__init__.py"], "config": content_digest(self.config.model_dump(mode="json")),
@@ -86,11 +99,12 @@ def descriptor_bytes(descriptor: ReportProvenance) -> bytes:
                        indent=2, allow_nan=False) + "\n").encode("utf-8")
 
 
-def installed_core_pins(check: Callable[[], None]) -> tuple[SourceFilePin, ...]:
+def installed_core_pins(check: Callable[[], None],
+                        profile: int = CURRENT_PROFILE) -> tuple[SourceFilePin, ...]:
     """Read only a fixed installed core-source inventory, never repo discovery/Git."""
     root = Path(__file__).resolve().parent
     pins = []
-    for name in CORE_FILES:
+    for name in SOURCE_PROFILES[profile]:
         check()
         path = root.joinpath(*name.split("/"))
         if (any(p.is_symlink() or (hasattr(p, "is_junction") and p.is_junction())
@@ -107,7 +121,7 @@ def installed_core_pins(check: Callable[[], None]) -> tuple[SourceFilePin, ...]:
 
 def local_descriptor(plan: PlanDocument, run_id: str, case_id: str, fail_on: int,
                      check: Callable[[], None]) -> ReportProvenance:
-    pins = installed_core_pins(check)
+    pins = installed_core_pins(check, CURRENT_PROFILE)
     files = {row.path: row.sha256 for row in pins}
     config = LocalConfig(fail_on=fail_on)
     config_hash = content_digest(config.model_dump(mode="json"))
@@ -115,7 +129,7 @@ def local_descriptor(plan: PlanDocument, run_id: str, case_id: str, fail_on: int
     components = tuple(ComponentVersion(
         component_id=kind, kind=kind, name=name, version=version, sha256=value)
         for kind, name, version, value in (
-            ("source", "installed-core-subset", "content-v1", build),
+            ("source", "installed-core-subset", SOURCE_PROFILE_VERSIONS[CURRENT_PROFILE], build),
             ("parser", "terraform-json-parser", PARSER_VERSION, files["ingest/__init__.py"]),
             ("rules", "declared-aws-predicates", POLICY_VERSION, files["rules/__init__.py"]),
             ("config", "local-review-config", "config-v1", config_hash)))
@@ -130,7 +144,8 @@ def local_descriptor(plan: PlanDocument, run_id: str, case_id: str, fail_on: int
                                         case_ids=(case_id,), config_component_id="config",
                                         version_component_id="rules", attempt_ids=()),),
         attempts=(), artifacts=(), eligibility=())
-    return ReportProvenance(run_manifest=run, source_files=pins, config=config)
+    return ReportProvenance(schema_version=CURRENT_PROFILE, run_manifest=run,
+                            source_files=pins, config=config)
 
 
 def private_binding(descriptor: ReportProvenance) -> dict:

@@ -1,4 +1,5 @@
 """Versioned strict wires. Raw input is deliberately excluded from report models."""
+import json
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -78,6 +79,39 @@ class RuleEvaluation(Wire):
     coverage: tuple[str, ...] = ()
 
 class ReviewReport(Wire):
+    """Dictionary facade; report_wire owns the canonical projection types.
+
+    Plain construction stays a container. `validated` (producer) and
+    `validate_wire` (writer/reader, since the dictionaries stay mutable) are the
+    canonical boundaries: extra, malformed or leaked fields are rejected, never
+    dropped or filled in.
+    """
     private: dict[str, Any]
     shareable: dict[str, Any]
     exit_code: int
+
+    @classmethod
+    def validated(cls, private: dict[str, Any], shareable: dict[str, Any],
+                  exit_code: int) -> "ReviewReport":
+        private, shareable = _canonical_pair(private, shareable, exit_code)
+        return cls(private=private, shareable=shareable, exit_code=exit_code)
+
+    def validate_wire(self) -> tuple[dict[str, Any], dict[str, Any]]:
+        return _canonical_pair(self.private, self.shareable, self.exit_code)
+
+
+def _canonical_pair(private: Any, shareable: Any, exit_code: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    # Deferred import: report_wire imports this module and provenance.
+    from iac_review.contracts.report_wire import projection_dict, validate_report_pair
+    checked_private, checked_shareable = validate_report_pair(private, shareable, exit_code=exit_code)
+    canonical = projection_dict(checked_private), projection_dict(checked_shareable)
+    # Nested models (e.g. ReportProvenance) have defaults; a dropped field must be
+    # refused, not silently restored by the canonical dump.
+    for original, dumped in zip((private, shareable), canonical):
+        try:
+            same = json.loads(json.dumps(original, allow_nan=False)) == dumped
+        except (TypeError, ValueError):
+            same = False
+        if not same:
+            raise ValueError("report_wire_not_canonical")
+    return canonical

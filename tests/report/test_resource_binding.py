@@ -2,9 +2,12 @@
 
 Regression source only; not executed during Dirty Mode.
 """
+from uuid import uuid4
+
 import pytest
 
 from iac_review import report as reporting
+from iac_review.rules import SEVERITIES
 from iac_review.contracts import (
     EvidenceRef, PlanDocument, PlanIdentity, ResolvedEvidence, ResourceChange,
     RuleEvaluation, ValueState,
@@ -32,18 +35,20 @@ def test_foreign_reference_is_not_resolved_or_displayed(monkeypatch, foreign_fie
             expected=ValueState(state="known", value="managed"), role="decision",
         )
 
-    own = ref(resources[0], "own")
+    # Canonical report wire: opaque 32-hex ids and the fixed policy severities.
+    own = ref(resources[0], uuid4().hex)
+    foreign_id = uuid4().hex
     updates = {}
     if foreign_field in {"key", "both"}:
         updates["resource_key"] = resources[1].key
     if foreign_field in {"index", "both"}:
         updates["resource_index"] = 1
         updates["pointer"] = "/resource_changes/1/mode"
-    foreign = own.model_copy(update={**updates, "fact_id": "foreign", "role": role})
+    foreign = own.model_copy(update={**updates, "fact_id": foreign_id, "role": role})
     rows = []
     for resource in resources:
         for rule in ("R1", "R2", "R3", "R4"):
-            decision = (ref(resource, f"{resource.index}-{rule}"),)
+            decision = (ref(resource, uuid4().hex),)
             supporting = ()
             if resource.index == 0 and rule == "R2":
                 if role == "decision":
@@ -51,8 +56,8 @@ def test_foreign_reference_is_not_resolved_or_displayed(monkeypatch, foreign_fie
                 else:
                     supporting = (foreign,)
             rows.append(RuleEvaluation(
-                evaluation_id=f"evaluation-{resource.index}-{rule}", resource_key=resource.key,
-                rule_id=rule, severity=3, applicability="supported", outcome="clear",
+                evaluation_id=uuid4().hex, resource_key=resource.key,
+                rule_id=rule, severity=SEVERITIES[rule], applicability="supported", outcome="clear",
                 reason_code="synthetic_clear", decision_refs=decision, supporting_refs=supporting,
             ))
     resolved_ids = []
@@ -66,7 +71,7 @@ def test_foreign_reference_is_not_resolved_or_displayed(monkeypatch, foreign_fie
     result = reporting.build_report(plan, tuple(rows))
     target = next(row for row in result.private["evaluations"]
                   if row["address"] == resources[0].address and row["rule_id"] == "R2")
-    assert "foreign" not in resolved_ids
+    assert foreign_id not in resolved_ids
     if role == "decision":
         assert target["facts"] == []
         assert target["outcome"] == "indeterminate"

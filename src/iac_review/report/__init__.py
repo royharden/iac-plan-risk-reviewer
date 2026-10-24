@@ -23,7 +23,7 @@ from iac_review.contracts import (
     RuleEvaluation, ValueState,
 )
 from iac_review.evidence import resolve, verify_unchanged
-from iac_review.ingest import InputError, MAX_SECONDS
+from iac_review.ingest import InputError, MAX_BYTES, MAX_SECONDS
 from iac_review.provenance import (
     DESCRIPTOR_FILE, ReportProvenance, descriptor_bytes, local_descriptor,
     private_binding, verify_descriptor,
@@ -311,7 +311,10 @@ def build_report(
     descriptor = local_descriptor(plan, run_id, case_id, fail_on, provenance_budget)
     private["provenance"] = private_binding(descriptor)
     verify_unchanged(plan)
-    return ReviewReport(private=private, shareable=shareable, exit_code=exit_code)
+    # Canonical report wire validation; a mismatch is a producer defect, not a report.
+    report = ReviewReport.validated(private, shareable, exit_code)
+    provenance_budget()
+    return report
 
 
 def _html(report: dict[str, Any]) -> bytes:
@@ -392,29 +395,36 @@ def write_report(report: ReviewReport, out: Path, *, deadline: float | None = No
     try:
         check_deadline()
         pending.mkdir()
-        binding = report.private.get("provenance")
+        # The facade dictionaries are mutable; revalidate exactly what is published.
+        private, shareable = report.validate_wire()
+        check_deadline()
+        binding = private.get("provenance")
         if type(binding) is not dict or type(binding.get("descriptor")) is not dict:
             raise ValueError("typed private report provenance required")
         descriptor = ReportProvenance.model_validate_json(json.dumps(binding["descriptor"]))
         provenance_bytes = descriptor_bytes(descriptor)
-        verify_descriptor(report.private, report.shareable, provenance_bytes,
-                          report.private["plan"]["sha256"], report.private["run_id"])
+        verify_descriptor(private, shareable, provenance_bytes,
+                          private["plan"]["sha256"], private["run_id"])
         check_deadline()
         payloads: dict[str, bytes] = {}
         for name, projection, render in (
-            ("private.json", report.private, _json_bytes),
-            ("private.html", report.private, _html),
-            ("shareable.json", report.shareable, _json_bytes),
-            ("shareable.html", report.shareable, _html),
+            ("private.json", private, _json_bytes),
+            ("private.html", private, _html),
+            ("shareable.json", shareable, _json_bytes),
+            ("shareable.html", shareable, _html),
         ):
             check_deadline()
             payloads[name] = render(projection)
+            # Indented ensure_ascii output can outgrow the validated compact wire;
+            # never publish an artifact the bundle reader would refuse.
+            if len(payloads[name]) > MAX_BYTES:
+                raise ValueError("report_artifact_byte_limit")
             check_deadline()
         payloads[DESCRIPTOR_FILE] = provenance_bytes
         private_manifest = {
-            "schema_version": "1.1.0", "run_id": report.private["run_id"],
+            "schema_version": "1.1.0", "run_id": private["run_id"],
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "plan_sha256": report.private["plan"]["sha256"],
+            "plan_sha256": private["plan"]["sha256"],
             "parser_version": PARSER_VERSION, "policy_version": POLICY_VERSION,
             "artifacts": {name: sha256(data).hexdigest() for name, data in payloads.items()},
             "privacy": "Private files and this manifest remain local. Share only the two shareable files.",

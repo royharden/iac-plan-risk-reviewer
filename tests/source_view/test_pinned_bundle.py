@@ -94,8 +94,10 @@ def test_source_masks_dominate_report_value(tmp_path: Path, mask: str) -> None:
     out, source, finding, fact = _bundle(tmp_path, mask)
     result = source_view.view_evidence(out, source, finding, fact)
     assert result["fact"]["state"] == mask and result["fact"]["value"] is None
-    _edit_fact(out, finding, fact, value=True, state="known")
-    with pytest.raises(InputError, match="evidence_value_or_mask_mismatch"):
+    # Tamper state and resolution together (a canonically valid known fact), so the
+    # rejection comes from re-resolving the masked source, not from the report wire.
+    _edit_fact(out, finding, fact, value=True, state="known", resolution="resolved")
+    with pytest.raises(InputError, match="evidence_resolution_mismatch"):
         source_view.view_evidence(out, source, finding, fact)
 
 

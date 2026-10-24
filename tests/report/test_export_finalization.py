@@ -9,18 +9,22 @@ import pytest
 
 from iac_review import report as reporting
 from iac_review.contracts import ReviewReport
-from iac_review.ingest import InputError
+from iac_review.ingest import InputError, load_plan
+from iac_review.rules import evaluate
 
 
-def synthetic_report():
-    return ReviewReport(
-        private={"run_id": "a" * 32, "plan": {"sha256": "b" * 64}},
-        shareable={"projection": "shareable"}, exit_code=0,
-    )
+def synthetic_report(tmp_path: Path) -> ReviewReport:
+    """A real canonical report from a public empty plan (writer revalidates the wire)."""
+    source = tmp_path / "public-empty-plan.json"
+    source.write_text(json.dumps({"format_version": "1.2", "complete": True,
+                                  "errored": False, "resource_changes": []}), encoding="utf-8")
+    plan = load_plan(source)
+    return reporting.build_report(plan, evaluate(plan))
 
 
 @pytest.mark.parametrize("fault", ["deadline", "write", "finalize"])
 def test_failed_export_removes_its_reports_and_keeps_aborted_marker(tmp_path, monkeypatch, fault):
+    report = synthetic_report(tmp_path)  # built before any clock/filesystem fault is installed
     out = tmp_path / "bundle"
     clock = [0.0]
     monkeypatch.setattr(reporting, "monotonic", lambda: clock[0])
@@ -44,15 +48,16 @@ def test_failed_export_removes_its_reports_and_keeps_aborted_marker(tmp_path, mo
             raise OSError("synthetic finalization failure")
         monkeypatch.setattr(reporting.os, "replace", fail_replace)
     with pytest.raises(InputError if fault == "deadline" else OSError):
-        reporting.write_report(synthetic_report(), out, deadline=10.0)
+        reporting.write_report(report, out, deadline=10.0)
     assert json.loads((out / "export-state.json").read_text())["state"] == "ABORTED"
     assert sorted(path.name for path in out.iterdir()) == ["export-state.json"]
 
 
 def test_two_argument_writer_keeps_demo_compatibility(tmp_path, monkeypatch):
+    report = synthetic_report(tmp_path)
     monkeypatch.setattr(reporting, "_html", lambda _projection: b"synthetic HTML")
     out = tmp_path / "bundle"
-    reporting.write_report(synthetic_report(), out)
+    reporting.write_report(report, out)
     assert json.loads((out / "export-state.json").read_text())["state"] == "COMPLETE"
     assert (out / "private.json").is_file()
     assert (out / "shareable.html").is_file()

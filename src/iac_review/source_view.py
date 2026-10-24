@@ -17,7 +17,8 @@ import sys
 from time import monotonic
 from typing import Any, Sequence
 
-from iac_review.contracts import PARSER_VERSION, POLICY_VERSION, ValueState
+from iac_review.contracts import PARSER_VERSION, POLICY_VERSION, ReviewReport, ValueState
+from iac_review.contracts.report_wire import validate_legacy_private_report, validate_shareable_projection
 from iac_review.evidence import make_ref, resolve, verify_unchanged
 from iac_review.ingest import InputError, MAX_BYTES, MAX_RESOURCES, MAX_SECONDS
 from iac_review.ingest import decode_source, load_plan, read_source_bytes
@@ -81,6 +82,53 @@ def _json(data: bytes, deadline: float) -> dict[str, Any]:
     return decode_source(data, started=deadline - MAX_SECONDS)
 
 
+def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        _require(key not in result, "bundle_report_json_invalid")
+        result[key] = value
+    return result
+
+
+def _nonfinite(_: str) -> Any:
+    raise InputError("bundle_report_json_invalid")
+
+
+def _finite(text: str) -> float:
+    value = float(text)
+    _require(math.isfinite(value), "bundle_report_json_invalid")
+    return value
+
+
+def _report_json(data: bytes, deadline: float) -> dict[str, Any]:
+    """Strict decoder for writer-produced report JSON.
+
+    The plan decoder's 256 KiB encoded-string cap does not fit report output:
+    ensure_ascii escaping can expand a permitted address several times. File size
+    stays bounded by _read; field/string bounds come from the canonical report wire.
+    """
+    _check(deadline)
+    try:
+        value = json.loads(data.decode("utf-8", errors="strict"), object_pairs_hook=_pairs,
+                           parse_constant=_nonfinite, parse_float=_finite)
+    except InputError:
+        raise
+    except (UnicodeError, ValueError, RecursionError):
+        raise InputError("bundle_report_json_invalid") from None
+    _require(type(value) is dict, "bundle_report_json_invalid")
+    # Bound depth before any ad hoc comparison touches the decoded structure.
+    stack = [(value, 0)]
+    while stack:
+        node, depth = stack.pop()
+        _require(depth <= 64, "bundle_report_json_invalid")
+        if type(node) is dict:
+            stack.extend((item, depth + 1) for item in node.values())
+        elif type(node) is list:
+            stack.extend((item, depth + 1) for item in node)
+    _check(deadline)
+    return value
+
+
 @dataclass(frozen=True)
 class _Bundle:
     path: Path
@@ -98,11 +146,13 @@ def _load_bundle(path: Path, deadline: float) -> _Bundle:
     state = _json(state_bytes, deadline)
     _require(set(state) == {"state", "exit_code"} and state.get("state") == "COMPLETE",
              "bundle_export_not_complete")
-    _require(type(state["exit_code"]) is int and state["exit_code"] in range(4),
+    # A COMPLETE bundle carries a report exit (0-2), never the CLI error exit 3;
+    # both writer versions always ended the receipt with LF (report_inventory).
+    _require(type(state["exit_code"]) is int and state["exit_code"] in range(3),
              "bundle_exit_invalid")
     manifest_bytes = _read(path / "manifest.json", deadline, 65_536)
     receipt = _read(path / "manifest.sha256", deadline, 128)
-    _require(re.fullmatch(rb"[0-9a-f]{64}\n?", receipt) is not None,
+    _require(re.fullmatch(rb"[0-9a-f]{64}\n", receipt) is not None,
              "bundle_manifest_hash_invalid")
     _require(sha256(manifest_bytes).hexdigest() == receipt.decode("ascii").strip(),
              "bundle_manifest_hash_mismatch")
@@ -139,7 +189,9 @@ def _load_bundle(path: Path, deadline: float) -> _Bundle:
         data = _read(path / name, deadline, 65_536 if name == DESCRIPTOR_FILE else MAX_BYTES)
         hashes[name] = sha256(data).hexdigest()
         _require(hashes[name] == catalog[name], "bundle_artifact_hash_mismatch")
-        if name.endswith(".json"):
+        if name in ("private.json", "shareable.json"):
+            reports[name] = _report_json(data, deadline)
+        elif name.endswith(".json"):
             reports[name] = _json(data, deadline)
         if name == DESCRIPTOR_FILE:
             descriptor_raw = data
@@ -171,6 +223,13 @@ def _load_bundle(path: Path, deadline: float) -> _Bundle:
              == [r["finding_id"] for r in shared["evaluations"]], "bundle_projection_join_mismatch")
     provenance_hash = None
     if bound:
+        # Bound bundles are current reports: the canonical wire pair must accept them.
+        try:
+            private, shared = ReviewReport(private=private, shareable=shared,
+                                           exit_code=state["exit_code"]).validate_wire()
+        except (ValueError, TypeError):
+            raise InputError("bundle_report_wire_invalid") from None
+        _check(deadline)
         try:
             verify_descriptor(private, shared, descriptor_raw, manifest["plan_sha256"], manifest["run_id"])
         except (ValueError, TypeError, KeyError):
@@ -178,6 +237,14 @@ def _load_bundle(path: Path, deadline: float) -> _Bundle:
         provenance_hash = hashes[DESCRIPTOR_FILE]
     else:
         _require("provenance" not in private, "bundle_provenance_descriptor_missing")
+        # Legacy seven-file archives use the separate canonical legacy type; they
+        # stay explicitly unbound and are never promoted to a current report.
+        try:
+            private = validate_legacy_private_report(private)
+            shared = validate_shareable_projection(shared)
+        except (ValueError, TypeError):
+            raise InputError("bundle_report_wire_invalid") from None
+        _check(deadline)
     return _Bundle(path, manifest["run_id"], manifest["plan_sha256"],
                    tuple(sorted(hashes.items())), private, shared, provenance_hash)
 
