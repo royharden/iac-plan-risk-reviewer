@@ -38,7 +38,7 @@ def test_guarded_byte_pin_and_existing_decoder_limits_are_not_relaxed(tmp_path):
 def test_reader_checks_permission_repeatedly_but_opens_snapshot_once(tmp_path, monkeypatch):
     """what_bug_this_catches: each arm silently rereads/stages private raw input outside the capability."""
     manifest, pins, permission = metadata(tmp_path)
-    access = HeldoutAccess(tmp_path, manifest, pins, permission, "a" * 64, tmp_path / "events.jsonl")
+    access = HeldoutAccess(tmp_path, manifest, pins, permission, "a" * 64, tmp_path / "events.jsonl", None)
     checks, reads = [], []
     monkeypatch.setattr(access, "check_authorized", lambda: checks.append(1) or {})
     monkeypatch.setattr(access, "read_case_input", lambda cid: reads.append(cid) or b"public fixture bytes")
@@ -92,7 +92,7 @@ def test_guarded_inventory_checks_raw_lineage_without_opening_payload(tmp_path, 
     manifest = manifest.model_copy(update={"cases": (binding,)})
     ref = ArtifactRef(artifact_id="fixture_input", role="case_input", path="private/synthetic/inputs/fixture.json",
                       sha256="a" * 64, bytes_upper=1024)
-    access = HeldoutAccess(tmp_path, manifest, pins, permission, "a" * 64, tmp_path / "events.jsonl")
+    access = HeldoutAccess(tmp_path, manifest, pins, permission, "a" * 64, tmp_path / "events.jsonl", None)
     monkeypatch.setattr(access, "check_authorized", lambda: {ref.artifact_id: ref})
     monkeypatch.setattr(access, "read_case_input", lambda *a: pytest.fail("payload opened"))
     config, _, _ = fixture(tmp_path)

@@ -158,11 +158,82 @@ class LocalExecutionGrant:
     comparison_manifest_sha256: str
     invocations: tuple[ApprovedInvocation, ...]
     approved_bytes_sha256: str
+    # Distinct explicit scopes; a heldout grant never covers synthetic inputs or vice versa.
+    input_scope: Literal["development_synthetic", "heldout"] = "development_synthetic"
+    access_authorization_sha256: str | None = None
+
+
+SYNTHETIC_GRANT_SCHEMA = "m4-local-scanner-execution-grant-v1"
+HELDOUT_GRANT_SCHEMA = "m4-local-scanner-heldout-grant-v1"
+GUARDED_INPUT_DIRECTORY = "guarded-input"
 
 
 def manifest_digest(manifest: dict) -> str:
     return digest(json.dumps(manifest, sort_keys=True, separators=(",", ":"),
                              allow_nan=False).encode())
+
+
+def _heldout_manifest(manifest: dict, access_authorization_sha256: object) -> bool:
+    """Guarded heldout scope: no raw path, explicit guarded input, exact access pin."""
+    cases = manifest.get("cases")
+    return (manifest.get("input_scope") == "heldout" and manifest.get("guarded_input") is True
+            and manifest.get("synthetic_input_attested") is not True
+            and isinstance(access_authorization_sha256, str) and SHA256.fullmatch(access_authorization_sha256)
+            and manifest.get("access_authorization_sha256") == access_authorization_sha256
+            and isinstance(cases, list) and len(cases) == 1 and isinstance(cases[0], dict)
+            and "plan_path" not in cases[0])
+
+
+def guarded_input_path(workspace: Path, plan_sha256: str) -> Path:
+    """Deterministic per-arm staging target, predeclared in the operator's argv/pins."""
+    if not workspace.is_absolute() or not SHA256.fullmatch(plan_sha256):
+        raise ValueError("absolute workspace and exact plan pin required")
+    return workspace / GUARDED_INPUT_DIRECTORY / (plan_sha256 + ".json")
+
+
+def stage_guarded_input(workspace: Path, data: bytes, plan_sha256: str, cap: int) -> Path:
+    """Explicitly materialize permission-gated in-memory bytes for ONE scanner arm.
+
+    The scanner process needs a file path; the private heldout source path is never
+    reopened, copied or passed to it. The caller-owned staging directory must already
+    exist; the file is created exclusively (no overwrite/reuse), fsynced and read back.
+    """
+    import os
+    if type(data) is not bytes or len(data) > cap or digest(data) != plan_sha256:
+        raise ValueError("guarded input bytes differ from the permitted pin")
+    path = guarded_input_path(workspace, plan_sha256)
+    for item in (path.parent, *path.parent.parents):
+        if item.is_symlink() or (hasattr(item, "is_junction") and item.is_junction()):
+            raise ValueError("guarded staging link forbidden")
+    if not path.parent.is_dir():
+        raise ValueError("pre-existing caller-owned guarded staging directory required")
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    fd = os.open(path, flags, 0o600)
+    try:
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise OSError("short guarded input write")
+            view = view[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    if digest(bounded_read(path, cap)) != plan_sha256:
+        raise ValueError("guarded input staging readback mismatch")
+    return path
+
+
+def remove_guarded_input(path: Path, plan_sha256: str, cap: int) -> bool:
+    """Remove only the exact file this run staged; never a different or linked file."""
+    try:
+        if (path.name != plan_sha256 + ".json" or path.parent.name != GUARDED_INPUT_DIRECTORY
+                or digest(bounded_read(path, cap)) != plan_sha256):
+            return False
+        path.unlink()
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def load_execution_grant(path: Path, *, expected_sha256: str, manifest: dict) -> LocalExecutionGrant:
@@ -175,15 +246,21 @@ def load_execution_grant(path: Path, *, expected_sha256: str, manifest: dict) ->
     if not SHA256.fullmatch(expected_sha256) or digest(raw) != expected_sha256:
         raise ValueError("operator execution grant differs from its external pin")
     value = strict_json(raw)
-    flags = {"dirty_mode_closed", "local_only", "network_denied", "descendants_confined",
-             "no_provider_credentials", "synthetic_input_attested"}
+    common = {"dirty_mode_closed", "local_only", "network_denied", "descendants_confined",
+              "no_provider_credentials"}
+    heldout = isinstance(value, dict) and value.get("schema_version") == HELDOUT_GRANT_SCHEMA
+    flags = common | ({"heldout_access_authorized", "guarded_input_staging_declared"} if heldout
+                      else {"synthetic_input_attested"})
     keys = {"schema_version", "grant_id", "operator_id", "build_sha256",
             "comparison_manifest_sha256", "invocations"} | flags
+    if heldout:
+        keys = keys | {"access_authorization_sha256"}
     if (not isinstance(value, dict) or set(value) != keys
-            or value["schema_version"] != "m4-local-scanner-execution-grant-v1"
+            or value["schema_version"] not in {SYNTHETIC_GRANT_SCHEMA, HELDOUT_GRANT_SCHEMA}
             or any(value[flag] is not True for flag in flags)
-            or manifest.get("input_scope") != "development_synthetic"
-            or manifest.get("synthetic_input_attested") is not True
+            or (not heldout and (manifest.get("input_scope") != "development_synthetic"
+                                 or manifest.get("synthetic_input_attested") is not True))
+            or (heldout and not _heldout_manifest(manifest, value["access_authorization_sha256"]))
             or value["build_sha256"] != manifest.get("build_sha256")
             or value["comparison_manifest_sha256"] != manifest_digest(manifest)):
         raise ValueError("execution grant scope/mode/synthetic attestation mismatch")
@@ -221,7 +298,9 @@ def load_execution_grant(path: Path, *, expected_sha256: str, manifest: dict) ->
         seen.add(record.invocation_sha256)
         approved.append(record)
     return LocalExecutionGrant(value["grant_id"], value["operator_id"], value["build_sha256"],
-                               value["comparison_manifest_sha256"], tuple(approved), expected_sha256)
+                               value["comparison_manifest_sha256"], tuple(approved), expected_sha256,
+                               "heldout" if heldout else "development_synthetic",
+                               value["access_authorization_sha256"] if heldout else None)
 
 
 def _local_profile(invocation: Invocation, approved: ApprovedInvocation) -> None:
@@ -338,12 +417,15 @@ class BoundedSubprocessRunner:
 
     def verify_manifest(self, manifest: dict) -> None:
         grant = self.execution_grant
-        if (not self.activation_authorized or grant is None
-                or manifest.get("synthetic_input_attested") is not True
-                or manifest.get("input_scope") != "development_synthetic"
+        if grant is not None and grant.input_scope == "heldout":
+            scoped = _heldout_manifest(manifest, grant.access_authorization_sha256)
+        else:
+            scoped = (manifest.get("synthetic_input_attested") is True
+                      and manifest.get("input_scope") == "development_synthetic")
+        if (not self.activation_authorized or grant is None or not scoped
                 or manifest.get("build_sha256") != grant.build_sha256
                 or manifest_digest(manifest) != grant.comparison_manifest_sha256):
-            raise PermissionError("pinned operator grant for this exact synthetic manifest required")
+            raise PermissionError("pinned operator grant for this exact scoped manifest required")
 
     def approval(self, invocation: Invocation) -> ApprovedInvocation:
         if not self.activation_authorized or self.execution_grant is None:

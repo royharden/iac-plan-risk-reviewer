@@ -15,6 +15,7 @@ from eval.runner.custody import (  # noqa: E402
     validate_exposure, validate_independence, validate_seal, validate_semantics,
 )
 from eval.runner.model_bridge import UtilityRequest, utility_summaries  # noqa: E402
+from eval.runner.scoring_handoff import ScoringHandoff, check_handoff_for_scoring  # noqa: E402
 
 MAX_BYTES = 16 * 1024 * 1024
 
@@ -157,6 +158,9 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("authority-sha256", "semantic-suite-sha256", "eligibility-sha256", "utility-sha256"):
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--exposure-receipts", type=Path)
+    # Heldout only: pinned post-run handoff (eval/runner/scoring_handoff.py, docs/SCORING-HANDOFF.md).
+    parser.add_argument("--scoring-handoff", type=Path)
+    parser.add_argument("--scoring-handoff-sha256")
     parser.add_argument("--allow-sealed-exposure", action="store_true",
                         help="requires externally persisted receipt; never makes an exposed edition fresh")
     args = parser.parse_args(argv)
@@ -174,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("eligibility manifest pin/edition mismatch")
         exposure = None
         receipts = ()
+        handoff = None
         if args.split == "heldout":
             if edition.state == "sealed" and not args.allow_sealed_exposure:
                 raise ValueError("sealed edition requires explicit exposure approval")
@@ -184,6 +189,15 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("bounded exposure receipt list required")
             receipts = tuple(ExposureReceipt.model_validate_json(json.dumps(row)) for row in raw)
             exposure = validate_exposure(authority, seal, receipts, args.authority_sha256)
+            # S1 item 4: heldout scoring consumes the pinned post-run handoff (metadata only).
+            # A committed pre-access input exposure is never scoring permission.
+            if args.scoring_handoff is None or args.scoring_handoff_sha256 is None:
+                raise ValueError("heldout scoring requires the pinned post-run scoring handoff")
+            handoff = model(args.scoring_handoff, ScoringHandoff)
+            if (metadata_digest(handoff) != args.scoring_handoff_sha256
+                    or handoff.edition_id != edition.edition_id
+                    or handoff.build_sha256 != edition.frozen_build_sha256):
+                raise ValueError("scoring handoff pin/edition mismatch")
         # Before any oracle/measurement bytes are read, reserve a fresh local output
         # and flush a durable consumption record. Parse/hash failure never removes it.
         if args.out.exists() or any(p.is_symlink() for p in (args.out, *args.out.parents)):
@@ -196,6 +210,7 @@ def main(argv: list[str] | None = None) -> int:
                      "authority_sha256": args.authority_sha256, "seal_sha256": metadata_digest(seal),
                      "build_sha256": edition.frozen_build_sha256,
                      "external_exposure_receipts": [row.model_dump(mode="json") for row in receipts],
+                     "scoring_handoff_sha256": args.scoring_handoff_sha256 if handoff is not None else None,
                      "authorship_authenticated": False}
         durable_json(args.out / "exposure.json", preaccess)
         # Parent directory fsync/ACL locking and receipt retention remain custody-controller duties.
@@ -221,8 +236,14 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("oracle bytes differ from frozen edition")
         if any(row.measurements_sha256 != measurement_hash for row in receipts):
             raise ValueError("exposure receipt measurement digest mismatch")
-        oracle = decode_rows(oracle_bytes, OracleRow)
         measured = decode_rows(measurement_bytes, ArmRow)
+        handoff_summary = None
+        if handoff is not None:
+            # Checked BEFORE the oracle is decoded; failure leaves the oracle undecoded.
+            handoff_summary = check_handoff_for_scoring(handoff, edition_id=edition.edition_id,
+                build_sha256=edition.frozen_build_sha256, receipts=receipts,
+                measurement_sha256=measurement_hash, measured=measured)
+        oracle = decode_rows(oracle_bytes, OracleRow)
         if receipts and not {row.arm for row in measured} <= {row.arm for row in receipts}:
             raise ValueError("measurement arm lacks pre-access exposure receipt")
         inv = {row.case_id: row for row in seal.inventory}
@@ -262,6 +283,15 @@ def main(argv: list[str] | None = None) -> int:
                 result["arms"][arm]["unresolved_usd_upper"] = utility[arm]["cost"]["unresolved_usd_upper"]
             if utility[arm]["measurement_status"] != "RECORDED":
                 result["arms"][arm]["measurement_status"] = "INCOMPLETE"
+        if handoff_summary is not None:
+            # No favorable-score gate: every arm the frozen run left incomplete stays so.
+            for arm in handoff_summary["incomplete_arms"]:
+                if arm in result["arms"]:
+                    result["arms"][arm]["measurement_status"] = "INCOMPLETE"
+            # score() sets the deterministic gate only for a RECORDED D arm; keep it consistent.
+            if "D" in handoff_summary["incomplete_arms"]:
+                result["deterministic_exact_gate"] = False
+            result["scoring_handoff"] = handoff_summary
         result.update({"provenance": preaccess, "custody": custody,
                        "exposure": exposure, "utility": utility,
                        "authorship_authenticated": False, "product_acceptance": False})

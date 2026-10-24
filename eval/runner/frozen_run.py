@@ -13,11 +13,12 @@ from iac_review.contracts.manifest import Digest, ManifestWire, RunManifest
 from eval.model.experiment import canonical, digest
 from eval.runner.benchmark import (ApprovedScanner, BenchmarkConfig, BenchmarkResult,
     FIXED_ARMS, SyntheticAuthority, benchmark_config_digest, coordinate, source_build_digest)
-from eval.runner.benchmark_access import (GuardedCaseReader, HeldoutAuthorization,
+from eval.runner.benchmark_access import (INPUT_ACCESS_STATES, GuardedCaseReader, HeldoutAuthorization,
     arm_inventory_digest, authorize_heldout_access)
 from eval.runner.bundle import root_digest
 from eval.runner.custody import metadata_digest
-from eval.runner.exposure_journal import ExposureCommitAuthorization, verify_committed_exposure
+from eval.runner.exposure_journal import (ExposureCommitAuthorization, InputExposureCommit,
+    InputExposureReceipt, verify_committed_exposure)
 from eval.runner.preflight import PreflightPins
 
 
@@ -72,7 +73,10 @@ def _selection(runtime: FrozenRuntime, pins: FrozenRunPins, expected_pin: str):
     if (type(runtime) is not FrozenRuntime or type(pins) is not FrozenRunPins
             or metadata_digest(pins) != expected_pin or type(runtime.journal) is not AttemptJournal
             or runtime.config.input_scope != "heldout" or runtime.config.fake_only is not False
-            or runtime.manifest.split != "heldout" or runtime.manifest.edition_state != "consumed_holdout"
+            # S1.6: sealed is allowed only because the access gate then requires the
+            # committed input-exposure journal; it is never oracle/scoring permission.
+            or runtime.manifest.split != "heldout"
+            or runtime.manifest.edition_state not in INPUT_ACCESS_STATES
             or runtime.manifest.run_id != runtime.config.run_id
             or any(case.case_record_sha256 is None for case in runtime.config.cases)):
         raise ValueError("exact_frozen_external_selection_required")
@@ -104,17 +108,25 @@ def run_frozen(runtime: FrozenRuntime, pins: FrozenRunPins, *, expected_pins_sha
     benchmark, reason = None, None
     try:
         _selection(runtime, pins, expected_pins_sha256)
+        # Contract S1: D6's PRE-ACCESS InputExposureCommit binds per-arm measurement
+        # intents. It is not payload/oracle/scoring permission; the access gate
+        # below re-verifies it on every read and adds the independent permission.
         commit = verify_committed_exposure(runtime.root, runtime.manifest, runtime.preflight_pins,
             runtime.exposure_authorization, expected_authorization_sha256=pins.exposure_authorization_sha256,
             expected_commit_sha256=pins.exposure_commit_sha256)
-        if (commit.receipt_file_sha256 != runtime.access_permission.exposure_artifact_sha256
+        permission = runtime.access_permission
+        if (type(commit) is not InputExposureCommit or commit.payload_permission_granted is not False
+                or commit.commit_sha256 != permission.input_exposure_commit_sha256
+                or commit.receipt_file_sha256 != permission.input_exposure_receipt_file_sha256
+                or pins.exposure_authorization_sha256 != permission.input_exposure_authorization_sha256
                 or {row.arm for row in commit.receipts} != set(FIXED_ARMS)
-                or any(row.measurements_sha256 != runtime.access_permission.measurements_sha256[row.arm]
+                or any(type(row) is not InputExposureReceipt
+                       or row.measurement_intents_sha256 != permission.measurement_intents_sha256[row.arm]
                        for row in commit.receipts)):
-            raise ValueError("committed_consumption_permission_mismatch")
+            raise ValueError("committed_input_exposure_permission_mismatch")
         accessor = authorize_heldout_access(runtime.root, runtime.manifest, runtime.preflight_pins,
-            runtime.access_permission, expected_permission_sha256=pins.access_authorization_sha256,
-            event_path=runtime.access_event_path)
+            permission, expected_permission_sha256=pins.access_authorization_sha256,
+            event_path=runtime.access_event_path, exposure_authorization=runtime.exposure_authorization)
         reader = GuardedCaseReader(accessor)
         benchmark = coordinate(runtime.config, journal=runtime.journal, transport=runtime.transport,
             manifest_context=runtime.manifest, expected_manifest_context_sha256=pins.run_manifest_sha256,

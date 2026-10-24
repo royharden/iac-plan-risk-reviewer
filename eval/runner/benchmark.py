@@ -6,6 +6,7 @@ Local producer code is trusted; the inference boundary receives Request only.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
+from functools import partial
 import json
 import math
 import os
@@ -22,7 +23,7 @@ from eval.model.provenance import ExportBundle, export_bundle
 from eval.model.protocol import ModelOnlyRequest, model_only_input
 from eval.model.transport import INSTRUCTIONS, Reply, Request, Transport
 from eval.runner.scoring import ARMS, ArmRow
-from eval.scanners.driver import compare as scanner_compare
+from eval.scanners.driver import GuardedScannerInput, compare as scanner_compare
 from eval.scanners.runner import CHECK_ID, SHA256, bounded_read, strict_json
 from eval.scanners.runner import BoundedSubprocessRunner, manifest_digest
 from eval.scanners.run_manifest import ScannerRunContext, adapt_scanner_report
@@ -146,8 +147,10 @@ def validate_config(config: BenchmarkConfig, *, approved_mode: bool = False, _fr
             raise ValueError("actual_frozen_reader_and_explicit_mode_required")
         expected_scope = "heldout"
         _frozen_reader.check_inventory(config.cases, config.build_sha256)
+    # Heldout inputs are never attested synthetic (no relabelling either way).
     if (tuple(ARMS) != FIXED_ARMS or config.input_scope != expected_scope
-            or config.fake_only is not (not approved_mode) or config.synthetic_input_attested is not True):
+            or config.fake_only is not (not approved_mode)
+            or config.synthetic_input_attested is not (_frozen_reader is None)):
         raise ValueError("development_fake_only_scope_required_before_payload_access")
     for value in (config.run_id, config.edition_id):
         if not OPAQUE.fullmatch(value):
@@ -207,17 +210,30 @@ class SyntheticAuthority:
     approved_bytes_sha256: str
 
 
+SYNTHETIC_AUTHORITY_SCHEMA = "m4-approved-synthetic-benchmark-v1"
+FROZEN_AUTHORITY_SCHEMA = "m4-approved-frozen-heldout-benchmark-v1"
+
+
 def load_synthetic_authority(raw: bytes, *, expected_sha256: str) -> SyntheticAuthority:
-    keys = {"schema_version", "run_id", "edition_id", "build_sha256", "config_file_sha256",
+    """Exact external run approval. Two closed, non-interchangeable schemas:
+
+    synthetic (`synthetic_only`) and frozen heldout (`heldout_frozen_only` plus the
+    exact input-access permission pin). A heldout run is never approved as synthetic.
+    """
+    base = {"schema_version", "run_id", "edition_id", "build_sha256", "config_file_sha256",
             "corpus_sha256", "arm_inventory_sha256", "provider_sha256", "price_sha256",
             "budget_sha256", "model_limits_sha256", "configuration_sha256", "data_transfer_sha256", "scanner_grants",
-            "dirty_mode_closed", "synthetic_only", "execution_explicitly_approved"}
+            "dirty_mode_closed", "execution_explicitly_approved"}
     if len(raw) > 256 * 1024 or not SHA256.fullmatch(expected_sha256) or digest(raw) != expected_sha256:
         raise ValueError("external_synthetic_authority_pin_required")
     value = strict_json(raw)
+    frozen = isinstance(value, dict) and value.get("schema_version") == FROZEN_AUTHORITY_SCHEMA
+    flags = ("dirty_mode_closed", "heldout_frozen_only" if frozen else "synthetic_only",
+             "execution_explicitly_approved")
+    keys = base | set(flags) | ({"access_authorization_sha256"} if frozen else set())
     if (not isinstance(value, dict) or set(value) != keys
-            or value["schema_version"] != "m4-approved-synthetic-benchmark-v1"
-            or any(value[key] is not True for key in ("dirty_mode_closed", "synthetic_only", "execution_explicitly_approved"))
+            or value["schema_version"] not in {SYNTHETIC_AUTHORITY_SCHEMA, FROZEN_AUTHORITY_SCHEMA}
+            or any(value[key] is not True for key in flags)
             or any(not isinstance(value[key], str) or not SHA256.fullmatch(value[key])
                    for key in keys if key.endswith("sha256"))
             or any(not isinstance(value[key], str) or not OPAQUE.fullmatch(value[key]) for key in ("run_id", "edition_id"))
@@ -267,7 +283,8 @@ def benchmark_config_digest(config: BenchmarkConfig) -> str:
         "scanner_arms": json.loads(config.scanner_arms_json)}))
 
 
-def _approved_scope(config, authority, transport, journal, scanners, config_file_pin, build_verifier):
+def _approved_scope(config, authority, transport, journal, scanners, config_file_pin, build_verifier,
+                    frozen_reader=None):
     from eval.model.provider_http import ProviderTransport
     if (type(authority) is not SyntheticAuthority or type(transport) is not ProviderTransport
             or type(transport.controller) is not PinnedController or transport.enabled is not True
@@ -280,6 +297,12 @@ def _approved_scope(config, authority, transport, journal, scanners, config_file
     load_synthetic_authority(authority.record_json.encode(), expected_sha256=digest(authority.record_json))
     if not SHA256.fullmatch(authority.approved_bytes_sha256):
         raise ValueError("external_original_authority_pin_required")
+    # Frozen heldout needs the frozen schema bound to the exact input-access permission.
+    access_pin = frozen_reader._access._expected_pin if frozen_reader is not None else None
+    if (record["schema_version"] != (FROZEN_AUTHORITY_SCHEMA if frozen_reader is not None
+                                     else SYNTHETIC_AUTHORITY_SCHEMA)
+            or record.get("access_authorization_sha256") != access_pin):
+        raise ValueError("execution_authority_scope_mismatch")
     corpus = digest(canonical([(c.case_id, c.plan_sha256, c.configuration_id, c.family_id, c.mutation_lineage)
                                for c in config.cases]))
     expected = {"run_id": config.run_id, "edition_id": config.edition_id, "build_sha256": config.build_sha256,
@@ -305,11 +328,23 @@ def _approved_scope(config, authority, transport, journal, scanners, config_file
         manifest = strict_json(binding.manifest_json.encode())
         binding.runner.verify_manifest(manifest)  # Metadata only, no invocation/process.
         declared = manifest.get("cases")
-        if (binding.runner.execution_grant.approved_bytes_sha256 != record["scanner_grants"][case.case_id]
-                or not isinstance(declared, list) or len(declared) != 1
+        grant = binding.runner.execution_grant
+        if frozen_reader is not None:
+            # Guarded heldout scope: no private path declared, heldout-scoped grant only.
+            scoped = (manifest.get("input_scope") == "heldout" and grant.input_scope == "heldout"
+                      and grant.access_authorization_sha256 == access_pin
+                      and isinstance(declared, list) and len(declared) == 1
+                      and isinstance(declared[0], dict) and "plan_path" not in declared[0])
+        else:
+            scoped = (manifest.get("input_scope") == "development_synthetic"
+                      and grant.input_scope == "development_synthetic"
+                      and isinstance(declared, list) and len(declared) == 1
+                      and isinstance(declared[0], dict)
+                      and declared[0].get("plan_path") == str(case.plan_path))
+        if (grant.approved_bytes_sha256 != record["scanner_grants"][case.case_id]
+                or not scoped
                 or declared[0].get("case_id") != case.case_id
                 or declared[0].get("plan_sha256") != case.plan_sha256
-                or declared[0].get("plan_path") != str(case.plan_path)
                 or set(manifest.get("arms", {})) != {"C", "C-custom", "T"}
                 or {item.arm for item in binding.runner.execution_grant.invocations} != {"C", "C-custom", "T"}):
             raise ValueError("approved_exact_scanner_manifest_mismatch")
@@ -358,7 +393,8 @@ def _manifest_scope(config: BenchmarkConfig, context: RunManifest | None, expect
         raise ValueError("actual_shared_RunManifest_context_required")
     if frozen_reader is not None:
         if (context != frozen_reader.manifest or digest(canonical(context.model_dump(mode="json"))) != expected_pin
-                or context.split != "heldout" or context.edition_state != "consumed_holdout"
+                # S1.6: sealed only with the gate's committed input-exposure journal.
+                or context.split != "heldout" or context.edition_state not in {"consumed_holdout", "sealed"}
                 or context.attempts or any(row.attempt_ids for row in context.invocations)
                 or any(row.claimed_eligible for row in context.eligibility)):
             raise ValueError("exact_preaccess_consumed_manifest_required")
@@ -650,7 +686,7 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
         if product is not product_adapter or models is not run_experiments or scanners is not scanner_compare:
             raise ValueError("approved_mode_requires_fixed_actual_producers")
         _approved_scope(config, execution_authority, transport, journal, approved_scanners,
-                        operator_config_sha256, build_verifier)
+                        operator_config_sha256, build_verifier, _frozen_reader)
     _manifest_scope(config, manifest_context, expected_manifest_context_sha256, _frozen_reader)
     if operator_config_sha256 is not None and not SHA256.fullmatch(operator_config_sha256):
         raise ValueError("invalid_operator_config_file_pin")
@@ -777,8 +813,15 @@ def coordinate(config: BenchmarkConfig, *, journal: AttemptJournal, transport: T
                     # deterministic source facts are never used to enrich a scanner.
                     aliases = _scanner_aliases(binding, produced)
                     _approved_scope(config, execution_authority, transport, journal, approved_scanners,
-                                    operator_config_sha256, build_verifier)
-                    scan = scanners(approved_manifest, runner=binding.runner, fake_only=False)
+                                    operator_config_sha256, build_verifier, _frozen_reader)
+                    if _frozen_reader is None:
+                        scan = scanners(approved_manifest, runner=binding.runner, fake_only=False)
+                    else:
+                        # Guarded heldout: the scanner consumes the permission-gated snapshot
+                        # only (rechecked per read); the private source path is never passed.
+                        scan = scanners(approved_manifest, runner=binding.runner, fake_only=False,
+                                        guarded_input=GuardedScannerInput(case.case_id, case.plan_sha256,
+                                                                          partial(_frozen_reader.read, case)))
                 else:
                     scan = scanners(scanner_manifest, fake_only=True)
                 if scan.get("fake_only") is not (not approved_mode) or any(

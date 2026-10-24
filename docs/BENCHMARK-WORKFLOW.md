@@ -17,10 +17,14 @@ summed as if each cumulative journal snapshot were a separate run.
 
 The default entrypoint accepts only explicitly attested public development-synthetic
 cases and non-network fake/protocol model identity. Scope rejects BEFORE raw payload access.
-There is no heldout accessor or scoring/gold phase. A future heldout controller must
-have external freeze/custody pins and durable consumption authorization BEFORE any
-payload read; metadata preflight success or changing a split flag is insufficient.
-This source grant does not open that path or authorize live model/scanner calls.
+The default entrypoint has no heldout accessor or scoring/gold phase. Heldout input is
+reachable only through the separate fixed frozen journey (`docs/FROZEN-RUN.md`): it
+needs external freeze/custody pins, D6's committed pre-access input exposure
+(`exposure_journal.commit_exposure`, the writer that earlier text described as
+absent/external) and an independent v2 input-access permission BEFORE any payload
+read; metadata preflight success or changing a split flag is insufficient. Scoring
+is a separate post-measurement handoff. None of this is activated or authorizes live
+model/scanner calls.
 
 Exact raw plan digests are checked before/after D, every L/P/M transport request,
 and before/after the scanner producer; scanner compare checks each C/C-custom/T
@@ -188,7 +192,9 @@ The separate `coordinate(..., execution_mode="approved_synthetic", ...)` mode ne
 config.fake_only=false plus exact external SyntheticAuthority, an enabled actual
 D5 ProviderTransport with PinnedController, existing ApprovedScanner bindings for
 every case and an actual owned shared AttemptJournal. Injected replacement product,
-model or scanner producers are refused in this mode. Heldout remains refused.
+model or scanner producers are refused in this mode. Heldout is refused here; the
+separate `execution_mode="frozen_heldout"` route requires the distinct closed
+`m4-approved-frozen-heldout-benchmark-v1` authority (see `docs/FROZEN-RUN.md`).
 
 `load_synthetic_authority(raw_bytes, expected_sha256=external_raw_byte_pin)` checks
 the bounded closed record `m4-approved-synthetic-benchmark-v1`. Fields are run_id,

@@ -1,21 +1,47 @@
 """Scanner comparison source driver; no oracle/product detector imports.
 
-Public development-synthetic inputs only. Hidden corpus custody/activation remains
-a separate later grant. No runner is selected implicitly. Source constructed under
-Dirty Mode; no invocation, import or tests executed during that construction.
+Two explicit input scopes. `development_synthetic` reads declared public synthetic
+plan paths. `heldout` (guarded) reads ONLY a permission-gated in-memory snapshot
+supplied as `GuardedScannerInput`, stages it explicitly per arm into the operator's
+scratch workspace and removes it afterwards; the private source path never appears
+in the manifest or the scanner argv. Heldout requires a heldout-scoped operator grant
+and the existing BoundedSubprocessRunner; there is no fake or second runner for it.
+No runner is selected implicitly. Source constructed under Dirty Mode; no
+invocation, import or tests executed during that construction.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 import json
 import re
 
 from . import checkov_adapter, trivy_adapter
 from .artifacts import Mapping
 from .runner import (BoundedSubprocessRunner, FakeRunner, Limits, Runner, SHA256, ScanArtifact, ScannerPin,
-                     bounded_read, cell_status, digest, simulate_capture, strict_json)
+                     bounded_read, cell_status, digest, remove_guarded_input, simulate_capture,
+                     stage_guarded_input, strict_json)
+
+SCOPES = ("development_synthetic", "heldout")
+
+
+@dataclass(frozen=True)
+class GuardedScannerInput:
+    """One case's permission-gated byte provider (e.g. GuardedCaseReader.read).
+
+    `read` rechecks access permission/custody on every call and returns the same
+    immutable snapshot; the driver re-verifies the pin on every use.
+    """
+    case_id: str
+    plan_sha256: str
+    read: Callable[[], bytes] = field(repr=False)
+
+    def verified(self, cap: int) -> bytes:
+        data = self.read()
+        if type(data) is not bytes or len(data) > cap or digest(data) != self.plan_sha256:
+            raise ValueError("guarded heldout input differs from its permitted pin")
+        return data
 
 ARMS = ("C", "C-custom", "T")
 RULES = ("R1", "R2", "R3", "R4")
@@ -41,9 +67,16 @@ class ComparisonRow:
 @dataclass(frozen=True)
 class Case:
     case_id: str
-    plan_path: Path
+    plan_path: Path | None  # None for guarded heldout: no private path is carried.
     plan_sha256: str
     resources: tuple[tuple[str, dict], ...]
+    guarded: GuardedScannerInput | None = field(default=None, repr=False)
+
+
+def _case_bytes(case: Case, limits: Limits) -> bytes:
+    if case.guarded is not None:
+        return case.guarded.verified(limits.plan_bytes)
+    return bounded_read(case.plan_path, limits.plan_bytes)
 
 
 def _opaque(value: object) -> str:
@@ -64,13 +97,20 @@ def _path(value: object) -> Path:
     return Path(value)
 
 
-def _load_cases(manifest: dict, limits: Limits) -> tuple[Case, ...]:
-    if (manifest.get("schema_version") != "m4-scanner-run-v1"
-            or manifest.get("input_scope") != "development_synthetic"):
-        raise ValueError("only declared development synthetic source inputs are authorized")
+def _load_cases(manifest: dict, limits: Limits,
+                guarded: GuardedScannerInput | None = None) -> tuple[Case, ...]:
+    scope = manifest.get("input_scope")
+    if manifest.get("schema_version") != "m4-scanner-run-v1" or scope not in SCOPES:
+        raise ValueError("only declared development synthetic or guarded heldout inputs are authorized")
+    heldout = scope == "heldout"
+    if heldout != (guarded is not None) or (guarded is not None and type(guarded) is not GuardedScannerInput):
+        raise ValueError("guarded heldout input and heldout scope are required together")
+    if heldout and (manifest.get("guarded_input") is not True
+                    or manifest.get("synthetic_input_attested") is True):
+        raise ValueError("heldout manifest must declare guarded input and no synthetic attestation")
     _hash(manifest.get("build_sha256"))
     cases = manifest.get("cases")
-    if not isinstance(cases, list) or not 0 < len(cases) <= 256:
+    if not isinstance(cases, list) or not 0 < len(cases) <= (1 if heldout else 256):
         raise ValueError("bounded nonempty case inventory required")
     result, seen_cases = [], set()
     for item in cases:
@@ -80,8 +120,15 @@ def _load_cases(manifest: dict, limits: Limits) -> tuple[Case, ...]:
         if case_id in seen_cases:
             raise ValueError("duplicate case identity")
         seen_cases.add(case_id)
-        path, expected = _path(item.get("plan_path")), _hash(item.get("plan_sha256"))
-        raw = bounded_read(path, limits.plan_bytes)
+        expected = _hash(item.get("plan_sha256"))
+        if heldout:
+            # Private source path is never declared, reopened or passed to a scanner.
+            if "plan_path" in item or guarded.case_id != case_id or guarded.plan_sha256 != expected:
+                raise ValueError("guarded heldout case identity/pin mismatch")
+            path, raw = None, guarded.verified(limits.plan_bytes)
+        else:
+            path = _path(item.get("plan_path"))
+            raw = bounded_read(path, limits.plan_bytes)
         if digest(raw) != expected:
             raise ValueError("case input differs from frozen plan bytes")
         plan = strict_json(raw)
@@ -110,7 +157,7 @@ def _load_cases(manifest: dict, limits: Limits) -> tuple[Case, ...]:
             seen_ids.add(resource_id)
             bound_addresses.add(address)
             resources.append((resource_id, by_address[address]))
-        result.append(Case(case_id, path, expected, tuple(resources)))
+        result.append(Case(case_id, path, expected, tuple(resources), guarded if heldout else None))
     if sum(len(case.resources) for case in result) * len(ARMS) * len(RULES) > 100_000:
         raise ValueError("comparison row budget exceeded")
     return tuple(result)
@@ -196,11 +243,21 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
                                 limits=limits), ()
     if runner is None:
         return _absent(arm, "no_explicit_authorized_runtime_runner"), ()
+    staged = None
     try:
         mappings = _mappings(settings)
-        common = dict(plan_path=case.plan_path, pin=_pin(settings),
+        workspace = _path(settings.get("workspace"))
+        plan_path = case.plan_path
+        if case.guarded is not None:
+            if type(runner) is not BoundedSubprocessRunner:
+                return _absent(arm, "guarded_heldout_requires_granted_bounded_runner"), mappings
+            # Explicit per-arm staging of the verified in-memory snapshot only.
+            staged = stage_guarded_input(workspace, case.guarded.verified(limits.plan_bytes),
+                                         case.plan_sha256, limits.plan_bytes)
+            plan_path = staged
+        common = dict(plan_path=plan_path, pin=_pin(settings),
                       config_path=_path(settings.get("config_path")),
-                      workspace=_path(settings.get("workspace")), runner=runner,
+                      workspace=workspace, runner=runner,
                       check_ids=tuple(check_ids), mappings=mappings,
                       policy_sha256=settings.get("policy_sha256"),
                       policy_manifest_path=_path(settings["policy_manifest_path"])
@@ -220,22 +277,33 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
         return artifact, mappings
     except (OSError, ValueError, TypeError, KeyError):
         return _absent(arm, "unavailable_or_unverified_activation_inputs"), ()
+    finally:
+        if staged is not None and not remove_guarded_input(staged, case.plan_sha256, limits.plan_bytes):
+            # Never silently leave heldout bytes behind: the comparison aborts.
+            raise ValueError("guarded heldout staging cleanup failed")
 
 
 def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = False,
-            limits: Limits = Limits()) -> dict:
+            limits: Limits = Limits(), guarded_input: GuardedScannerInput | None = None) -> dict:
     """No default process execution. Fake mode ignores/rejects runtime runners.
 
     Preserve one row per resource/rule/required arm, including missing observations.
     Never emits scorer ArmRows, and never interprets absent rows as true negatives.
+    Guarded heldout scope refuses fake mode and any runner other than a heldout-granted
+    BoundedSubprocessRunner; missing scanners stay NOT_RUN/incomplete, never measured.
     """
     # Freeze caller-owned mutable configuration before checking the operator pin.
     manifest = json.loads(json.dumps(manifest, allow_nan=False))
     if fake_only and runner is not None:
         raise ValueError("fake-only mode cannot accept a runtime runner")
+    if guarded_input is not None and (fake_only or type(runner) is not BoundedSubprocessRunner
+                                      or runner.execution_grant is None
+                                      or runner.execution_grant.input_scope != "heldout"):
+        raise ValueError("guarded heldout input requires its heldout-scoped granted runner")
     if type(runner) is BoundedSubprocessRunner:
         runner.verify_manifest(manifest)
-    cases = _load_cases(manifest, limits)
+    cases = _load_cases(manifest, limits, guarded_input)
+    scope = manifest["input_scope"]
     arms = manifest.get("arms", {})
     if not isinstance(arms, dict) or set(arms) - set(ARMS):
         raise ValueError("unknown comparison arm")
@@ -244,7 +312,7 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
     rows, receipts = [], []
     for case in cases:
         for arm in ARMS:
-            if digest(bounded_read(case.plan_path, limits.plan_bytes)) != case.plan_sha256:
+            if digest(_case_bytes(case, limits)) != case.plan_sha256:
                 raise ValueError("plan mutation between arms aborts comparison")
             artifact, mappings = _collect(case, arm, arms.get(arm), runner, fake_only, limits)
             if artifact.plan_sha256 not in (None, case.plan_sha256):
@@ -288,12 +356,12 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
                                               case.plan_sha256, _mapping_digest(mapping),
                                               capture_hash, tuple(sorted(set(reasons)))))
     for case in cases:
-        if digest(bounded_read(case.plan_path, limits.plan_bytes)) != case.plan_sha256:
+        if digest(_case_bytes(case, limits)) != case.plan_sha256:
             raise ValueError("plan mutation invalidates comparison")
     return {"schema_version": "m4-scanner-comparison-v1", "build_sha256": manifest["build_sha256"],
             "manifest_sha256": digest(json.dumps(manifest, sort_keys=True,
                                                  separators=(",", ":")).encode()),
-            "input_scope": "development_synthetic", "fake_only": fake_only,
+            "input_scope": scope, "fake_only": fake_only,
             "measurement_status": "SIMULATED_INELIGIBLE" if fake_only else (
                 "RECORDED" if rows and all(row.live_eligible for row in rows) else "INCOMPLETE"),
             "source_enrichment": False, "product_acceptance": False,

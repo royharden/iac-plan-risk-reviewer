@@ -115,6 +115,24 @@ synthetic_input_attested=true. A generated development input manifest does not
 supply that operator approval automatically: its final bytes/config must be
 approved independently before any later actual execution.
 
+A distinct closed `m4-local-scanner-heldout-grant-v1` covers ONLY guarded heldout
+manifests (the two grant types are not interchangeable). It replaces
+synthetic_input_attested with heldout_access_authorized and
+guarded_input_staging_declared and adds access_authorization_sha256, which must equal
+the manifest's pin of the exact v2 input-access permission. A heldout manifest has
+`input_scope="heldout"`, `guarded_input=true`, no synthetic attestation, exactly one
+case and NO plan_path. `driver.compare(..., guarded_input=GuardedScannerInput(...))`
+reads the permission-gated in-memory snapshot (re-verified on every use), refuses
+fake mode or any runner without a heldout-scoped grant, and per arm explicitly stages
+the verified bytes with exclusive create into the pre-existing operator-owned
+`<arm workspace>/guarded-input/<plan_sha256>.json` (`runner.guarded_input_path`),
+which the approved argv and pinned files must name. The staged file is removed after
+that arm; failed cleanup aborts the comparison. The private source path is never
+reopened or passed to a scanner. Fixed argv/timeouts/output caps and the single
+BoundedSubprocessRunner are unchanged. A missing or unscoped scanner stays NOT_RUN/
+incomplete, never measured. Heldout scanner reports reach the bridge only with
+externally pinned eligibility (Amendment A1). None of this has been executed.
+
 Each ApprovedInvocation binds arm/scanner/version, raw plan, executable,
 dependency inventory, version receipt, empty config, custom/built-in policy
 manifest, exact enabled check IDs and invocation_sha256. invocation_digest hashes

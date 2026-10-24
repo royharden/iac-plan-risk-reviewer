@@ -238,8 +238,21 @@ def preflight(root: Path, manifest: RunManifest, pins: PreflightPins) -> dict:
         raise ValueError("heldout measurement eligibility lacks consumption receipts")
     if manifest.split == "heldout" and not eligible_arms <= {row.arm for row in receipts}:
         raise ValueError("eligible heldout arm lacks exposure receipt")
+    # Contract S1.6: report D6's PRE-ACCESS input-exposure journal read-only. It never
+    # changes `state`, never satisfies the legacy post-measurement checks above, and
+    # is neither oracle/scoring permission nor eligibility evidence. The full pinned
+    # verification (`verify_committed_exposure`) belongs to the input-access gate.
+    from eval.runner.exposure_journal import exposure_status  # Lazy: that module imports this one.
+    try:
+        journal = exposure_status(root.absolute())
+        input_committed = (journal.state == "COMMITTED" and journal.payload_permission_granted is False
+                           and set(journal.exposed_arms) == set(ARMS)
+                           and len(journal.exposed_arms) == len(ARMS))
+    except (OSError, ValueError, TypeError, KeyError):
+        input_committed = False
     missing_arms = sorted(set(ARMS) - eligible_arms)
     return {"schema_version": 1, "run_id": manifest.run_id,
+            "input_exposure_committed": input_committed,
             "metadata_status": "CONSISTENT", "evaluation_status": "INCOMPLETE"
             if missing_arms or not costs["billing_fully_known"] else "METADATA_ELIGIBLE",
             "missing_arms": missing_arms, "edition_state": state, "custody": custody,

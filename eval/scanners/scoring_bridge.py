@@ -175,11 +175,14 @@ def bridge_report(report: dict, *, expected_report_sha256: str, edition_id: str,
     source = json.loads(raw)
     if (not isinstance(source, dict)
             or source.get("schema_version") != "m4-scanner-comparison-v1"
-            or source.get("input_scope") != "development_synthetic"
+            or source.get("input_scope") not in {"development_synthetic", "heldout"}
             or source.get("source_enrichment") is not False
             or type(source.get("fake_only")) is not bool
             or source.get("product_acceptance") is not False):
         raise ValueError("unsupported scanner source scope/profile")
+    # Amendment A1 (M4-INT): guarded heldout reports require externally pinned eligibility.
+    if source["input_scope"] == "heldout" and (eligibility is None or expected_eligibility_sha256 is None):
+        raise ValueError("heldout scanner source requires pinned execution eligibility")
     build = _hash(source.get("build_sha256"))
     _identity(edition_id)
     manifest_pin = None
