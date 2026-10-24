@@ -89,9 +89,12 @@ def check_edition_receipt(value: dict) -> dict:
 
     v1 records are refused: their `exposure_measurement_pins` cannot be told apart
     as intents or results, and are never reinterpreted as either. A v2 record must
-    carry both exposure events with all seven arms each. This checks shape only;
-    it does not authenticate the candidate or re-verify custody.
+    carry both exposure events with all seven arms each, the exact input-exposure
+    receipt schema and 64-lowercase-hex exposure pins (other record digests are not
+    re-checked here). This checks shape only; it does not
+    authenticate the candidate or re-verify custody.
     """
+    from eval.runner.exposure_journal import INPUT_EXPOSURE_SCHEMA
     if (type(value) is not dict or type(value.get("schema_version")) is not int
             or value["schema_version"] != EDITION_RECEIPT_VERSION):
         raise ValueError("legacy or unversioned edition receipt refused; not reinterpreted")
@@ -108,7 +111,21 @@ def check_edition_receipt(value: dict) -> dict:
                                        for row in rows] != list(ARMS)
                 or any(set(row) != {"arm", field} for row in rows)):
             raise ValueError("edition receipt exposure pins must cover all seven arms once")
+    if value["input_exposure"]["schema_version"] != INPUT_EXPOSURE_SCHEMA:
+        raise ValueError("edition receipt input-exposure schema is not the exact supported version")
+    pins = [value["input_exposure"][name] for name in (
+                "authorization_sha256", "commit_sha256", "receipt_file_sha256")]
+    pins.append(value["post_measurement_exposure"]["artifact_sha256"])
+    pins.extend(row["measurement_intents_sha256"] for row in intents)
+    pins.extend(row["measurements_sha256"] for row in results)
+    if any(not _is_digest(pin) for pin in pins):
+        raise ValueError("edition receipt exposure pin is not a 64-hex SHA256 digest")
     return value
+
+
+def _is_digest(value) -> bool:
+    return (type(value) is str and len(value) == 64
+            and all(char in "0123456789abcdef" for char in value))
 
 
 def _input_exposure(root: Path, manifest: RunManifest, pins: PreflightPins,
@@ -120,10 +137,13 @@ def _input_exposure(root: Path, manifest: RunManifest, pins: PreflightPins,
     the post-measurement legacy receipts and completion, and match current custody.
     """
     # Lazy import mirrors the other optional eval paths in this module.
-    from eval.runner.exposure_journal import INPUT_EXPOSURE_SCHEMA, _verify_committed
-    commit = _verify_committed(root, completion.input_exposure_authorization_sha256,
-                               completion.input_exposure_commit_sha256)
+    from eval.runner.exposure_journal import INPUT_EXPOSURE_SCHEMA, verify_input_exposure_commit
     legacy_at = {row.arm: row.exposed_at for row in exposure}
+    if len(legacy_at) != len(exposure) or set(legacy_at) != set(ARMS):
+        raise ValueError("all seven post-measurement exposure receipts required")
+    commit = verify_input_exposure_commit(root,
+        expected_authorization_sha256=completion.input_exposure_authorization_sha256,
+        expected_commit_sha256=completion.input_exposure_commit_sha256)
     if (commit.receipt_file_sha256 != completion.input_exposure_receipt_file_sha256
             or commit.authorization.run_id != manifest.run_id
             or commit.authorization.edition_id != manifest.edition_id

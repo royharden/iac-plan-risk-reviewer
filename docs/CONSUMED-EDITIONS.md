@@ -53,8 +53,10 @@ completion, expected_completion_sha256)` performs these bounded stages:
 2. Run metadata-only preflight. Bind actual authority/seal/global build, policy,
    corpus, prompt/rubric, semantic and eligibility identities; require all seven
    post-measurement exposure receipts. The completion pins the exact post-measurement
-   exposure artifact and seven actual measured artifacts separately. Then verify the
-   committed pre-access input-exposure journal (metadata only) against the completion's
+   exposure artifact and seven actual measured artifacts separately. Require all seven
+   distinct post-measurement arms first (ValueError otherwise). Then verify the
+   committed pre-access input-exposure journal (metadata only, through the public
+   `exposure_journal.verify_input_exposure_commit` seam) against the completion's
    three input-exposure pins and current custody: same run/edition/authority/seal/
    build/oracle/custodian and authorization policy/build, all seven arms, committed at or after the seal and no later
    than each arm's post-measurement exposure or completion. Intents are never treated
@@ -83,7 +85,9 @@ all declared attempts and costs, original result/artifact pins and lineage pins.
 authorization/commit/receipt-file pins, seven `intent_pins`) and
 `post_measurement_exposure` (`artifact_sha256` of the legacy exposure artifact, seven `result_pins`) as separate
 blocks. The v1 field `exposure_measurement_pins` is gone. `check_edition_receipt(value)`
-is the pure reader gate, and the writer runs it on its own record before writing: it refuses v1, unversioned and mixed records rather than
+is the pure reader gate, and the writer runs it on its own record before writing. It
+also requires the exact `m4-input-exposure-v1` receipt schema and 64-lowercase-hex
+values for every exposure pin. It refuses v1, unversioned and mixed records rather than
 reading their pins as either intents or results.
 It does not copy raw model prose, private maps, actor/assessor identity records,
 credentials, arbitrary metadata files or original measurement envelopes. The
@@ -96,9 +100,15 @@ For later authorized activation, from the outer shell, the explicit script is
 [prepare_consumed_edition.py](../scripts/prepare_consumed_edition.py). Its required
 options are `--root`, `--out` and `--selection-sha256`, `--manifest-sha256`,
 `--authority-sha256`, `--semantic-suite-sha256`, `--eligibility-sha256`,
-`--release-sha256`, `--completion-sha256`. It reads only fixed controls under
+`--release-sha256`, `--completion-sha256`. The script itself reads only fixed controls under
 `metadata/`: run-manifest.json, assembly-selection.json, release-authorization.json,
-edition-completion.json. There is no default destination, discovery, execute-arm,
+edition-completion.json. The library it calls additionally reads, as metadata only:
+the preflight allowlisted metadata (authority, seal, semantic receipt, eligibility,
+legacy post-measurement `exposure.json`) and the D6 input-exposure journal files
+`metadata/input-exposure-commit.jsonl` and `metadata/input-exposure.json`. A present
+legacy WIP journal (`metadata/exposure-commit.jsonl` or `.exposure-commit.lock`)
+blocks release. Only after those gates does it read approved measurement, then
+input/oracle payloads. There is no default destination, discovery, execute-arm,
 oracle-generation, overwrite, scrub, push or publish option. A successful command
 would return 0 for local preparation, even with retained score FAIL; refusal is 3.
 No command or candidate has actually been executed/generated.

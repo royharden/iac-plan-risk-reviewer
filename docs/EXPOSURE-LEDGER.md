@@ -75,6 +75,24 @@ Raises `ValueError` on any mismatch, partial, torn, ambiguous or legacy-shaped j
 A verified commit is consumption evidence only: it is never input, oracle or scoring
 permission, and preflight/commit success is never payload permission.
 
+### Journal-only seam (edition release, scoring readers)
+
+```python
+verify_input_exposure_commit(
+    root: Path, *,
+    expected_authorization_sha256: str,
+    expected_commit_sha256: str | None = None,
+) -> InputExposureCommit
+```
+
+Reads only `metadata/input-exposure-commit.jsonl` and `metadata/input-exposure.json`
+and verifies the complete journal against the pinned authorization (and commit)
+digests. It does not re-run preflight or custody checks; the caller binds current
+custody (as `edition_release._input_exposure` does) or uses `verify_committed_exposure`
+for the full metadata gate. Raises `ValueError` on legacy WIP, absent, partial, torn,
+ambiguous, over-nested or mismatched journals. The private `_verify_committed`
+remains as the shared implementation and is not a consumer API.
+
 ## Durable sequence
 
 `commit_exposure(root, manifest, pins, authorization, *, expected_authorization_sha256) -> InputExposureCommit`

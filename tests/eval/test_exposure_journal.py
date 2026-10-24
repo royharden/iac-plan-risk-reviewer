@@ -5,6 +5,7 @@ Authored, not run (Dirty Mode). Never executes a real commit or opens payloads.
 from __future__ import annotations
 
 import ast
+import inspect
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,7 +20,7 @@ from eval.runner.exposure_journal import (
     INPUT_EXPOSURE_SCHEMA, InputExposureCommit, InputExposureReceipt,
     LEDGER_RELATIVE, LEGACY_WIP_RELATIVE, LOCK_RELATIVE, RECEIPTS_RELATIVE,
     _ledger_events, _parse_receipts, _receipt_bytes, _receipt_set_matches,
-    exposure_status,
+    exposure_status, verify_input_exposure_commit,
 )
 
 SOURCE = Path(__file__).parents[2] / "eval" / "runner" / "exposure_journal.py"
@@ -150,6 +151,32 @@ def test_commit_refuses_legacy_wip_and_preexisting_post_measurement_exposure():
                   if isinstance(node, ast.FunctionDef) and node.name == "commit_exposure")
     names = {node.id for node in ast.walk(commit) if isinstance(node, ast.Name)}
     assert {"LEGACY_WIP_RELATIVE", "POST_MEASUREMENT_RELATIVE"} <= names
+
+
+def test_public_journal_seam_signature_is_keyword_only_and_returns_commit():
+    signature = inspect.signature(verify_input_exposure_commit)
+    params = signature.parameters
+    assert list(params) == ["root", "expected_authorization_sha256", "expected_commit_sha256"]
+    assert params["expected_authorization_sha256"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert params["expected_commit_sha256"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert params["expected_commit_sha256"].default is None
+
+
+def test_public_journal_seam_fails_closed_with_value_error(tmp_path):
+    (tmp_path / "metadata").mkdir()
+    with pytest.raises(ValueError):  # absent journal
+        verify_input_exposure_commit(tmp_path, expected_authorization_sha256="a" * 64)
+    (tmp_path / LEDGER_RELATIVE).write_bytes(b'{"event":"prepared"}')
+    with pytest.raises(ValueError, match="torn"):
+        verify_input_exposure_commit(tmp_path, expected_authorization_sha256="a" * 64)
+    (tmp_path / LEGACY_WIP_RELATIVE[0]).write_bytes(b"\0")
+    with pytest.raises(ValueError, match="legacy WIP"):
+        verify_input_exposure_commit(tmp_path, expected_authorization_sha256="a" * 64)
+    # Deep nesting within the byte cap surfaces as ValueError, never RecursionError.
+    (tmp_path / LEGACY_WIP_RELATIVE[0]).unlink()
+    (tmp_path / LEDGER_RELATIVE).write_bytes(b"[" * 100000 + b"]" * 100000 + b"\n")
+    with pytest.raises(ValueError):
+        verify_input_exposure_commit(tmp_path, expected_authorization_sha256="a" * 64)
 
 
 def test_journal_files_are_distinct_from_legacy_exposure_artifact():

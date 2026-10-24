@@ -197,21 +197,59 @@ def test_input_exposure_must_precede_post_measurement_and_match_custody(edition_
     monkeypatch.setattr(release, "metadata_digest", lambda _seal: "c" * 64)
     exposure = tuple(SimpleNamespace(arm=arm, exposed_at=later) for arm in ARMS)
     commit = _input_commit(sealed)
-    monkeypatch.setattr("eval.runner.exposure_journal._verify_committed", lambda *a: commit)
+    monkeypatch.setattr("eval.runner.exposure_journal.verify_input_exposure_commit", lambda *a, **k: commit)
     assert release._input_exposure(Path("."), manifest, pins, completion, authority,
                                    seal, exposure) is commit
     # 18:00 is after post-measurement exposure (12:00) but before completion (next day
     # 00:00), so only the input-before-results ordering check can refuse it.
     for bad in (_input_commit(datetime(2026, 10, 22, 18, tzinfo=timezone.utc)),  # after results
                 _input_commit(datetime(2026, 10, 21, tzinfo=timezone.utc))):    # before seal
-        monkeypatch.setattr("eval.runner.exposure_journal._verify_committed", lambda *a, c=bad: c)
+        monkeypatch.setattr("eval.runner.exposure_journal.verify_input_exposure_commit", lambda *a, c=bad, **k: c)
         with pytest.raises(ValueError, match="pre-access input exposure"):
             release._input_exposure(Path("."), manifest, pins, completion, authority, seal, exposure)
     foreign = _input_commit(sealed)
     foreign.receipt_file_sha256 = "d" * 64
-    monkeypatch.setattr("eval.runner.exposure_journal._verify_committed", lambda *a: foreign)
+    monkeypatch.setattr("eval.runner.exposure_journal.verify_input_exposure_commit", lambda *a, **k: foreign)
     with pytest.raises(ValueError, match="pre-access input exposure"):
         release._input_exposure(Path("."), manifest, pins, completion, authority, seal, exposure)
+
+
+def test_edition_receipt_refuses_non_digest_pins_and_foreign_receipt_schema():
+    for mutate in (lambda v: v["input_exposure"].update(commit_sha256="A" * 64),
+                   lambda v: v["input_exposure"].update(authorization_sha256="a" * 63),
+                   lambda v: v["post_measurement_exposure"].update(artifact_sha256=1),
+                   lambda v: v["input_exposure"]["intent_pins"][2].update(
+                       measurement_intents_sha256="g" * 64),
+                   lambda v: v["post_measurement_exposure"]["result_pins"][6].update(
+                       measurements_sha256=None)):
+        value = _edition_receipt()
+        mutate(value)
+        with pytest.raises(ValueError, match="64-hex"):
+            release.check_edition_receipt(value)
+    for schema in ("m4-input-exposure-v2", "m4-input-exposure-commit-v1", 1):
+        value = _edition_receipt()
+        value["input_exposure"]["schema_version"] = schema
+        with pytest.raises(ValueError, match="exact supported version"):
+            release.check_edition_receipt(value)
+
+
+def test_input_exposure_without_full_legacy_arm_set_raises_value_error(edition_metadata, monkeypatch):
+    manifest, completion = edition_metadata
+    def forbidden(*args, **kwargs):
+        raise AssertionError("precondition must refuse before the journal is read")
+    monkeypatch.setattr("eval.runner.exposure_journal.verify_input_exposure_commit", forbidden)
+    later = datetime(2026, 10, 22, 12, tzinfo=timezone.utc)
+    partial = tuple(SimpleNamespace(arm=arm, exposed_at=later) for arm in ARMS[:-1])
+    duplicated = (*partial, SimpleNamespace(arm=ARMS[0], exposed_at=later))
+    for exposure in (partial, duplicated, ()):
+        with pytest.raises(ValueError, match="post-measurement exposure receipts"):
+            release._input_exposure(Path("."), manifest, None, completion, None, None, exposure)
+
+
+def test_release_uses_public_journal_seam_not_private_helper():
+    source = (Path(__file__).parents[2] / "eval" / "runner" / "edition_release.py").read_text(encoding="utf-8")
+    assert "verify_input_exposure_commit" in source
+    assert "_verify_committed" not in source
 
 
 def test_release_source_never_writes_ambiguous_exposure_pins():

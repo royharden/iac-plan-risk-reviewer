@@ -503,6 +503,28 @@ def commit_exposure(root: Path, manifest: RunManifest, pins: PreflightPins,
         return _verify_committed(root, expected_authorization_sha256, commit_sha)
 
 
+def verify_input_exposure_commit(root: Path, *, expected_authorization_sha256: str,
+                                 expected_commit_sha256: str | None = None) -> InputExposureCommit:
+    """Public journal-only consumer seam (edition release, scoring readers).
+
+    Reads only `metadata/input-exposure-commit.jsonl` and `metadata/input-exposure.json`
+    under `root` and verifies the complete prepared -> committed journal against the
+    externally pinned authorization digest (and commit digest when given). It does
+    NOT re-run preflight or custody checks: callers bind current custody themselves,
+    or use `verify_committed_exposure` for the full metadata gate. Raises ValueError
+    on any legacy WIP, partial, torn, ambiguous or mismatched journal. Never grants
+    input, oracle or scoring permission.
+    """
+    root = root.absolute()
+    _safe_path(root)
+    if any(os.path.lexists(root / path) for path in LEGACY_WIP_RELATIVE):
+        raise ValueError("legacy WIP exposure journal present; edition blocked")
+    try:
+        return _verify_committed(root, expected_authorization_sha256, expected_commit_sha256)
+    except RecursionError as error:
+        raise ValueError("exposure journal nesting exceeds parser depth") from error
+
+
 def verify_committed_exposure(root: Path, manifest: RunManifest, pins: PreflightPins,
                               authorization: ExposureCommitAuthorization, *,
                               expected_authorization_sha256: str,
@@ -515,8 +537,11 @@ def verify_committed_exposure(root: Path, manifest: RunManifest, pins: Preflight
     """
     authority, seal, _status = _authorize(root.absolute(), manifest, pins, authorization,
         expected_authorization_sha256, allow_consumed=True)
-    result = _verify_committed(root.absolute(), expected_authorization_sha256,
-                               expected_commit_sha256)
+    try:
+        result = _verify_committed(root.absolute(), expected_authorization_sha256,
+                                   expected_commit_sha256)
+    except RecursionError as error:
+        raise ValueError("exposure journal nesting exceeds parser depth") from error
     if any(row.seal_sha256 != metadata_digest(seal)
            or row.authority_sha256 != pins.authority_sha256
            or row.custodian != authority.custodian
