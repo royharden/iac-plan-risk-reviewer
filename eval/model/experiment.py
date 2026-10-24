@@ -158,6 +158,142 @@ def _baseline_hash(rows: tuple[ArmRow, ...]) -> str:
     return digest(canonical([json.loads(row.model_dump_json()) for row in rows]))
 
 
+def execute_attempt(
+    *, arm: Arm, payload: str, finding_id: str | None, context: Context,
+    transport: Transport, journal: AttemptJournal, limits: Limits, validator: Any,
+    capture_private_prose: bool = False,
+) -> Observation:
+    """Exactly one durable reservation/terminal path shared by executor and selector.
+
+    Caller freezes/validates safe payload and its D binding before this boundary.
+    No automatic P/M calls, retry, journal creation or reconciliation occurs here.
+    A rejected start returns not_run with no fabricated Attempt receipt.
+    """
+    if arm not in INSTRUCTIONS or type(payload) is not str or not callable(validator):
+        raise ValueError("attempt_safe_request_contract_invalid")
+    if type(capture_private_prose) is not bool:
+        raise ValueError("private_capture_requires_explicit_boolean")
+    for value in (context.build_sha256, context.source_sha256, context.corpus_sha256, context.config_sha256):
+        if type(value) is not str or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+            raise ValueError("context requires pinned SHA256 identities")
+    for value in (limits.input_tokens_upper, limits.output_tokens_upper,
+                  limits.max_input_bytes, limits.max_output_bytes, limits.max_attempts):
+        if type(value) is not int or value <= 0:
+            raise ValueError("limits must be positive integers")
+    if type(limits.timeout_seconds) not in (int, float) or not math.isfinite(limits.timeout_seconds) or limits.timeout_seconds <= 0:
+        raise ValueError("timeout must be finite and positive")
+    identity = transport.identity
+    if identity.kind not in ("mock", "protocol") or any(
+        type(v) is not str or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}", v) is None
+        for v in (identity.provider, identity.model, identity.version)):
+        raise ValueError("transport identity must be a fixed ineligible version label")
+    if (journal.price.provider, journal.price.model) != (identity.provider, identity.model):
+        raise ValueError("journal price and transport identity disagree")
+    if len(payload.encode("utf-8")) > limits.max_input_bytes:
+        return Observation(arm, finding_id, "not_run", "input_size_limit", None)
+    request = Request(arm, payload, INSTRUCTIONS[arm], limits.input_tokens_upper,
+                      limits.output_tokens_upper, limits.timeout_seconds)
+    hashes = {
+        "build": context.build_sha256, "corpus": context.corpus_sha256,
+        "projection": digest(payload), "prompt": digest(request.instruction),
+        "input": digest(canonical({"arm": arm, "instruction": request.instruction,
+                                    "payload": payload})),
+        "model": digest(canonical([identity.provider, identity.model, identity.version,
+                                    identity.kind])),
+        "config": digest(canonical([context.config_sha256, limits.input_tokens_upper,
+                                     limits.output_tokens_upper, limits.max_input_bytes,
+                                     limits.max_output_bytes, limits.timeout_seconds,
+                                     limits.max_attempts])),
+    }
+    bound = (Decimal(limits.input_tokens_upper) * journal.price.input_usd_per_million
+             + Decimal(limits.output_tokens_upper) * journal.price.output_usd_per_million
+             ) / Decimal(1_000_000)
+    deadline_monotonic = monotonic() + limits.timeout_seconds
+    try:
+        attempt_id = journal.start(Reservation(
+            input_tokens_upper=limits.input_tokens_upper,
+            output_tokens_upper=limits.output_tokens_upper,
+            request_usd_upper=bound, hashes=hashes))
+    except JournalError:
+        return Observation(arm, finding_id, "not_run", "journal_start_blocked", None)
+    start = perf_counter()
+    usage = Usage()
+    response_hash = None
+    private_response = None
+    private_response_complete = None
+    selected = None
+    claims: tuple[str, ...] = ()
+    predictions: tuple[Prediction, ...] = ()
+    status: Terminal = "error"
+    reason = "transport_error"
+    try:
+        started_call = getattr(transport, "complete_started", None)
+        reply = started_call(request, journal=journal, attempt_id=attempt_id,
+            deadline_monotonic=deadline_monotonic) if callable(started_call) else transport.complete(request)
+        if not isinstance(reply, Reply):
+            raise ValueError("invalid transport envelope")
+        if arm == "P" and capture_private_prose and type(reply.payload) is bytes:
+            capture_bound = min(limits.max_output_bytes, 65_536)
+            private_response = reply.payload[:capture_bound]
+            private_response_complete = len(reply.payload) <= capture_bound \
+                and getattr(reply, "payload_complete", True) is True
+        usage = _usage(reply.usage)
+        if reply.status not in ("ok", "invalid", "timeout", "error", "cancelled"):
+            raise ValueError("invalid transport status")
+        status = reply.status
+        reason = "transport_" + status
+        complete = getattr(reply, "payload_complete", True)
+        if type(complete) is not bool or complete is False and status == "ok":
+            status, reason = "invalid", "response_incomplete"
+        elif type(reply.payload) is not bytes or len(reply.payload) > limits.max_output_bytes:
+            status, reason = "invalid", "response_size_or_type"
+        else:
+            response_hash = digest(reply.payload)
+            if status == "ok":
+                try:
+                    selected, claims, predictions = validator(_response(reply.payload))
+                    if selected is not None and not selected.accepted:
+                        status, reason = "invalid", "invalid_selection"
+                    else:
+                        reason = "validated_shape_not_semantic_approval"
+                except (ValueError, TypeError, KeyError, RecursionError, UnicodeError):
+                    status, reason = "invalid", "invalid_response"
+    except TimeoutError:
+        status, reason = "timeout", "transport_timeout"
+    except KeyboardInterrupt:
+        status, reason = "cancelled", "operator_cancelled"
+    except Exception:
+        # Exception strings may contain request text/secrets. Never record them.
+        status, reason = "error", "transport_error"
+    elapsed = max(0, int((perf_counter() - start) * 1000))
+    if elapsed > limits.timeout_seconds * 1000 and status != "cancelled":
+        status, reason = "timeout", "cooperative_deadline_exceeded"
+    if status != "ok":
+        # Invalid L remains a deterministic fallback; unverified P/M is withheld.
+        selected, predictions = None, ()
+        # Parsed P claims stay transient for assessors even when a cooperative
+        # deadline was exceeded; withholding must not erase generated claims.
+    # If durable terminal append fails, propagate: start remains a liability.
+    # Never manufacture an apparently complete receipt for a failed append.
+    journal.terminal(attempt_id, status, elapsed, input_tokens=usage.input_tokens,
+                     output_tokens=usage.output_tokens, known_usd=usage.known_usd,
+                     response_sha256=response_hash)
+    billing_known = status != "timeout" and all(v is not None for v in (
+        usage.input_tokens, usage.output_tokens, usage.known_usd))
+    unresolved = max(bound - (usage.known_usd or Decimal(0)), Decimal(0)) \
+        if not billing_known else Decimal(0)
+    receipt = Attempt(attempt_id, arm, status, elapsed, usage.input_tokens,
+                      usage.output_tokens, None if usage.known_usd is None else str(usage.known_usd),
+                      str(unresolved), billing_known, tuple(sorted(hashes.items())), response_hash,
+                      digest(journal.price.model_dump_json()),
+                      digest(canonical([usage.input_tokens, usage.output_tokens,
+                                        None if usage.known_usd is None else str(usage.known_usd)])),
+                      not billing_known)
+    return Observation(arm, finding_id, status, reason, receipt, selected, claims, predictions,
+                       private_response=private_response,
+                       private_response_complete=private_response_complete)
+
+
 def run_experiments(
     *, plan: PlanDocument, shareable: dict[str, Any], baseline: tuple[ArmRow, ...],
     links: tuple[FindingLink, ...], resource_links: tuple[ResourceLink, ...],
@@ -242,113 +378,13 @@ def run_experiments(
         nonlocal attempted, halt
         if halt or attempted >= limits.max_attempts:
             return Observation(arm, finding_id, "not_run", "stopped_or_request_cap", None)
-        if len(payload.encode("utf-8")) > limits.max_input_bytes:
-            return Observation(arm, finding_id, "not_run", "input_size_limit", None)
-        request = Request(arm, payload, INSTRUCTIONS[arm], limits.input_tokens_upper,
-                          limits.output_tokens_upper, limits.timeout_seconds)
-        hashes = {
-            "build": context.build_sha256, "corpus": context.corpus_sha256,
-            "projection": digest(payload), "prompt": digest(request.instruction),
-            "input": digest(canonical({"arm": arm, "instruction": request.instruction,
-                                        "payload": payload})),
-            "model": digest(canonical([identity.provider, identity.model, identity.version,
-                                        identity.kind])),
-            "config": digest(canonical([context.config_sha256, limits.input_tokens_upper,
-                                         limits.output_tokens_upper, limits.max_input_bytes,
-                                         limits.max_output_bytes, limits.timeout_seconds,
-                                         limits.max_attempts])),
-        }
-        bound = (Decimal(limits.input_tokens_upper) * journal.price.input_usd_per_million
-                 + Decimal(limits.output_tokens_upper) * journal.price.output_usd_per_million
-                 ) / Decimal(1_000_000)
-        deadline_monotonic = monotonic() + limits.timeout_seconds
-        try:
-            attempt_id = journal.start(Reservation(
-                input_tokens_upper=limits.input_tokens_upper,
-                output_tokens_upper=limits.output_tokens_upper,
-                request_usd_upper=bound, hashes=hashes))
-        except JournalError:
+        observation = execute_attempt(arm=arm, payload=payload, finding_id=finding_id,
+            context=context, transport=transport, journal=journal, limits=limits,
+            validator=validator, capture_private_prose=capture_private_prose)
+        attempted += int(observation.attempt is not None)
+        if observation.status in ("timeout", "cancelled") or observation.reason == "journal_start_blocked":
             halt = True
-            return Observation(arm, finding_id, "not_run", "journal_start_blocked", None)
-        attempted += 1
-        start = perf_counter()
-        usage = Usage()
-        response_hash = None
-        private_response = None
-        private_response_complete = None
-        selected = None
-        claims: tuple[str, ...] = ()
-        predictions: tuple[Prediction, ...] = ()
-        status: Terminal = "error"
-        reason = "transport_error"
-        try:
-            started_call = getattr(transport, "complete_started", None)
-            reply = started_call(request, journal=journal, attempt_id=attempt_id,
-                deadline_monotonic=deadline_monotonic) if callable(started_call) else transport.complete(request)
-            if not isinstance(reply, Reply):
-                raise ValueError("invalid transport envelope")
-            if arm == "P" and capture_private_prose and type(reply.payload) is bytes:
-                capture_bound = min(limits.max_output_bytes, 65_536)
-                private_response = reply.payload[:capture_bound]
-                private_response_complete = len(reply.payload) <= capture_bound \
-                    and getattr(reply, "payload_complete", True) is True
-            usage = _usage(reply.usage)
-            if reply.status not in ("ok", "invalid", "timeout", "error", "cancelled"):
-                raise ValueError("invalid transport status")
-            status = reply.status
-            reason = "transport_" + status
-            complete = getattr(reply, "payload_complete", True)
-            if type(complete) is not bool or complete is False and status == "ok":
-                status, reason = "invalid", "response_incomplete"
-            elif type(reply.payload) is not bytes or len(reply.payload) > limits.max_output_bytes:
-                status, reason = "invalid", "response_size_or_type"
-            else:
-                response_hash = digest(reply.payload)
-                if status == "ok":
-                    try:
-                        selected, claims, predictions = validator(_response(reply.payload))
-                        if selected is not None and not selected.accepted:
-                            status, reason = "invalid", "invalid_selection"
-                        else:
-                            reason = "validated_shape_not_semantic_approval"
-                    except (ValueError, TypeError, KeyError, RecursionError, UnicodeError):
-                        status, reason = "invalid", "invalid_response"
-        except TimeoutError:
-            status, reason = "timeout", "transport_timeout"
-        except KeyboardInterrupt:
-            status, reason = "cancelled", "operator_cancelled"
-        except Exception:
-            # Exception strings may contain request text/secrets. Never record them.
-            status, reason = "error", "transport_error"
-        elapsed = max(0, int((perf_counter() - start) * 1000))
-        if elapsed > limits.timeout_seconds * 1000 and status != "cancelled":
-            status, reason = "timeout", "cooperative_deadline_exceeded"
-        if status != "ok":
-            # Invalid L remains a deterministic fallback; unverified P/M is withheld.
-            selected, predictions = None, ()
-            # Parsed P claims stay transient for assessors even when a cooperative
-            # deadline was exceeded; withholding must not erase generated claims.
-        if status in ("timeout", "cancelled"):
-            halt = True
-        # If durable terminal append fails, propagate: start remains a liability.
-        # Never manufacture an apparently complete receipt for a failed append.
-        journal.terminal(attempt_id, status, elapsed, input_tokens=usage.input_tokens,
-                         output_tokens=usage.output_tokens, known_usd=usage.known_usd,
-                         response_sha256=response_hash)
-        billing_known = status != "timeout" and all(v is not None for v in (
-            usage.input_tokens, usage.output_tokens, usage.known_usd))
-        unresolved = max(bound - (usage.known_usd or Decimal(0)), Decimal(0)) \
-            if not billing_known else Decimal(0)
-        receipt = Attempt(attempt_id, arm, status, elapsed, usage.input_tokens,
-                          usage.output_tokens, None if usage.known_usd is None else str(usage.known_usd),
-                          str(unresolved), billing_known, tuple(sorted(hashes.items())), response_hash,
-                          digest(journal.price.model_dump_json()),
-                          digest(canonical([usage.input_tokens, usage.output_tokens,
-                                            None if usage.known_usd is None else str(usage.known_usd)])),
-                          not billing_known)
-        return Observation(arm, finding_id, status, reason, receipt, selected, claims, predictions,
-                           private_response=private_response,
-                           private_response_complete=private_response_complete)
+        return observation
 
     for link, capsule in capsules:
         payload = capsule.model_dump_json()
