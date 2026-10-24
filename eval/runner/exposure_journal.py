@@ -1,9 +1,15 @@
-"""Durable metadata-only all-arm holdout consumption commit.
+"""Durable metadata-only all-arm pre-access input-exposure commit (contract S1).
 
-This module records consumption before a separate controller may read heldout
-payloads. It is not access permission, authorship authentication, or an evaluation
-runner. A partial commit is permanently blocked until an external custodian resolves
-it; this source never rolls back or reuses an edition.
+This module records the PRE-ACCESS input-exposure event before a separate
+controller may read heldout case inputs. It writes versioned
+`InputExposureReceipt` rows that bind declared per-arm measurement INTENTS, never
+result hashes. The legacy post-measurement, pre-oracle `custody.ExposureReceipt`
+(whose `measurements_sha256` is the actual measured-results file hash checked by
+scoring) is a different event: this module never constructs or writes it.
+
+It is not input, oracle or scoring permission, authorship authentication, or an
+evaluation runner. A partial commit is permanently blocked until an external
+custodian resolves it; this source never rolls back or reuses an edition.
 """
 from __future__ import annotations
 
@@ -16,24 +22,33 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import Field
+from pydantic import AwareDatetime, Field
 
 from iac_review.contracts.manifest import RunManifest
 from eval.model.experiment import canonical
 from eval.runner.benchmark_access import arm_inventory_digest
 from eval.runner.bundle import root_digest
 from eval.runner.custody import (
-    CustodyAuthority, Digest, ExposureReceipt, Identity, Record, Seal,
+    CustodyAuthority, Digest, Identity, Record, Seal,
     SemanticReceipt, metadata_digest, validate_seal, validate_semantics,
 )
 from eval.runner.preflight import PreflightPins, preflight
 from eval.runner.scoring import ARMS
 
+INPUT_EXPOSURE_SCHEMA = "m4-input-exposure-v1"
 MAX_LEDGER_BYTES = 1024 * 1024
 MAX_RECEIPT_BYTES = 64 * 1024
-LEDGER_RELATIVE = Path("metadata") / "exposure-commit.jsonl"
-RECEIPTS_RELATIVE = Path("metadata") / "exposure.json"
-LOCK_RELATIVE = Path("metadata") / ".exposure-commit.lock"
+# Distinct from the legacy post-measurement "exposure" metadata artifact read by
+# preflight/scoring; the two records are never stored in the same file.
+LEDGER_RELATIVE = Path("metadata") / "input-exposure-commit.jsonl"
+RECEIPTS_RELATIVE = Path("metadata") / "input-exposure.json"
+LOCK_RELATIVE = Path("metadata") / ".input-exposure-commit.lock"
+# Earlier unaccepted WIP journal paths, which copied intents into legacy
+# measurements_sha256. Never ignored: presence blocks status and commit.
+LEGACY_WIP_RELATIVE = (Path("metadata") / "exposure-commit.jsonl",
+                       Path("metadata") / ".exposure-commit.lock")
+# Legacy post-measurement receipt file; must not pre-exist a pre-access commit.
+POST_MEASUREMENT_RELATIVE = Path("metadata") / "exposure.json"
 
 
 class ExposureCommitAuthorization(Record):
@@ -60,8 +75,32 @@ class ExposureCommitAuthorization(Record):
     approved_before_access: Literal[True]
 
 
+class InputExposureReceipt(Record):
+    """One arm's durable PRE-ACCESS input-exposure receipt.
+
+    `measurement_intents_sha256` is the externally declared intent/config pin for
+    this arm, frozen before any heldout input is read. It is never a result or
+    artifact hash and is never copied into legacy `ExposureReceipt`.
+    """
+    schema_version: Literal["m4-input-exposure-v1"] = "m4-input-exposure-v1"
+    event: Literal["pre_access_input_exposure"] = "pre_access_input_exposure"
+    run_id: Identity
+    edition_id: Identity
+    authority_sha256: Digest
+    seal_sha256: Digest
+    build_sha256: Digest
+    oracle_sha256: Digest
+    arm: Literal["D", "L", "P", "M", "C", "C-custom", "T"]
+    measurement_intents_sha256: Digest
+    state: Literal["consumed_holdout"] = "consumed_holdout"
+    custodian: Identity
+    committed_at: AwareDatetime
+    durable_receipt_id: Identity
+    committed_before_access_attested: Literal[True]
+
+
 class CommitEnvelope(Record):
-    schema_version: Literal[1] = 1
+    schema_version: Literal["m4-input-exposure-commit-v1"] = "m4-input-exposure-commit-v1"
     commit_id: Identity
     authorization_sha256: Digest
     authorization: ExposureCommitAuthorization
@@ -81,16 +120,20 @@ class CommitEnvelope(Record):
     rubric_sha256: Digest
     arm_inventory_sha256: Digest
     receipt_file_sha256: Digest
-    receipts: tuple[ExposureReceipt, ...] = Field(min_length=7, max_length=7)
+    receipts: tuple[InputExposureReceipt, ...] = Field(min_length=7, max_length=7)
 
 
-class CommitResult(Record):
-    state: Literal["CONSUMED_HOLDOUT"]
+class InputExposureCommit(Record):
+    """Verified committed pre-access record. Grants no input/oracle/scoring permission."""
+    schema_version: Literal["m4-input-exposure-commit-v1"] = "m4-input-exposure-commit-v1"
+    state: Literal["CONSUMED_HOLDOUT_INPUT"]
     commit_sha256: Digest
     receipt_file_sha256: Digest
     authorization: ExposureCommitAuthorization
-    receipts: tuple[ExposureReceipt, ...] = Field(min_length=7, max_length=7)
+    receipts: tuple[InputExposureReceipt, ...] = Field(min_length=7, max_length=7)
     payload_permission_granted: Literal[False] = False
+    oracle_permission_granted: Literal[False] = False
+    scoring_permission_granted: Literal[False] = False
     authorship_authenticated: Literal[False] = False
     product_acceptance: Literal[False] = False
 
@@ -283,26 +326,28 @@ def _authorize(root: Path, manifest: RunManifest, pins: PreflightPins,
             or authority.rubric_sha256 != authorization.rubric_sha256
             or authority.policy_sha256 != authorization.policy_sha256
             or authority.custodian != authorization.custodian
-            or next(row.sha256 for row in manifest.components if row.kind == "prompt")
+            or next((row.sha256 for row in manifest.components if row.kind == "prompt"), None)
                != authorization.prompt_sha256
             or arm_inventory_digest(manifest) != authorization.arm_inventory_sha256):
         raise ValueError("frozen inventory/prompt/rubric/arm authorization mismatch")
     return authority, seal, status
 
 
-def _receipt_bytes(receipts: tuple[ExposureReceipt, ...]) -> bytes:
+def _receipt_bytes(receipts: tuple[InputExposureReceipt, ...]) -> bytes:
     return _canonical_bytes([row.model_dump(mode="json") for row in receipts])
 
 
-def _parse_receipts(raw: bytes) -> tuple[ExposureReceipt, ...]:
+def _parse_receipts(raw: bytes) -> tuple[InputExposureReceipt, ...]:
     values = _strict_json(raw)
     if type(values) is not list or len(values) != len(ARMS):
-        raise ValueError("all seven exposure receipts required")
-    receipts = tuple(ExposureReceipt.model_validate(row) for row in values)
+        raise ValueError("all seven input-exposure receipts required")
+    if any(type(row) is not dict or row.get("schema_version") != INPUT_EXPOSURE_SCHEMA
+           for row in values):
+        raise ValueError("unversioned or legacy exposure receipt refused")
+    receipts = tuple(InputExposureReceipt.model_validate_json(json.dumps(row, allow_nan=False))
+                     for row in values)
     if ({row.arm for row in receipts} != set(ARMS)
-            or len({row.durable_receipt_id for row in receipts}) != len(receipts)
-            or any(not row.durable_before_access_attested
-                   or row.state != "consumed_holdout" for row in receipts)):
+            or len({row.durable_receipt_id for row in receipts}) != len(receipts)):
         raise ValueError("exposure arm inventory is incomplete or duplicated")
     return receipts
 
@@ -324,19 +369,25 @@ def _receipt_set_matches(envelope: CommitEnvelope) -> bool:
     return (
         {row.arm for row in receipts} == set(ARMS)
         and len({row.durable_receipt_id for row in receipts}) == len(ARMS)
-        and all(row.durable_before_access_attested and row.state == "consumed_holdout"
+        and len({row.committed_at for row in receipts}) == 1
+        and all(row.committed_before_access_attested is True
+            and row.schema_version == INPUT_EXPOSURE_SCHEMA
+            and row.state == "consumed_holdout"
+            and row.run_id == envelope.run_id
             and row.edition_id == envelope.edition_id
             and row.authority_sha256 == envelope.authority_sha256
             and row.seal_sha256 == envelope.seal_sha256
             and row.build_sha256 == envelope.build_sha256
             and row.oracle_sha256 == envelope.oracle_sha256
-            and row.measurements_sha256 == envelope.authorization.measurement_intents_sha256[row.arm]
+            and row.custodian == envelope.authorization.custodian
+            and row.measurement_intents_sha256
+                == envelope.authorization.measurement_intents_sha256.get(row.arm)
             for row in receipts)
     )
 
 
 def _verify_committed(root: Path, expected_authorization_sha256: str,
-                      expected_commit_sha256: str | None = None) -> CommitResult:
+                      expected_commit_sha256: str | None = None) -> InputExposureCommit:
     ledger = root / LEDGER_RELATIVE
     receipt_path = root / RECEIPTS_RELATIVE
     raw = _read_bytes(ledger, MAX_LEDGER_BYTES)
@@ -367,18 +418,19 @@ def _verify_committed(root: Path, expected_authorization_sha256: str,
     receipt_raw = _read_bytes(receipt_path, MAX_RECEIPT_BYTES)
     if (hashlib.sha256(receipt_raw).hexdigest() != envelope.receipt_file_sha256
             or events[1].get("receipt_file_sha256") != envelope.receipt_file_sha256
-            or receipt_raw != _receipt_bytes(envelope.receipts)):
+            or receipt_raw != _receipt_bytes(envelope.receipts)
+            or _parse_receipts(receipt_raw) != envelope.receipts):
         raise ValueError("exposure receipt readback does not match committed bytes")
-    return CommitResult(state="CONSUMED_HOLDOUT", commit_sha256=commit_sha,
-                        receipt_file_sha256=envelope.receipt_file_sha256,
-                        authorization=envelope.authorization,
-                        receipts=envelope.receipts)
+    return InputExposureCommit(state="CONSUMED_HOLDOUT_INPUT", commit_sha256=commit_sha,
+                               receipt_file_sha256=envelope.receipt_file_sha256,
+                               authorization=envelope.authorization,
+                               receipts=envelope.receipts)
 
 
 def commit_exposure(root: Path, manifest: RunManifest, pins: PreflightPins,
                     authorization: ExposureCommitAuthorization, *,
-                    expected_authorization_sha256: str) -> CommitResult:
-    """Durably commit all seven metadata receipts before any payload access.
+                    expected_authorization_sha256: str) -> InputExposureCommit:
+    """Durably commit all seven pre-access input-exposure receipts before any input read.
 
     This function does not return file bytes, paths to payloads, or permission.
     Exact replay returns the already committed receipts. Any partial, torn, or
@@ -392,20 +444,28 @@ def commit_exposure(root: Path, manifest: RunManifest, pins: PreflightPins,
                                            expected_authorization_sha256)
     ledger, receipt_path = root / LEDGER_RELATIVE, root / RECEIPTS_RELATIVE
     lock_path = root / LOCK_RELATIVE
+    if any(os.path.lexists(root / path) for path in LEGACY_WIP_RELATIVE):
+        raise ValueError("legacy WIP exposure journal present; edition blocked")
     with _exclusive_lock(lock_path):
-        if ledger.exists() or receipt_path.exists():
+        if os.path.lexists(ledger) or os.path.lexists(receipt_path):
             return _verify_committed(root, expected_authorization_sha256)
+        if os.path.lexists(root / POST_MEASUREMENT_RELATIVE):
+            raise ValueError("post-measurement exposure precedes pre-access commit; edition blocked")
         if not ledger.parent.is_dir() or not receipt_path.parent.is_dir():
             raise ValueError("pre-existing metadata directory required")
         commit_id = uuid4().hex
         now = datetime.now(timezone.utc)
-        receipts = tuple(ExposureReceipt(
+        if now < seal.sealed_at:
+            raise ValueError("input exposure cannot precede the custody seal")
+        # Pre-access intents only; no legacy ExposureReceipt is constructed here.
+        receipts = tuple(InputExposureReceipt(
+            run_id=authorization.run_id,
             edition_id=authority.edition_id, authority_sha256=pins.authority_sha256,
             seal_sha256=metadata_digest(seal), build_sha256=authority.frozen_build_sha256,
-            oracle_sha256=authority.oracle_sha256,
-            measurements_sha256=authorization.measurement_intents_sha256[arm],
-            arm=arm, custodian=authority.custodian, exposed_at=now,
-            durable_receipt_id=uuid4().hex, durable_before_access_attested=True)
+            oracle_sha256=authority.oracle_sha256, arm=arm,
+            measurement_intents_sha256=authorization.measurement_intents_sha256[arm],
+            custodian=authority.custodian, committed_at=now,
+            durable_receipt_id=uuid4().hex, committed_before_access_attested=True)
             for arm in ARMS)
         receipt_raw = _receipt_bytes(receipts)
         envelope = CommitEnvelope(
@@ -446,25 +506,37 @@ def commit_exposure(root: Path, manifest: RunManifest, pins: PreflightPins,
 def verify_committed_exposure(root: Path, manifest: RunManifest, pins: PreflightPins,
                               authorization: ExposureCommitAuthorization, *,
                               expected_authorization_sha256: str,
-                              expected_commit_sha256: str) -> CommitResult:
-    """Narrow metadata-only D4 seam; must run before separate permission-gated reads."""
+                              expected_commit_sha256: str) -> InputExposureCommit:
+    """Narrow metadata-only D4 seam; must run before separate permission-gated reads.
+
+    Returns the committed `InputExposureReceipt` rows. D4 compares each row's
+    `measurement_intents_sha256` with its own `HeldoutAuthorization` intents. Success
+    is never input, oracle or scoring permission.
+    """
     authority, seal, _status = _authorize(root.absolute(), manifest, pins, authorization,
         expected_authorization_sha256, allow_consumed=True)
     result = _verify_committed(root.absolute(), expected_authorization_sha256,
                                expected_commit_sha256)
     if any(row.seal_sha256 != metadata_digest(seal)
            or row.authority_sha256 != pins.authority_sha256
-           or row.custodian != authority.custodian for row in result.receipts):
+           or row.custodian != authority.custodian
+           or row.committed_at < seal.sealed_at for row in result.receipts):
         raise ValueError("committed receipt differs from current frozen custody metadata")
     return result
 
 
 def exposure_status(root: Path, expected_authorization_sha256: str | None = None) -> ExposureJournalStatus:
-    """Read-only payload-free status; it never repairs or completes a partial journal."""
+    """Read-only payload-free status; it never repairs or completes a partial journal.
+
+    A lock file alone is not a commit: the lock is created before any journal byte
+    and is never removed, so its presence without a ledger/receipt means nothing
+    was written (or a writer is in progress) and the edition is still UNCONSUMED.
+    """
     _safe_path(root)
     ledger, receipts = root / LEDGER_RELATIVE, root / RECEIPTS_RELATIVE
-    lock_path = root / LOCK_RELATIVE
-    if not ledger.exists() and not receipts.exists() and not lock_path.exists():
+    if any(os.path.lexists(root / path) for path in LEGACY_WIP_RELATIVE):
+        return ExposureJournalStatus(state="BLOCKED", reason_code="legacy_wip_exposure_journal_present")
+    if not os.path.lexists(ledger) and not os.path.lexists(receipts):
         return ExposureJournalStatus(state="UNCONSUMED", reason_code="no_exposure_commit")
     try:
         raw = _read_bytes(ledger, MAX_LEDGER_BYTES)
@@ -475,8 +547,8 @@ def exposure_status(root: Path, expected_authorization_sha256: str | None = None
         if expected_authorization_sha256 is not None and envelope.authorization_sha256 != expected_authorization_sha256:
             raise ValueError("authorization_conflict")
         result = _verify_committed(root, envelope.authorization_sha256)
-        return ExposureJournalStatus(state="COMMITTED", reason_code="all_seven_committed",
+        return ExposureJournalStatus(state="COMMITTED", reason_code="all_seven_input_exposures_committed",
             commit_sha256=result.commit_sha256, receipt_file_sha256=result.receipt_file_sha256,
             exposed_arms=tuple(row.arm for row in result.receipts))
-    except (OSError, ValueError, TypeError, KeyError):
+    except (OSError, ValueError, TypeError, KeyError, RecursionError):
         return ExposureJournalStatus(state="BLOCKED", reason_code="incomplete_or_ambiguous_commit")

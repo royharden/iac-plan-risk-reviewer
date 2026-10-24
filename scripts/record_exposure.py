@@ -1,7 +1,10 @@
-"""Commit or inspect a metadata-only, all-seven-arm exposure journal.
+"""Commit or inspect the metadata-only, all-seven-arm PRE-ACCESS input-exposure journal.
 
 The record command never opens case input, oracle, outcome, prose, or measurement
-payloads. A committed receipt records consumption and still grants no access.
+payloads. It writes versioned `InputExposureReceipt` rows (declared measurement
+intents, never results) and never the legacy post-measurement `ExposureReceipt`.
+A committed receipt records consumption and still grants no input, oracle or
+scoring access.
 """
 from __future__ import annotations
 
@@ -11,7 +14,9 @@ import json
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+_root_dir = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_root_dir / "src"))
+sys.path.insert(0, str(_root_dir))
 
 from iac_review.contracts.manifest import RunManifest
 from eval.runner.bundle import root_digest
@@ -60,7 +65,7 @@ def _root(path: Path, expected_sha256: str) -> Path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    record = commands.add_parser("record", help="durably commit seven metadata receipts")
+    record = commands.add_parser("record", help="durably commit seven pre-access input-exposure receipts")
     record.add_argument("--root", type=Path, required=True)
     record.add_argument("--root-sha256", required=True)
     record.add_argument("--manifest", type=Path, required=True)
@@ -89,8 +94,10 @@ def main(argv: list[str] | None = None) -> int:
         manifest = RunManifest.model_validate_json(manifest_raw)
         if metadata_digest(manifest) != args.run_manifest_sha256:
             raise ValueError("canonical run manifest pin mismatch")
-        _auth_raw, auth_wire = _read_pinned(args.authorization, args.authorization_file_sha256)
-        authorization = ExposureCommitAuthorization.model_validate(auth_wire)
+        # Duplicate/nonfinite checks ran in _read_pinned; strict JSON-mode validation of
+        # the exact pinned bytes follows (the wire dict itself is not revalidated).
+        auth_raw, _auth_wire = _read_pinned(args.authorization, args.authorization_file_sha256)
+        authorization = ExposureCommitAuthorization.model_validate_json(auth_raw)
         pins = PreflightPins(run_manifest_sha256=args.run_manifest_sha256,
             authority_sha256=authorization.authority_sha256,
             semantic_suite_sha256=args.semantic_suite_sha256,
@@ -101,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             expected_authorization_sha256=args.authorization_sha256)
         print(result.model_dump_json())
         return 0
-    except (OSError, ValueError, TypeError, KeyError) as error:
+    except (OSError, ValueError, TypeError, KeyError, RecursionError) as error:
         print(f"EXPOSURE_JOURNAL_REJECTED: {type(error).__name__}", file=sys.stderr)
         return 2
 
