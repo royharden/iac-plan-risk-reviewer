@@ -278,13 +278,17 @@ def test_v2_binding_reaches_adapter_invocation_and_manifest_pin(tmp_path):
     "field,value",
     [
         ("tree_sha256", "0" * 64),
-        ("root", Path("C:/different/policy")),
-        ("manifest_path", Path("C:/different/manifest.json")),
+        ("root", Path("different/policy")),
+        ("manifest_path", Path("different/manifest.json")),
     ],
 )
 def test_each_typed_binding_field_changes_invocation_identity(tmp_path, field, value):
     manifest, kwargs, _, _ = binding_fixture(tmp_path)
     _, invocation, _, _ = artificial_granted_runner(tmp_path, manifest, kwargs)
+    if field in {"root", "manifest_path"}:
+        value = tmp_path / value
+        assert value.is_absolute()
+        assert value != getattr(invocation.bundle_inventory, field)
     changed = replace(invocation.bundle_inventory, **{field: value})
     assert invocation_digest(replace(invocation, bundle_inventory=changed)) != invocation_digest(
         invocation
