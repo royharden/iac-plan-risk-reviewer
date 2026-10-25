@@ -21,6 +21,8 @@ from types import SimpleNamespace
 import pytest
 from eval.scanners.bundle_inventory import BundleInventory, load_bundle_inventory, verify_tree
 
+from eval.scanners import bundle_inventory as inventory_module
+
 FIXTURES = Path(__file__).parent / "fixtures" / "trivy-bundle-v1"
 SMALL_SHA = "171e51e9eea6c8e9d2cba4da52f583b9be56110fdae61f08ec72e1b22a60f024"
 REFUSAL = (ValueError, OSError, TimeoutError)
@@ -482,6 +484,55 @@ def test_manifest_byte_cap_before_json_parse(tmp_path):
     manifest.write_bytes(raw)
     descriptor["tree_sha256"] = hashlib.sha256(raw).hexdigest()
     refused(descriptor, tmp_path)
+
+
+@pytest.mark.parametrize("cap", [65536, 524288])
+@pytest.mark.parametrize("offset", [-1, 0, 1])
+def test_direct_bounded_read_enforces_exact_cap(tmp_path, cap, offset):
+    """what_bug_this_catches: a cap argument without actual bounded-read enforcement."""
+    path = tmp_path / "owned-bounded-read.bin"
+    raw = b"x" * (cap + offset)
+    path.write_bytes(raw)
+    if offset > 0:
+        with pytest.raises(ValueError, match="byte cap exceeded"):
+            inventory_module._read(path, cap)
+    else:
+        assert inventory_module._read(path, cap) == raw
+    assert path.read_bytes() == raw
+
+
+@pytest.mark.parametrize("size", [524287, 524288, 524289])
+def test_manifest_cap_is_checked_before_parser_entry(tmp_path, monkeypatch, size):
+    """what_bug_this_catches: invalid JSON masks a missing manifest read-size gate.
+
+    Near/at-cap raw bytes must reach the parser unchanged; over-cap raw bytes
+    must be rejected without invoking it. These are read/parser boundary probes,
+    not claims that a full-cap valid canonical tree satisfies every other cap.
+    """
+    descriptor, _, manifest = small_tree(tmp_path)
+    raw = b" " * size
+    manifest.write_bytes(raw)
+    descriptor["tree_sha256"] = hashlib.sha256(raw).hexdigest()
+    calls = []
+
+    class ParserReached(Exception):
+        pass
+
+    def parser_spy(value, *args, **kwargs):
+        calls.append(value)
+        if size > 524288:
+            raise AssertionError("over-cap manifest reached JSON parser")
+        raise ParserReached
+
+    monkeypatch.setattr(inventory_module.json, "loads", parser_spy)
+    if size > 524288:
+        with pytest.raises(ValueError, match="byte cap exceeded"):
+            load_bundle_inventory(descriptor, tmp_path)
+        assert calls == []
+    else:
+        with pytest.raises(ParserReached):
+            load_bundle_inventory(descriptor, tmp_path)
+        assert calls == [raw.decode("utf-8")]
 
 
 def test_data_open_error_fails_closed(tmp_path, monkeypatch):

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import time
 from dataclasses import asdict, replace
 from pathlib import Path, PurePosixPath
@@ -648,3 +649,120 @@ def test_raw_persistence_failure_stays_incomplete_when_deadline_also_expires(tmp
     # The successful mocked terminal storage reports a failed raw persistence
     # honestly, regardless of which failure code wins or whether stderr is tried.
     assert terminal["retained_output_complete"] is False
+
+
+@pytest.mark.parametrize(
+    "boundary,target,expire",
+    [("none", "none", False)]
+    + [
+        (boundary, target, expire)
+        for boundary in ("write", "flush", "fsync")
+        for target in ("stdout", "stderr", "both")
+        for expire in (False, True)
+    ],
+)
+def test_real_output_stream_faults_preserve_retention_truth(
+    tmp_path, monkeypatch, boundary, target, expire
+):
+    """what_bug_this_catches: one failed raw stream suppresses the other or timeout
+    turns failed durability into a complete-retention attestation.
+
+    Real exclusively opened files and production _write_bytes/_receipt remain in
+    use. Wrappers inject synthetic OSError after actual partial write, flush, or
+    fsync; this does not simulate a kernel or disk failure.
+    """
+    manifest, kwargs, _, _ = binding_fixture(tmp_path)
+    runner, _, approval, _ = artificial_granted_runner(tmp_path, manifest, kwargs)
+    calls, output = mocked_popen(monkeypatch, kwargs)
+    original_open, original_fsync = Path.open, os.fsync
+    opened, injected, active = [], [], {}
+    clock = [0.0]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+
+    def fail(role, stage):
+        if boundary == stage and target in (role, "both"):
+            injected.append((role, stage))
+            if expire:
+                clock[0] = 31.0
+            raise OSError("owned synthetic " + role + " " + stage + " failure")
+
+    class StreamBoundary:
+        def __init__(self, stream, role):
+            self.stream, self.role = stream, role
+
+        def __enter__(self):
+            self.stream.__enter__()
+            active[self.stream.fileno()] = self.role
+            return self
+
+        def __exit__(self, *args):
+            active.pop(self.stream.fileno())
+            return self.stream.__exit__(*args)
+
+        def write(self, raw):
+            if boundary == "write" and target in (self.role, "both"):
+                partial = raw[: max(1, len(raw) // 2)]
+                assert self.stream.write(partial) == len(partial)
+                fail(self.role, "write")
+            return self.stream.write(raw)
+
+        def flush(self):
+            self.stream.flush()
+            fail(self.role, "flush")
+
+        def fileno(self):
+            return self.stream.fileno()
+
+    def opened_file(path, *args, **options):
+        stream = original_open(path, *args, **options)
+        if args and args[0] == "xb":
+            for role in ("stdout", "stderr"):
+                if path.name.startswith(".scanner-" + role + "-"):
+                    opened.append(role)
+                    return StreamBoundary(stream, role)
+        return stream
+
+    def fsync(fd):
+        original_fsync(fd)
+        if fd in active:
+            fail(active[fd], "fsync")
+
+    monkeypatch.setattr(Path, "open", opened_file)
+    monkeypatch.setattr(os, "fsync", fsync)
+    report = compare(manifest, runner=runner)
+    assert len(calls) == 1
+    assert opened == ["stdout", "stderr"]
+    terminal = json.loads(
+        (tmp_path / f".scanner-terminal-{approval.invocation_sha256}.json").read_bytes()
+    )
+    expected = {"stdout": output, "stderr": b"owned synthetic stderr"}
+    affected = set() if target == "none" else {"stdout", "stderr"} if target == "both" else {target}
+    assert injected == [(role, boundary) for role in ("stdout", "stderr") if role in affected]
+    for role, raw in expected.items():
+        retained = (tmp_path / terminal[role + "_file"]).read_bytes()
+        wanted = raw[: max(1, len(raw) // 2)] if role in affected and boundary == "write" else raw
+        assert retained == wanted
+    assert terminal["retained_output_complete"] is (not affected)
+    assert terminal["timed_out"] is expire
+    if affected:
+        assert terminal["error_code"] == (
+            "complete_tree_attempt_timeout" if expire else "raw_output_write_failed"
+        )
+        assert all(
+            row["introduced_prediction"] is None and not row["live_eligible"]
+            for row in report["rows"]
+        )
+        assert next(row for row in report["capture_receipts"] if row["arm"] == "T")["status"] in {
+            "error",
+            "timeout",
+            "invalid",
+        }
+        batch = bridge_report(
+            json.loads(json.dumps(report)),
+            expected_report_sha256=report_digest(report),
+            edition_id="test_edition",
+        )
+        assert all(row.eligibility_ref is None for row in batch.rows)
+    else:
+        assert terminal["error_code"] is None
+        assert any(row["introduced_prediction"] is True for row in report["rows"])
