@@ -41,7 +41,7 @@ ConvertTo-Json -InputObject $command | Set-Content -LiteralPath (Join-Path $evid
 $previousPythonPath = $env:PYTHONPATH
 $previousEncoding = $env:PYTHONUTF8
 try {
-    $env:PYTHONPATH = Join-Path $repoRoot 'src'
+    $env:PYTHONPATH = (Join-Path $repoRoot 'src') + [System.IO.Path]::PathSeparator + $repoRoot
     $env:PYTHONUTF8 = '1'
     & $pythonPath @pytestArgs 2>&1 | Tee-Object -FilePath (Join-Path $evidencePath 'pytest.txt')
     $testExitCode = $LASTEXITCODE
