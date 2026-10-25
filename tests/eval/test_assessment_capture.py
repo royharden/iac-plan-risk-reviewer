@@ -189,7 +189,11 @@ def test_driver_index_round_trips_to_D7_manual_annotation_without_truth(tmp_path
     # Explicit synthetic HUMAN span input, not production automatic segmentation.
     inventory = make_inventory(artifact, (SpanSpec(start=0, end=len(artifact.prose), kind="claim", withheld=True),),
                                "9" * 32)
-    rubric = Rubric(rubric_id="a" * 32, required_fact_ids=(), required_limitation_ids=())
+    from eval.model.explanation_artifacts import text_digest
+    rubric_text = "Public plumbing fixture: no independent semantic assessment."
+    rubric = Rubric(rubric_id="a" * 32, rubric_text=rubric_text,
+                    rubric_text_sha256=text_digest(rubric_text),
+                    required_fact_ids=(), required_limitation_ids=())
     first = prepare_sheet(artifact, inventory, rubric, "8" * 32, "6" * 32)
     second = prepare_sheet(artifact, inventory, rubric, "6" * 32, "8" * 32)
     assert all(row.label is None for row in first.rows)

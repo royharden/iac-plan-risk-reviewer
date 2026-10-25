@@ -169,9 +169,12 @@ def test_missing_real_pins_never_selects_or_calls_a_runner(tmp_path: Path) -> No
     assert all(row["introduced_prediction"] is None for row in report["rows"])
 
 
-def test_hidden_scope_is_not_read_by_development_driver(tmp_path: Path) -> None:
+def test_hidden_scope_is_not_read_by_development_driver(tmp_path: Path, monkeypatch) -> None:
     """what_bug_this_catches: convenience scanner command exposing a sealed holdout."""
     manifest, _, _ = setup_case(tmp_path)
     manifest["input_scope"] = "heldout"
-    with pytest.raises(ValueError, match="development synthetic"):
+    def forbidden_read(*args, **kwargs):
+        raise AssertionError("case bytes must not be read for unguarded scope")
+    monkeypatch.setattr(Path, "read_bytes", forbidden_read)
+    with pytest.raises(ValueError):
         compare(manifest)
