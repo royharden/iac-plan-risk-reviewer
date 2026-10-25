@@ -14,15 +14,33 @@ first 64 KiB of each stream is included as base64 with full-file size and hash
 in the container logs. A truncated prefix is explicit. Preserve the stopped
 container, image, context, logs and inspection receipts.
 
-Example (a fresh absolute evidence directory is mandatory):
+Requires PowerShell 7 with modern .NET. A fresh absolute evidence leaf and an
+existing regular parent directory are mandatory. Every existing evidence ancestor
+is checked from the filesystem root; links, junctions and reparse points are refused
+before any ports or Docker calls. The leaf is created without overwrite before
+external operations. This does not provide immunity to concurrent ancestor changes;
+use an exclusively controlled regular directory outside OneDrive reparse roots.
+
+Example:
 
 ```powershell
 ./scripts/docker_scanners.ps1 -EvidenceDirectory 'C:/path/to/new-m4-evidence'
 ```
 
-The script claims/checks its M4 instance before Docker operations. No listener
-is opened. The default instance is `r03-rv2-scanners-prep`; choose another unique
-instance for another retained probe run. The source lock is bound to D11 commit
+The script refuses existing image and container names for its selected M4 instance
+before build, then claims/checks that instance before build/run. No listener is
+opened. The default instance is `r03-rv2-scanners-prep`; choose another unique
+instance for another retained probe run. Existing resources are retained. Build
+captures an immutable image ID and run uses that ID. Container receipts and logs
+use the captured container ID and must match the image, name, labels and exit state.
+Every required native command exit is recorded and checked, including Git,
+resource preflight, inspection, logs and ports observation. Empty/malformed receipts
+and incomplete raw stream metadata fail closed. `result.json` is written only after
+all checks pass. Failure retains the context, command receipts and `failure.json`;
+a nonzero probe run attempts log/inspection/observation capture before failing.
+No Docker resource is deleted or retagged on collision. These preflight checks are
+not an exclusive Docker namespace reservation against another concurrent writer.
+The source lock is bound to D11 commit
 `1e59284f4180adfe75848943d3fb21f9d308afc8` and SHA256
 `3bc130464fd7c4e7c17a2bf8441cbe046cee0db4aa067ea64433da6c368c44d2`.
 
@@ -36,3 +54,12 @@ Primary raw-output persistence requires a durable reviewed retention path; a
 stopped container does not retain files from a temporary filesystem. The probe
 uses its durable Docker logs instead. This preparation image does not implement
 primary capture or grant handling.
+
+Focused failure regressions invoke a fresh `pwsh -NoProfile -NonInteractive`
+process with Git, ports and Docker functions mocked. They perform no Docker or
+scanner execution. Source inputs alone are modeled as approved regular inputs;
+the evidence collision and junction controls exercise the real filesystem.
+
+```powershell
+python -m pytest evals/scanners/tests/test_metadata_launcher.py -q
+```
