@@ -25,7 +25,7 @@ from iac_review.contracts import (
 from iac_review.contracts.report_inventory import (
     BOUND_PAYLOADS, PRIVACY_TEXT, AbortedMarker, classify_bundle, validate_export_state,
 )
-from iac_review.evidence import resolve, verify_unchanged
+from iac_review.evidence import resolve_many, verify_unchanged
 from iac_review.ingest import InputError, MAX_BYTES, MAX_SECONDS
 from iac_review.provenance import (
     DESCRIPTOR_FILE, ReportProvenance, descriptor_bytes, local_descriptor,
@@ -150,13 +150,10 @@ def build_report(
     if plan.coverage or any(not resource.action_supported for resource in plan.resources):
         limitations.add("unsupported_input")
 
-    private_rows: list[dict[str, Any]] = []
-    shared_rows: list[dict[str, Any]] = []
+    # Preserve every eligible occurrence in decision/supporting order. Fact IDs
+    # are labels, not deduplication keys or a safe join between result positions.
+    ordered_refs: list[EvidenceRef] = []
     seen: set[tuple[str, str]] = set()
-    counts: Counter[str] = Counter()
-    threshold_risk = False
-    risk_present = False
-    evidence_failures: list[dict[str, str]] = []
     for evaluation in evaluations:
         if monotonic() - started > MAX_SECONDS:
             raise InputError("review_time_limit")
@@ -167,6 +164,27 @@ def build_report(
         if row_key in seen:
             raise ValueError("duplicate resource/rule evaluation")
         seen.add(row_key)
+        for refs in (evaluation.decision_refs, evaluation.supporting_refs):
+            for ref in refs:
+                if monotonic() - started > MAX_SECONDS:
+                    raise InputError("review_time_limit")
+                if ref.resource_key == resource.key and ref.resource_index == resource.index:
+                    ordered_refs.append(ref)
+    resolved_refs = resolve_many(plan, tuple(ordered_refs), deadline=started + MAX_SECONDS)
+    if len(resolved_refs) != len(ordered_refs):
+        raise ValueError("batch evidence result count mismatch")
+    resolved_positions = iter(resolved_refs)
+
+    private_rows: list[dict[str, Any]] = []
+    shared_rows: list[dict[str, Any]] = []
+    counts: Counter[str] = Counter()
+    threshold_risk = False
+    risk_present = False
+    evidence_failures: list[dict[str, str]] = []
+    for evaluation in evaluations:
+        if monotonic() - started > MAX_SECONDS:
+            raise InputError("review_time_limit")
+        resource = resources[evaluation.resource_key]
         if evaluation.applicability == "unsupported_shape":
             limitations.add("unsupported_shape")
         if evaluation.coverage:
@@ -191,7 +209,9 @@ def build_report(
                     else:
                         local_limits.add("supporting_evidence_omitted")
                     continue
-                resolved = resolve(plan, ref)
+                resolved = next(resolved_positions)
+                if resolved.ref != ref:
+                    raise ValueError("batch evidence result order mismatch")
                 marker_allowed = (
                     outcome == "indeterminate" and
                     resolved.status in {"unknown", "sensitive"}
