@@ -7,11 +7,16 @@ from uuid import uuid4
 import pytest
 
 from iac_review import report as reporting
-from iac_review.rules import SEVERITIES
 from iac_review.contracts import (
-    EvidenceRef, PlanDocument, PlanIdentity, ResolvedEvidence, ResourceChange,
-    RuleEvaluation, ValueState,
+    EvidenceRef,
+    PlanDocument,
+    PlanIdentity,
+    ResolvedEvidence,
+    ResourceChange,
+    RuleEvaluation,
+    ValueState,
 )
+from iac_review.rules import SEVERITIES
 
 
 @pytest.mark.parametrize("foreign_field", ["key", "index", "both"])
@@ -62,12 +67,14 @@ def test_foreign_reference_is_not_resolved_or_displayed(monkeypatch, foreign_fie
             ))
     resolved_ids = []
 
-    def resolve(_plan, evidence):
-        resolved_ids.append(evidence.fact_id)
-        return ResolvedEvidence(ref=evidence, status="resolved", value=evidence.expected)
+    def resolve_many(_plan, refs, *, deadline=None):
+        assert deadline is not None
+        resolved_ids.extend(ref.fact_id for ref in refs)
+        return tuple(ResolvedEvidence(ref=ref, status="resolved", value=ref.expected)
+                     for ref in refs)
 
     monkeypatch.setattr(reporting, "verify_unchanged", lambda _plan: None)
-    monkeypatch.setattr(reporting, "resolve", resolve)
+    monkeypatch.setattr(reporting, "resolve_many", resolve_many)
     result = reporting.build_report(plan, tuple(rows))
     target = next(row for row in result.private["evaluations"]
                   if row["address"] == resources[0].address and row["rule_id"] == "R2")
