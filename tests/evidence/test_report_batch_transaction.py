@@ -293,3 +293,38 @@ def test_actual_windows_ancestor_junction_is_refused(core_change, core_plan_file
     linked = plan.model_copy(update={"source_path": str(junction / "plan.json")})
     with pytest.raises(InputError):
         batch(linked, [ref])
+
+
+def test_batch_report_preserves_default_effect_and_masking_boundary(
+    core_change, core_plan_file, tmp_path, monkeypatch,
+):
+    import os
+    import socket
+    import subprocess
+    import urllib.request
+
+    from iac_review import cli, explain
+
+    source = core_plan_file([core_change(
+        actions=("create",),
+        after={"publicly_accessible": True, "storage_encrypted": "BATCH_MARKED_SECRET"},
+        change_fields={"after_sensitive": {"storage_encrypted": True}},
+    )])
+    original = source.read_bytes()
+
+    def denied(*_args, **_kwargs):
+        raise AssertionError("Default batch report attempted a network/process/model effect")
+
+    monkeypatch.setattr(socket, "socket", denied)
+    monkeypatch.setattr(socket, "create_connection", denied)
+    monkeypatch.setattr(urllib.request, "urlopen", denied)
+    monkeypatch.setattr(subprocess, "Popen", denied)
+    monkeypatch.setattr(subprocess, "run", denied)
+    monkeypatch.setattr(os, "system", denied)
+    monkeypatch.setattr(explain.FakeSelector, "select", denied)
+    out = tmp_path / "effect-guarded-bundle"
+    assert cli.main(["inspect", str(source), "--out", str(out)]) == 2
+    assert source.read_bytes() == original
+    for name in ("private.json", "shareable.json", "private.html", "shareable.html"):
+        assert "BATCH_MARKED_SECRET" not in (out / name).read_text(encoding="utf-8")
+    assert set(tmp_path.iterdir()) == {source, out}
