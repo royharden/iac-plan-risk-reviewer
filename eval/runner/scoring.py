@@ -295,8 +295,7 @@ def score(oracle: list[OracleRow], measured: list[ArmRow], split: str, *,
             recall = ratio(counts["tp"], counts["tp"] + counts["fn"])
             per_rule[rule] = dict(counts) | {
                 "precision": precision, "recall": recall,
-                "f1": 2 * precision * recall / (precision + recall)
-                if precision is not None and recall is not None and precision + recall else None,
+                "f1": ratio(2 * counts["tp"], 2 * counts["tp"] + counts["fp"] + counts["fn"]),
                 "abstention_rate": ratio(counts["decidable_abstentions"], counts["supported_decidable"]),
                 "gold_unknown_rate": ratio(counts["gold_indeterminate"], counts["total"]),
                 "unsupported_rate": ratio(counts["unsupported"], counts["total"]),

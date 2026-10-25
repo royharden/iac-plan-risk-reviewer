@@ -138,7 +138,7 @@ def import_assessments(
     authority_by_key = {(row.expected_case.case_id, row.expected_case.resource_id,
                          row.expected_case.rule_id): row for row in selected_authority}
     if len({row.finding_id for row in verified.p_outcomes}) != len(verified.p_outcomes):
-        raise ValueError("duplicate P finding outcome in verified capture index")
+        raise ValueError("duplicate P outcome in verified capture index")
     outcome_by_finding = {row.finding_id: row for row in verified.p_outcomes}
     from eval.runner.model_bridge import _json as parse_export_json
     exported_observations = parse_export_json(bundle.observations_json)
@@ -169,7 +169,7 @@ def import_assessments(
         case_id = authorized.expected_case.case_id
         cases.append(authorized.expected_case)
         candidate_artifacts = [row for row in artifact_by_id.values()
-            if (row.case_id, *finding_key.get(row.finding_id, (None, None))) == key]
+            if row.case_id == key[0] and finding_key.get(row.finding_id) == key]
         if len(candidate_artifacts) != 1:
             failures.append({"case_id": case_id, "reason": "missing_or_ambiguous_capture_artifact"})
             continue

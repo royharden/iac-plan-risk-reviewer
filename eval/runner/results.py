@@ -235,6 +235,7 @@ def _batch_view(value: dict | None) -> dict | None:
         "total_usd": known if complete and billing_known else None,
         "billing_fully_known": billing_known,
         "invocation_costs_added_to_journal": False,
+        "invocation_costs_added_to_global": False,
         "live_evidence_eligible": False,
     }
 
