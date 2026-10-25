@@ -1,88 +1,94 @@
-# Limits and deferred validation
+# Limits and remaining validation
 
-## Nothing has run
+## Development evidence and its limits
 
-- This is construction source. No dependency was installed and no module was imported,
-  executed or tested. The only checks were syntax parsing and focused source inspection,
-  which do not establish runtime correctness, privacy behavior, effects, performance,
-  memory bounds or crash behavior.
-- All regression files under `tests/` are authored source; none has run or passed.
-- Dependencies are declared ranges in `pyproject.toml`, not a locked or audited set.
-  Licensing, publication and independent product acceptance are pending. There is no
-  remote deployment.
+The keyless combined code has been installed, imported and executed. Recorded
+validation on 2026-10-25 passed 946 development tests without failures/errors/skips,
+24 public synthetic cases and four host CLI journeys; the combined-code container
+also passed 24 cases and four journeys with network disabled. Independent component
+reviews and synthetic evidence/privacy/effect/failure regressions have executed.
+See [testing](TESTING.md) for commands and versions.
 
-## Deferred validation (in order)
+These are scoped development results. They do not establish genuine producer
+compatibility, held-out accuracy, model value, productivity, live cost, every OS
+race/crash outcome or whole-plan/product/release acceptance. Dependencies are
+locked; a comprehensive security/license audit and the final rebuilt distributable
+remain separate work. There is no hosted deployment or published release.
 
-1. Lock and audit dependencies; pin real Terraform/AWS producer and scanner tool versions.
-   Then run the core, import, schema, CLI, privacy, effect, journal and crash regressions.
-2. Exercise the held-out exposure split: the pre-access input-exposure commit (measurement
-   intents) versus the post-measurement exposure receipt (actual results hash), and the
-   sealed-plus-committed input-access path. These are source contracts only; runtime and
-   custody behavior are unverified.
-3. Exercise the strict JSON-mode assessment batch intake (exact pinned bytes after duplicate
-   and non-finite checks); untested.
-4. Appoint an independent oracle author, checker and rubric assessors; seal a lineage-
-   disjoint held-out corpus; confirm provider prices and caps; then measure all seven arms
-   (D, L, P, M, C, C-custom, T), keeping every attempt and its cost. All seven are
-   **NOT MEASURED**. Independent final acceptance has not started.
+## Remaining gates
+
+1. Establish actual Terraform/AWS producer profiles and missing per-minor format
+   fixtures. JSON 1.2 has direct synthetic parser evidence; accepted 1.0/1.1 targets
+   do not yet have separately established per-minor evidence. Synthetic version
+   strings do not prove producing tool/provider compatibility.
+2. Complete actual scanner binary/custom-policy pinning and compatible development
+   captures. This is separate from scanner adapter/fake tests and from the required
+   comparative measurements. Missing tools/mappings are incomplete, not negatives.
+3. Appoint independent oracle author/checker and rubric assessors, seal a lineage-
+   disjoint hidden corpus before tuning, and obtain explicit authorization for
+   genuine held-out exposure and any provider/model/price/cap. Synthetic metadata
+   regressions do not establish real custody, scoring authority or independent truth.
+4. Execute required D/L/P/M/C/C-custom/T experiments with genuine provenance and all
+   attempts/cost liabilities retained. All seven comparative arms are NOT MEASURED;
+   local deterministic tests do not close the benchmark. Finish independent product
+   and release acceptance before making a readiness or publication claim.
 
 ## Product scope
 
-- R1 covers world-open TCP (or all-protocol `-1`) 22/3389 in the standalone `aws_security_group_rule` shape only.
-  It is not general exposure or reachability analysis. Prefix-list and security-group
-  sources are unsupported, never assumed private. Inline and newer ingress shapes are out of
-  scope.
-- R2 is declared public accessibility, not proven routing. R3 is encryption-flag removal
-  only. R4 is declared destructive intent; it does not prove data loss or missing backups,
-  and no tag suppresses it.
-- Unknown or sensitive required facts are never inferred from other fields; they make the
-  predicate indeterminate. Omitted completeness/errored flags stay unknown and make the
-  review inconclusive.
-- JSON format versions listed in [compatibility](COMPATIBILITY.md) are parser targets, not
-  fixture-tested support. No Terraform or AWS provider version is claimed as tested.
-- An address containing a lone surrogate escape passes ingest but fails strict report
-  validation, so that plan gets no report (fail closed).
+- R1 covers world-open TCP or all-protocol `-1` ingress for 22/3389 in standalone
+  `aws_security_group_rule` only. It is not general exposure/reachability analysis.
+  Inline/newer shapes, database ports, prefix-list and security-group sources are
+  outside the supported predicate; unsupported sources are never assumed private.
+- R2 is declared public accessibility, not proven routing. R3 is encryption-flag
+  removal only. R4 flags supported RDS/EBS destructive intent, not proven data loss
+  or missing backups. Tags never suppress the warning.
+- Required unknown/sensitive facts are not guessed from other fields. Missing
+  completeness/errored flags keep whole-review coverage inconclusive. A risk may
+  remain visible alongside exit 2; no exit means globally secure or authorizes apply.
+- A lone-surrogate resource address can pass ingestion but fail strict report wire
+  validation; the CLI then refuses the report rather than emitting malformed output.
 
-## Privacy
+## Privacy and integrity
 
-- Private reports keep exact addresses and JSON pointers, which can themselves contain
-  secrets even though marked values are masked. Treat the whole private report and the
-  `evidence` command's output as sensitive and local.
-- Shareable reports contain opaque IDs and allowlisted Boolean, numeric and fixed-enum facts
-  only. The allowlist reduces outbound exposure; it is not a general secret detector.
-- Never upload a whole report directory. Check that `export-state.json` says `COMPLETE`,
-  then use the [share exporter](SHARING.md) with the original plan. Legacy (manifest 1.0.0)
-  bundles stay unbound and need re-inspection.
-- Demo fixtures are synthetic development data and must never be relabeled as held-out
-  evidence.
+Private reports and evidence stdout retain exact addresses/pointers, which can
+contain secrets even when marked values are masked. Keep the whole private bundle
+local. Shareable files use random IDs and fixed safe facts; this allowlist is not
+a general secret detector. Never upload a whole report directory or use private
+plans for a public demo. [Safe sharing](SHARING.md) regenerates from a COMPLETE
+current bound bundle and explicit original plan into a fresh separate directory.
+Legacy or stale bundles require reinspection; private mappings are never shared.
 
-## Integrity and verification
+Bundle hashes and provenance descriptors establish consistency, not producer,
+execution, oracle or detector authenticity. Report payloads are bounded at 16 MiB;
+smaller descriptor/control caps and string limits can refuse a large review. An
+ABORTED marker or pending remnants are not a complete report. Cooperative deadlines
+are checked between operations; OS termination and refused cleanup can leave
+ABORTED artifacts. Selected journal/locking/failure regressions do not prove
+power-loss durability or every concurrency/filesystem behavior.
 
-- Bundle hashes, the provenance descriptor and imported metadata check consistency only.
-  They do not authenticate a producer, detector semantics, oracle independence or a live
-  experiment.
-- The four report artifacts are capped at 16 MiB by both writer and viewer (the viewer uses
-  smaller caps for `run-manifest.json` and control files), so a very large review fails
-  instead of producing an unreadable bundle. Report string bounds are enforced by the report
-  wire. See
-  [report wire](REPORT-WIRE.md).
-- Export deadlines are cooperative between operations. Failed writes roll back created files
-  where possible; a killed process or refused cleanup leaves the `ABORTED` marker as the
-  authority. Journal locks and reconciliation need platform and concurrency validation.
-- The bounded AST boundary checker is not an effect sandbox. Reflection, native code,
-  dependency imports and indirect effects need later execution under an enforced boundary.
+Standalone evidence resolution reopens per call. Report construction uses a fresh
+entry/exit snapshot transaction; a transient change restored wholly between those
+observations may be missed. Persistent changes, link/read failures and expired
+budgets are refused. There is no continuous-monitoring guarantee or global cache.
+See [evidence transaction](EVIDENCE-BATCH.md).
 
-## Evaluation harness
+Source-policy checker regressions and Python effect guards have executed but are not an
+OS sandbox. Reflection, native/dependency effects and filesystem races limit their
+coverage. Container confinement was tested for a specific synthetic journey, not
+all production inputs or deployment environments.
 
-- The ordinary model CLI is fake-only. The provider path is disabled source requiring
-  external activation pins and a durable journal start; no credential, provider call, price
-  table or budget approval exists.
-- Scanner runner and adapters are development source with unverified pins, sandboxing and
-  mapping semantics. Absence of a mapping is not evidence of incompatibility.
-- Mock or protocol results are always live-ineligible. A binary introduced-risk prediction is
-  not a full outcome. Row cost subtotals are partial; model totals need every attempt,
-  including failed and no-row attempts and pending liabilities.
-- A committed input-exposure record is input permission only, never oracle, scoring or
-  tuning permission. Measured FAIL or unknown results stay recorded; missing or mock arms
-  cannot close them. No hidden payload, oracle or label was authored or read here.
-- No accuracy, latency, cost or productivity result follows from this source.
+## Evaluation boundary
+
+The ordinary model CLI is fake-only. The disabled provider path needs separate
+external admission and durable all-attempt accounting; no live provider access is
+established by these results. Failed/no-row attempts and pending/unknown billing
+must be retained; row subtotals cannot stand in for model total cost. A binary
+introduced-risk prediction is not a full outcome, and mocks remain live-ineligible.
+
+A pre-access exposure commit grants only the explicitly authorized input access,
+not oracle/scoring/tuning permission. Post-measurement receipt hashes bind actual
+results separately. Negative, failed and unknown results stay recorded. Required
+missing/mock/not-run arms cannot close consumed-edition preparation or benchmark
+acceptance. Development fixtures and metadata examples are not a sealed oracle or
+release evidence. No model/scanner accuracy, generalized performance, cost or
+productivity claim follows from the development checks.

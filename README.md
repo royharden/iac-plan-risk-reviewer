@@ -6,24 +6,27 @@ unsupported input stays visibly inconclusive. A model may later explain a findin
 never create, delete, reprioritize or clear one. The report never says infrastructure is
 secure or reflects deployed state.
 
-## Status: source construction only, nothing has run
+## Status: keyless development validation
 
-Read this before anything else.
+The tested code snapshot recorded on 2026-10-25 passed 946 development tests with
+zero failures, errors or skips using Python 3.12.13, Pydantic 2.14.1 and pytest 9.0.3.
+Its public synthetic matrix passed 24/24 cases, with four CLI journeys passing on
+the host and in a network-disabled Linux container. Imports, package/CLI execution,
+schema export, evidence verification and private/shareable workflows have run.
+Dependencies are pinned in `pyproject.toml` and `uv.lock`.
 
-- This source was written by coding agents in a static-only construction phase. **No
-  dependency has been installed and no code has been imported, executed or tested.** The
-  only checks performed were syntax parsing and focused source inspection.
-- The regression tests under `tests/` are authored source; **none has run**, so none passes.
-- No Terraform, AWS provider or JSON format version is claimed as tested. Version lists in
-  [compatibility](docs/COMPATIBILITY.md) are parser targets, not test results.
-- All seven evaluation arms (D, L, P, M, C, C-custom, T) are **NOT MEASURED**. No
-  precision, recall, latency, cost or productivity result exists. See [results](results/README.md).
-- No independent oracle, sealed held-out corpus, rubric assessment or independent
-  product acceptance exists yet.
-- Dependencies are declared as ranges in `pyproject.toml`; nothing is locked or audited.
-- There is no deployment, hosted service or published package.
+These are development checks, not an independently sealed accuracy benchmark or
+whole-product acceptance. JSON format 1.2 and the named AWS shapes have synthetic
+test evidence; real Terraform/AWS producer compatibility remains unestablished.
+See [testing](docs/TESTING.md) and [compatibility](docs/COMPATIBILITY.md) for scope.
 
-Everything below describes intended behavior of the source, not observed output.
+All seven comparative evaluation arms (D, L, P, M, C, C-custom, T) remain
+**NOT MEASURED**. Deterministic development execution does not close those benchmark
+obligations. Independent oracle custody, a sealed held-out corpus, semantic rubric
+assessment, genuine producer profiles and required live comparisons remain incomplete.
+No model-value, accuracy, live-cost or productivity claim follows from the checks.
+There is no hosted service or published release. Dependency audit and final acceptance
+requirements are listed in [limitations](docs/LIMITATIONS.md).
 
 ## What it does
 
@@ -75,24 +78,29 @@ visible. None of these codes means "secure" or authorizes an apply. Other comman
 on success; `explain` returns 0 for an accepted selection and 2 for deterministic fallback;
 every command returns 3 on error.
 
-## Intended use (not yet run)
+## Local use
 
-Requires Python 3.12 and [uv](https://docs.astral.sh/uv/). From the repository root:
+Requires Python 3.12 and [uv](https://docs.astral.sh/uv/). From the repository root
+in PowerShell:
 
-```sh
-uv sync
-uv run iac-review inspect fixtures/demo/public-ssh.json --out reports/public-ssh
+```powershell
+uv sync --frozen --python 3.12.13
+New-Item -ItemType Directory -Force reports | Out-Null
+uv run --frozen iac-review inspect fixtures/demo/public-ssh.json --out reports/public-ssh
+uv run --frozen iac-review verify-report reports/public-ssh --plan fixtures/demo/public-ssh.json
 ```
 
-Expected by policy, not observed: the `public-ssh` fixture opens TCP/22 to `0.0.0.0/0`
-and should produce an R1 `introduced_risk` with exit 1. Open `reports/public-ssh/private.html`
+The synthetic `public-ssh` fixture opens TCP/22 to `0.0.0.0/0` and produces an R1
+`introduced_risk` with inspect exit 1; successful verification returns 0. The risk
+exit is an expected review result. Output directories must be fresh; choose another
+name for another run. Open `reports/public-ssh/private.html`
 locally. To share, use the explicit share command with the original plan and a destination
 directory that does not exist yet (its parent must exist); never upload the whole report
 directory. See the
 [synthetic walkthrough](docs/DEMO.md), [sharing](docs/SHARING.md) and
 [activation order](docs/ACTIVATION.md).
 
-| Command | Intended behavior |
+| Command | Behavior |
 |---|---|
 | `iac-review inspect PLAN --out DIR [--fail-on 1..4]` | Parse, evaluate, resolve evidence, write private and shareable reports; finalize `export-state.json` last |
 | `iac-review verify-report BUNDLE [--plan PLAN]` | Check a COMPLETE bundle's inventory and hashes, optionally the source digest; not a risk verdict |
@@ -107,9 +115,10 @@ and is not imported by the product; see [evaluation](docs/EVALUATION.md).
 ## Repository layout
 
 - `src/iac_review/`: the product package and CLI.
-- `eval/`, `scripts/`: development evaluation harness (model arms, scanner comparison,
-  custody, scoring). Separately gated; nothing has run.
-- `tests/`: authored regression source (not run).
+- `eval/`, `evals/`, `scripts/`: development harness, public synthetic checks and
+  separately gated model/scanner/custody workflows.
+- `tests/`: development regression and independent specification-derived test cases;
+  these are not a sealed hidden oracle.
 - `fixtures/demo/`: small synthetic development plans. They are not hidden evaluation data.
 - `docs/`: design notes and limits. Start with [architecture](ARCHITECTURE.md) and
   [limitations](docs/LIMITATIONS.md); test plans are in [testing](docs/TESTING.md).

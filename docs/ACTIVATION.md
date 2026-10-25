@@ -1,105 +1,105 @@
-# Activate and validate after Dirty Mode
+# Local activation and remaining validation
 
-This repository is a source construction snapshot. No application, test suite, model/scanner experiment, package build or schema export has been run. Hand-authored demo files and fake transports demonstrate intended plumbing, not independent accuracy, compatibility, security or live-cost evidence.
+The keyless development product has been installed, imported, built and exercised.
+The recorded combined-code validation passed 946 development tests, 24 public
+synthetic cases and four host CLI journeys; the same combined code also passed
+24 public cases and four journeys in a network-disabled Linux container.
+See [testing](TESTING.md) for versions, commands and the limits of these results.
 
-The local product needs Python 3.12 and Pydantic v2. It does not need a listening server, database, container, Terraform apply or cloud account. Dependency ranges in pyproject.toml are not a resolved/audited lock. Later setup must resolve compatible versions, preserve the resulting lockfile and record actual tool versions. Do not infer tested producer support from parser target formats.
+The ordinary reviewer needs Python 3.12 and the locked Pydantic dependency. It
+needs no server, database, container, cloud account or Terraform apply. From the
+repository root, install the pinned development environment and use fresh outputs:
 
-When Roy closes Dirty Mode through INT, use the recorded deferred list in the outer run status to order validation:
+```powershell
+uv sync --frozen --python 3.12.13
+New-Item -ItemType Directory -Force reports | Out-Null
+uv run --frozen iac-review inspect fixtures/demo/public-ssh.json --out reports/public-ssh
+uv run --frozen iac-review verify-report reports/public-ssh --plan fixtures/demo/public-ssh.json
+```
 
-1. Resolve/audit dependencies and run the meaningful source tests that now exist. Establish parser, rule, evidence and private/shareable output semantics before benchmarking. Exercise a multi-resource wrong-evidence case, timeout with complete accounting, interrupted/failed export, masks/unknowns and exit precedence.
-2. Exercise the keyless CLI and demo end to end with separate new output directories. Confirm the input is never modified/copied/executed, sensitive values remain masked, shareable output has no private identity/map, and aborted invocations cannot leave a finalized clean-looking report. Validate file races, cooperative deadlines and crash/restart accounting.
-3. Appoint independent oracle author/checker and rubric assessors. Seal configuration and mutation lineage before tuning; keep hidden labels out of inference and implementation. Metadata validators check consistency; they do not authenticate independence. An exposed hidden edition remains consumed even if the run fails.
-4. Pin scanner versions, executable/config/custom-policy hashes and supported mappings against development inputs. Checkov built-ins, action-aware custom checks and compatible Trivy remain separate arms with identical raw synthetic input and enrichment disabled. Missing tools/mappings are incomplete work, never true negatives or proof of incompatibility.
-5. Keep fake model/scanner runs visibly ineligible for live measurements. Later L/P/M execution requires an approved provider/model/price/cap and all-attempt accounting; no approval follows from a driver accepting an injected transport. Pending timeout/unknown-cost liabilities block subsequent calls until explicit operator reconciliation.
-6. Freeze the integrated build, schemas, prompts, mappings and rubric before the one-shot held-out run. Publish every failure/abstention, unresolved cost and missing arm. Finish independent nonauthoring product acceptance before any readiness claim. Publication, real accounts, spending and deployment need their own current authorization.
+The synthetic SSH review returns 1 for threshold risk; verification returns 0.
+The [demo](DEMO.md) and [testing guide](TESTING.md) provide other implemented commands.
+A changed environment or code snapshot requires affected checks to be repeated.
+Locked resolution is not a comprehensive dependency security/license audit.
 
-No generated schema, test output, screenshot or benchmark result is supplied as evidence by this document. The scorer's imported records and structural metadata do not independently prove the original execution. Keep private reports/plans and agent coordination material out of any future public repository.
+## Product and data handling
 
-## Product walkthrough and source handoffs
+Use complete bundles only: `export-state.json` must say COMPLETE. Private reports,
+source filenames, exact addresses/pointers and `evidence` stdout remain local and
+sensitive. Safe sharing requires the original pinned plan, a current bound bundle
+and canonical regeneration into a separate fresh directory. Never upload a whole
+bundle or treat a shareable ID as a raw-source locator.
 
-Use the [demo walkthrough](DEMO.md) only after the keyless journey is activated.
-The [testing guide](TESTING.md) lists proposed outer-cwd-safe commands and remaining
-checks. Do not run documentation examples while Dirty Mode is open.
+`verify-report` checks integrity, optionally including the original source digest;
+it does not authenticate a producer or certify infrastructure. `evidence` reads
+one selected mask-safe fact with an explicit source path and actual opaque IDs.
+The report evidence transaction observes one fresh entry/exit snapshot and retains
+the 30-second budget; restored transient changes between observations may be missed.
+Standalone resolution retains per-call reopening. [Transaction details](EVIDENCE-BATCH.md).
 
-The pinned viewer library is present: `verify_report(bundle, original_plan=None)`
-and `view_evidence(bundle, original_plan, finding_id, fact_id)`. Main CLI
-`verify-report BUNDLE [--plan PLAN]` and
-`evidence BUNDLE --plan PLAN --finding ID --fact ID` wiring now exists in source.
-Exercise it after activation; no observed successful invocation is claimed.
-Bundle verification is integrity checking, not an authenticated producer or
-product verdict. Private evidence stdout stays local and out of shared logs.
+Development evidence covers strict ingestion, four-rule semantics, evidence,
+private/shareable projections, finite explanation fallback, journal accounting,
+schema export and selected failure/effect paths. It does not establish every
+filesystem race, power-loss recovery, dependency/native effect or operating system.
+Keep version/profile/schema tests with the source and verify actual import paths.
 
-RunManifest/preflight/binary-scoring source and schema-export bindings now exist.
-Exercise their integration before schema export or any integrated run. The report `manifest.json` is only the
-local artifact/digest binding; it does not close experiment provenance, authentic
-execution, consumed-edition custody or required arm completion. Reconcile model
-and scanner bridges against the final scorer wire without promoting fake rows.
-The preflight library reads allowlisted metadata, not plan/HTML/prompt/response
-payloads. Its external pins/link checks do not authenticate the original execution.
-No integrated `iac-review` preflight command or generated RunManifest is claimed.
+## Gates that remain open
 
-Respect scorer target semantics during activation: full-outcome is the default;
-binary introduced-risk predictions must not invent a full outcome. D exact checks
-require full outcomes. Null binary predictions abstain; definite predictions on
-indeterminate gold produce certainty errors. Retain v2 eligibility/pins and never
-promote mocks/legacy rows to satisfy a missing measurement.
+1. Establish genuine Terraform/AWS producer profiles. Parser-tested JSON formats
+   and synthetic resource shapes are separate axes; fabricated version strings
+   are not producer provenance. Add the missing per-minor fixture evidence before
+   extending tested claims. See [compatibility](COMPATIBILITY.md).
+2. Complete dependency/license review and actual scanner compatibility work. Pin
+   executable, config and custom-policy hashes and predeclare supported mappings.
+   Checkov built-ins, action-aware custom checks and compatible Trivy are distinct
+   arms over the same synthetic JSON without enrichment. Missing tools/mappings
+   mean incomplete work, not true negatives or proven incompatibility.
+3. Appoint independent oracle author/checker and semantic rubric assessors. Seal
+   configuration, mutation lineage and hidden corpus before tuning. Structural
+   metadata validates consistency, not independence. An exposed edition stays
+   consumed even if execution fails.
+4. Obtain separate explicit provider/model/price/cap approval before any live L/P/M
+   experiment. The ordinary model CLI is fake-only, and the programmatic provider
+   path remains disabled without external admission. Every attempted request,
+   including failure/no-row/unknown billing, must enter conservative accounting;
+   pending liabilities block more calls until explicit reconciliation. Mocks never
+   become live-eligible results.
+5. Freeze exact code, dependencies, schemas, prompts, scanner mappings and rubrics
+   for the genuine held-out run. Preserve all failures, abstentions, missing arms
+   and unresolved costs. All D/L/P/M/C/C-custom/T comparative measurements remain
+   NOT MEASURED; deterministic development execution does not close that benchmark.
+6. Complete independent product/release acceptance. Package/CLI and Docker
+   development results do not authorize publishing, accounts, spending or deployment.
+   The final distributable must be rebuilt and checked after documentation changes
+   so packaged README metadata matches its source.
 
-Use strict ProducerAccounting over D5 accounting_json plus every attempt snapshot,
-including failed/no-row attempts, usage and pending liabilities. A row subtotal
-cannot stand in for model total cost. Optional producer_exports consumes only the
-exact allowlisted ExportBundle and remains live-ineligible. The separate
-[operator ledger source](LEDGER.md) now provides status and pinned receipt
-reconciliation. Later activation must exercise that interface, residual locks,
-torn replay and the explicit operator reconciliation boundary.
+## Evaluation integrity order
 
-The ordinary [model CLI](model-activation.md) remains explicitly fake-only.
-Separate [disabled provider source](PROVIDER-ACTIVATION.md) requires externally
-approved admission, exact request/data/model/budget pins and an active original
-journal start before credential access/HTTPS. It has not been activated.
-The [share exporter](SHARING.md) and [private demo](DEMO.md) need fresh separate
-outputs and authoritative COMPLETE markers. Exercise stale bound source refusal,
-canonical regeneration and all privacy/failure boundaries after authorization.
+The development harness is separate from default product review. Its preflight
+reads allowlisted metadata, not plan/HTML/prompt/response payloads. Local artifact
+manifests and schema-valid RunManifest declarations do not prove genuine experiment
+execution, custody or completion. There is no `iac-review preflight` command.
 
-Held-out order (contract S1) must be exercised in sequence, each step independently
-authorized: commit the [pre-access input-exposure journal](EXPOSURE-LEDGER.md) while
-the edition is `sealed`; admit input-only access through `HeldoutAuthorization` v2
-(sealed plus a verified `InputExposureCommit`); run the frozen arms; pin the
-`ScoringHandoff` with the actual measured-results hash; only then write legacy
-post-measurement `ExposureReceipt` rows for scoring. Validate locking, crash and
-torn-journal refusal, legacy WIP-journal refusal and that no step grants oracle or
-scoring permission by itself.
+For a separately authorized real held-out edition: commit the pre-access
+[input-exposure intents](EXPOSURE-LEDGER.md) while sealed, verify committed input-only
+`HeldoutAuthorization` v2, run frozen arms, pin the actual measured-results hash in
+`ScoringHandoff`, then supply post-measurement `ExposureReceipt` rows for separately
+authorized scoring. No step grants oracle/scoring/tuning permission implicitly.
+Synthetic regression passes are not real custody or universal crash durability.
 
-Only after all seven genuine measurements exist may an external controller approve
-[consumed-edition preparation](CONSUMED-EDITIONS.md). Separate release/completion
-pins (`CompletionReference` v2, with separately named input-exposure and
-post-measurement exposure pins) bind the full consumed inventory and global frozen
-identities before payload reads. Keep all measured FAIL/negative/unknown and costs. Missing/mock/not-run arms
-block preparation. No actual candidate generation or publication is authorized by
-these commands/docs; all seven remain NOT MEASURED.
+Full-outcome and binary introduced-risk predictions are distinct scoring targets;
+a binary prediction must not invent a full outcome. D exact scoring requires full
+outcomes. Strict producer accounting includes every attempt, not only row subtotals.
+Unknown and negative measurements remain visible.
 
-After later authorization, verify the new AST boundary-checker source and tests
-before using its result. The intended checker reads default product source and
-import edges without loading application modules; development scanner subprocess
-code is deliberately outside its scope. Runtime dependencies/effects still need
-the actual sandbox checks in step 2 above. No static pass replaces those checks.
+[Consumed-edition preparation](CONSUMED-EDITIONS.md) needs genuine completion for
+all seven arms plus external release/completion pins. `CompletionReference` and
+edition version 2 separate input-exposure intents from post-measurement results;
+v1 is refused. No mock/not-run arm closes this gate. The [schema catalogue](schemas/README.md)
+is descriptive, not payload admission or authority. Report JSON remains 1.0.0,
+bound/legacy artifact inventories remain 1.1.0/1.0.0, and provenance profiles remain
+v1 nine files/v2 eleven files without repinning old bundles.
 
-The [fixed schema registry/exporter](schemas/README.md) now covers completed
-canonical wires and distinguishes ordinary dataclass descriptions from closed
-Pydantic roots. After explicit environment/runtime authorization, run its focused
-[compatibility regression source](../tests/contracts/test_schema_registry.py) and
-[export failure/API source](../tests/contracts/test_schema_export.py) before
-generating descriptions into a fresh separate directory. The exporter retains
-`--out`; its manifest is explicitly version 2, with a separately pinned catalogue
-and authoritative COMPLETE marker. Do not run it during open Dirty Mode.
-
-Inspect actual output for references/aliases/private classification and custom
-validator gaps. The ReviewReport wrapper is still a dictionary facade; the typed
-`report_wire` projections and `report_inventory` models are registered separately.
-Validate actual produced bundles against them (bound 1.1.0 and legacy 1.0.0) and
-keep the existing viewer inventory checks until that adoption is verified.
-Exercise both report-provenance source profiles (v1 nine files, v2 ten files) and
-confirm old v1 bundles still verify without being repinned.
-Exact batch version dispatch, deterministic/evaluation separation and genuine
-external custody/eligibility stay separate gates. A schema catalogue does not
-authenticate actors/execution, admit a payload, activate a provider or authorize
-consumed-edition release. All seven arms remain NOT MEASURED.
+Keep plans, private reports and operational coordination records out of public
+artifacts. See [limitations](LIMITATIONS.md), [ledger](LEDGER.md) and
+[provider activation](PROVIDER-ACTIVATION.md) for the remaining boundaries.

@@ -1,202 +1,125 @@
-# Core regression activation
+# Keyless development testing
 
-Dirty Mode authored regression-test source only. No tests, application imports,
-dependency installation, runtime effects or compatibility checks have run in this
-package. Syntax parsing and source review do not establish passing tests.
+## Recorded validation (2026-10-25)
 
-These are development regressions against the frozen public policy. Expected
-outcomes and synthetic builders were authored in the implementation lineage.
-They are not the independently authored hidden oracle, consumed holdout edition,
-producer/provider provenance or independent final product acceptance. Illustrative
-Terraform version strings in test inputs do not claim tested compatibility.
+An independently executed combined code snapshot, using Python 3.12.13,
+Pydantic 2.14.1 and pytest 9.0.3, recorded:
 
-| Source group | Meaningful boundaries |
+| Check | Recorded result | Scope |
+|---|---|---|
+| Full development suite | 946 passed; zero failures, errors or skips | Public synthetic tests, including metadata/fake evaluation workflows |
+| Public development matrix | 24/24 passed | Four-rule outcomes, evidence and privacy checks against declared public expectations |
+| Host CLI journeys | 4/4 passed | Risk, clear, unknown and malformed paths; inspect/verify/share where applicable |
+| Combined-code Docker journey | 24 public cases and 4 CLI journeys passed | Network-disabled, non-root, read-only Linux container; no host ports or mounts |
+| Independent batch review | 50 batch and 222 compatibility checks passed | Ordered snapshot evidence, closure refusal, privacy/effects and report integration |
+| Original large-CIDR case | 420 R1 facts, four source reads; completed through export within the unchanged 30-second budget | One synthetic 200-before/201-after-CIDR input; not a general performance guarantee |
+
+These counts overlap and must not be added into a unique-case total. Source,
+configuration, imports, test inputs and dependency versions were pinned for the
+recorded runs. Re-run affected checks when those inputs change. The large case
+recorded about 1.2 seconds from input through export in the full-suite run; machine,
+filesystem and workload differences limit extrapolation.
+
+Development tests include independently authored specification cases, but they are
+not an independently sealed hidden oracle or a human productivity study. All seven
+comparative arms D/L/P/M/C/C-custom/T remain NOT MEASURED. Genuine producer profiles,
+held-out custody, live comparisons and final product acceptance remain incomplete.
+A schema-valid receipt or imported result does not prove its original execution.
+
+## Repeatable local commands
+
+Run from the repository root. Use new output files/directories on every run;
+existing output is preserved, and pytest temporary roots must also be fresh.
+The dependency lock supports Python 3.12; the recorded patch version was 3.12.13.
+
+```powershell
+uv sync --frozen --python 3.12.13
+New-Item -ItemType Directory -Force reports | Out-Null
+uv run --frozen pytest tests -p no:cacheprovider --basetemp reports/pytest-tmp-01 --junitxml reports/pytest-01.xml
+uv run --frozen python -m evals.run_public --out reports/public-dev-01.json
+uv run --frozen python -m evals.docker_journey
+```
+
+The last command runs the four public CLI journeys on the host despite its module
+name. Actual container construction uses the separate `scripts/docker_e2e.ps1`,
+which requires an explicitly pinned base image and a valid local resource claim;
+it is not needed for ordinary review. Its machine-specific registry parameters
+must be configured by the environment owner, not copied from another machine.
+The container test's offline runtime does not imply that dependency installation
+or image building is network-free.
+
+For an evidence-producing PowerShell subset runner:
+
+```powershell
+pwsh -File scripts/check_local.ps1 -Python .venv/Scripts/python.exe -EvidenceDirectory reports/check-local-01
+```
+
+`check_local.ps1` selects its own repository, binds that source into PYTHONPATH,
+requires Python 3.12 and a fresh evidence directory, and records dependency
+inventory, candidate, command, log, JUnit and exit status. Its subset excludes
+`tests/eval` and `tests/corpus`; it is not the full-suite command above. Read the
+collected/executed counts and failures in the reporter, rather than treating an
+exit code or zero collected cases as a pass. Confirm imports belong to the chosen
+checkout when using a shared interpreter. Duplicate module basenames require the
+configured importlib mode.
+
+## Coverage and boundaries
+
+| Tests | Main checks |
 |---|---|
-| `tests/ingest/` | Action order, deposed/duplicate identity, duplicate JSON keys, invalid UTF-8/nonfinite/depth, malformed versus unsupported actions, missing flags/minor version |
-| `tests/evidence/` | Null/absent/unknown/sensitive, ancestor masks, checked absence, escaped pointers, digest/resource/side/value mismatch, mutation |
-| `tests/rules/` | Small R1–R4 public truth-boundary examples, IPv4/IPv6 exposure transitions, unknown short circuits, unsupported coverage, no context suppression |
-| `tests/report/` | F1 resource binding, F3 export finalization, canary projections/HTML escaping, risk/coverage/threshold/no-change precedence |
-| `tests/explain/` | Required facts/limitations, reversed relation, foreign IDs, forbidden outcome field, oversized output and deterministic fallback |
-| `tests/attempts/` | F2 timeout pending/replay/conservative accounting and explicit reconciliation |
-| `tests/integration/` | CLI 3/2/1/0, finalization deadline, occupied output, default model/network/process guards, mutation abort, offline explain boundary |
+| `tests/ingest/` | Ordered actions, deposed identity, duplicates, strict JSON/UTF-8, limits, missing flags and unsupported versions |
+| `tests/evidence/` | Masks, exact JSON types, pointers, checked absence, digest/identity mismatch, standalone reopening and atomic batch closure |
+| `tests/rules/` | Public R1-R4 truth boundaries, IPv4/IPv6 transitions, short circuits and explicit unsupported coverage |
+| `tests/report/` | Foreign-reference withholding, duplicate/ordered batch positions, privacy canaries, escaping, exit precedence and ABORTED publication |
+| `tests/source_view/`, `tests/shareable/` | Bound/legacy inventory, tamper refusal, explicit source pin and safe regeneration |
+| `tests/integration/`, `tests/e2e/` | Real CLI paths, occupied outputs, source mutation, finite fallback and default effect guards |
+| `tests/attempts/` | Conservative all-attempt accounting, unknown liabilities, replay and reconciliation |
+| `tests/contracts/` | Closed wires, source boundaries, schema export and version/legacy compatibility |
+| `tests/eval/` | Public metadata/fake scoring, exposure, handoff and release-admission boundaries; no genuine hidden edition |
 
-Shared `tests/eval/` and other `tests/contracts/` files are owned per package
-grant, not per directory; listing a file here implies no independent acceptance.
-`tests/conftest.py` supplies only uniquely prefixed
-`core_change`/`core_plan_file` helpers; no global autouse behavior or environment
-mutation affects other test groups.
+The batch cases in `test_report_batch_transaction.py` and `test_batch_consumer.py`
+exercise entry/exit reads, deadlines, duplicate references, stale `plan.raw`,
+mutation/link/read failures and positional association. Standalone `resolve`
+still reopens per call. A transient change restored between observations may be
+missed; [the transaction boundary](EVIDENCE-BATCH.md) makes no continuous-monitoring
+claim. Neither deadlines nor passed cases prove every OS race or crash outcome.
 
-## Later commands, after Dirty Mode closes and INT authorizes activation
-
-Resolve/audit dependencies and a legitimate lock under INT's activation package
-first. The commands below are proposed future execution, not an instruction to
-run setup or tests during construction. Keep the shell cwd at the outer shell;
-the package invocation can select the inner project explicitly:
-
-```powershell
-uv run --project .\iac-plan-risk-reviewer pytest --import-mode=importlib `
-  .\iac-plan-risk-reviewer\tests\ingest `
-  .\iac-plan-risk-reviewer\tests\evidence `
-  .\iac-plan-risk-reviewer\tests\rules `
-  .\iac-plan-risk-reviewer\tests\report `
-  .\iac-plan-risk-reviewer\tests\explain `
-  .\iac-plan-risk-reviewer\tests\attempts `
-  .\iac-plan-risk-reviewer\tests\integration
-```
-
-Use importlib mode because several owned and shared test directories can have
-matching module filenames without Python package markers. Packaging/import path,
-actual pytest availability and dependency pins remain unverified; if activation
-cannot resolve `iac_review`, INT must configure the audited package environment
-rather than modifying test expectations or silently using another checkout.
-Record exact source hash, dependency/producer profiles, collected/run counts,
-failures and actual commands before claiming a test pass. Zero collected cases
-and AST-only checks are not passes.
-
-The effect guards deny common Python network/process call paths and inspect the
-synthetic input/output footprint. They are bounded regression guards, not an
-OS sandbox or proof against every native side effect. Later independent effect
-validation must deny process/network use at the environment boundary and check
-authorization, journal crash/concurrency, filesystem races and report privacy.
-
-Before consuming reports, verify local `export-state.json` is COMPLETE. ABORTED
-or pending remnants are not completed invocations. Later activation must exercise
-real rendering/write failures and deadline behavior on the target filesystem,
-including cleanup refusal and process termination. Static source cannot establish
-those outcomes. No model/scanner measurement, paid request, hidden corpus access
-or publication is authorized by this document.
-
-## Bounded source-policy checker (authored, not run)
-
-`scripts/check_source_boundaries.py` reads only a selected `iac_review` package,
-parses syntax and builds local import edges without loading application modules.
-It limits files, file/total bytes, AST nodes, directory depth and visited entries;
-an incomplete scan is an explicit finding. Default graph roots are `iac_review`
-and `iac_review.cli`. Source checks cover all discovered product modules, including
-lazy imports; graph closure overapproximates runtime loading and is not an observed
-module inventory. The intentional `__main__` command module is excluded only
-from import-time declaration checks. Network/process/cloud imports, selected
-dynamic/effect calls, missing local modules and nondeclarative import-time
-statements/mutations are findings. Unknown external dependencies are rejected;
-standard-library declarations and Pydantic are not dependency audits.
-
-Exactly `tests/contracts/test_product_boundaries.py` is this checker package's
-new contract test. Other contracts tests belong to another lead and were untouched.
-The synthetic cases include transitive import edges, forbidden imports/dynamic
-loaders, top-level effects, allowed declarations/main guard, dev-harness exclusion
-and a bounded-scan failure. Neither checker nor these tests was executed.
-
-For later separately authorized activation, the outer-cwd-safe interfaces are:
+Default-path effect guards deny common Python network/process paths and inspect
+synthetic input/output footprints. They do not constitute an OS sandbox or prove
+all native/dependency effects absent. The bounded source-policy checker reads a
+fixed product tree, parses AST/import edges and emits explicit findings for
+forbidden effects, dynamic loading and incomplete scans:
 
 ```powershell
-python .\iac-plan-risk-reviewer\scripts\check_source_boundaries.py
-uv run --project .\iac-plan-risk-reviewer pytest --import-mode=importlib .\iac-plan-risk-reviewer\tests\contracts\test_product_boundaries.py
+uv run --frozen python scripts/check_source_boundaries.py
 ```
 
-The checker prints a static report to stdout, with 0 for no policy findings and
-1 for findings. Those exit meanings are distinct from product risk exits. No clean
-checker result has been observed. Declarative dataclass/Pydantic/regex calls are
-trusted syntax; aliases/rebinding, reflection, generated/native code, dependency
-behavior and filesystem races prevent this from proving runtime isolation. Dev
-scanner/provider/edition harness code is intentionally outside the product-package
-scan. A product import of evaluation code remains forbidden even when lazy. Direct
-product environment lookup is a finding. The checker neither inspects nor admits the
-disabled external provider nor grants authorization or publication.
+Its 0/1 exits mean no static-policy findings/findings, separately from product risk
+exits. Evaluation scanner code is outside that product scan. Reflection, native
+code, dependency behavior and filesystem races remain limits.
 
-## Demo, safe export and consumed-edition source
+## Schemas, demo and remaining evaluation work
 
-[Demo](DEMO.md) requires fake/synthetic flags and a PRIVATE root marker, with strict
-viewer, finite fallback, mock journal and declared scanner capabilities.
-[Sharing](SHARING.md) requires the original plan/current bound core pins and
-canonical regeneration into a fresh safe-only directory. Focused sources:
-[demo journey](../tests/integration/test_demo_journey.py) and
-[share exporter](../tests/shareable/test_export.py). Neither has run.
-
-[Consumed-edition preparation](CONSUMED-EDITIONS.md) has separate external release
-and completion pins. Missing/mock/not-run arms cannot close it; measured
-negative/unknown/error results and costs remain. Its [regressions](../tests/eval/test_edition_release.py)
-are public metadata examples, not custody, oracle labels or release evidence.
-The [ledger](LEDGER.md) and [disabled provider](PROVIDER-ACTIVATION.md) now have
-source interfaces; ordinary model CLI stays fake-only and product review offline.
-
-Additional future authorized selection, from the outer shell:
+Schema export and its fixed-registry tests have executed. To generate descriptions
+into a new directory with an existing parent:
 
 ```powershell
-uv run --project .\iac-plan-risk-reviewer pytest --import-mode=importlib `
-  .\iac-plan-risk-reviewer\tests\shareable `
-  .\iac-plan-risk-reviewer\tests\eval\test_edition_release.py `
-  .\iac-plan-risk-reviewer\tests\contracts\test_product_boundaries.py
+uv run --frozen python scripts/export_schemas.py --out reports/schemas-01
 ```
 
-Do not run under open Dirty Mode. A later positive edition test needs separately
-approved independent records and exact-copy/privacy/failure/cost/expiry/rollback/
-crash checks. Tiny metadata examples cannot close that obligation. All seven arms
-remain NOT MEASURED.
+The catalogue has 121 declarations and export-manifest version 2. Descriptive
+schemas, especially dataclasses and nested Any/dict fields, do not replace actual
+validators, privacy checks, payload admission or actor/execution authentication.
+Bound report inventory 1.1.0 remains distinct from legacy unbound inventory 1.0.0;
+provenance profiles 1 (nine files) and 2 (eleven files) are not silently migrated.
 
-## Fixed schema descriptions and compatibility
-
-The [actual-wire registry](../eval/runner/schema_registry.py) and
-[exporter](../scripts/export_schemas.py) remain unexecuted source. Their focused
-[export regressions](../tests/contracts/test_schema_export.py) and
-[registry/compatibility regressions](../tests/contracts/test_schema_registry.py)
-cover fixed canonical types, missing/duplicate/version conflicts, private versus
-shareable-shape classification, data-only catalogue without application imports,
-legacy exporter API/--out retention, explicit unsupported versions, closed root
-unknown fields, partial-write ABORTED state and detached catalogue/file hashes.
-
-Compatibility cases distinguish seven-file legacy report inventory 1.0.0 from
-eight-file bound 1.1.0; changing a version cannot retain the wrong inventory or
-upgrade a legacy bundle's trust. They also distinguish deterministic RunManifest
-from schema-valid evaluation declarations requiring separate preflight admission.
-Batch transport requires its exact explicit version; dataclass descriptions do not
-gain strict/unknown-field rejection from being listed. The ReviewReport dictionary
-facade and private fields excluded by serialization remain documented schema
-limits; the typed report projections and bundle inventory models are now separate
-registered roots. Registry regressions also pin the stable IDs, canonical type
-paths and literal versions of the types added this run (report_wire,
-report_inventory, input-exposure journal, held-out access v2, frozen-run pins,
-scoring handoff, CompletionReference v2) plus report-provenance profiles 1/2, and
-refuse undeclared payload versions for them (including CompletionReference 1 and
-HeldoutAuthorization 1).
-
-## Held-out exposure, access, frozen run and release (authored, not run)
-
-| Source | Boundaries |
-|---|---|
-| `tests/contracts/test_report_wire.py`, `tests/contracts/test_report_inventory.py`, `tests/report/test_report_wire_integration.py` | Typed private/shareable/legacy projections, bound/legacy inventory classification, no silent upgrade |
-| `tests/eval/test_exposure_journal.py` | `InputExposureReceipt` intents-not-results, legacy/unversioned refusal, torn/partial journals, legacy WIP paths, public seam fails closed with ValueError |
-| `tests/eval/test_benchmark_access.py`, `tests/eval/test_frozen_run.py`, `tests/eval/test_frozen_run_boundaries.py`, `tests/eval/test_scanner_heldout_admission.py` | v2 input-only permission, committed-exposure binding, guarded reads, scanner held-out admission |
-| `tests/eval/test_scoring_handoff.py` | Post-run pins, no oracle/scoring permission |
-| `tests/eval/test_edition_release.py` | CompletionReference v2/v1 refusal, edition.json v2 separation, hex/schema gate, input-before-results ordering |
-
-```powershell
-uv run --project .\iac-plan-risk-reviewer pytest --import-mode=importlib `
-  .\iac-plan-risk-reviewer\tests\contracts\test_report_wire.py `
-  .\iac-plan-risk-reviewer\tests\contracts\test_report_inventory.py `
-  .\iac-plan-risk-reviewer\tests\report\test_report_wire_integration.py `
-  .\iac-plan-risk-reviewer\tests\eval\test_exposure_journal.py `
-  .\iac-plan-risk-reviewer\tests\eval\test_benchmark_access.py `
-  .\iac-plan-risk-reviewer\tests\eval\test_frozen_run.py `
-  .\iac-plan-risk-reviewer\tests\eval\test_frozen_run_boundaries.py `
-  .\iac-plan-risk-reviewer\tests\eval\test_scanner_heldout_admission.py `
-  .\iac-plan-risk-reviewer\tests\eval\test_scoring_handoff.py `
-  .\iac-plan-risk-reviewer\tests\eval\test_edition_release.py
-```
-
-Future authorized selection only; none of these has been collected or run. Some
-files were still being edited by other packages when this list was written; confirm
-each exists in the activated source before relying on the selection.
-
-Future selection after authorization, with outer cwd unchanged:
-
-```powershell
-uv run --project .\iac-plan-risk-reviewer pytest --import-mode=importlib `
-  .\iac-plan-risk-reviewer\tests\contracts\test_schema_export.py `
-  .\iac-plan-risk-reviewer\tests\contracts\test_schema_registry.py
-```
-
-No test, import or schema generation was run. Later activation must inspect real
-validation/serialization schema output and references, aliases/strictness/custom
-validators, frozen dataclass limitations, version drift and filesystem failures.
-See [schema source documentation](schemas/README.md). Descriptions never admit
-payloads, authenticate actors/execution or authorize provider/release activity.
+The [synthetic demo](DEMO.md), safe sharing and schema tests pass in development.
+Held-out exposure/authorization, frozen-run, scoring-handoff and consumed-edition
+regressions use synthetic metadata only. A real edition still needs independent
+oracle author/checker and rubric assessors, genuine external pins, sealed lineage,
+input exposure before access, post-measurement results receipts, all seven genuine
+arms and all-attempt accounting. Missing/mock/failed/unknown results are retained;
+none becomes a measured negative, true negative or completed comparison by default.
+See [activation](ACTIVATION.md), [compatibility](COMPATIBILITY.md) and
+[limitations](LIMITATIONS.md). No test command grants hidden access, provider calls,
+spending or publication.

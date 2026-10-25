@@ -1,8 +1,10 @@
 # Architecture
 
-Status: construction source. Nothing described here has been imported, executed or
-tested; see the status section of the [README](README.md). This file maps the source as it
-exists, not verified behavior.
+The keyless development pipeline has executed, including independent combined-tree
+regressions, public synthetic cases and host/container CLI journeys. See the dated
+validation scope in [testing](docs/TESTING.md). This architecture also describes
+gated evaluation interfaces; their existence does not establish genuine benchmark
+execution, producer compatibility or final acceptance.
 
 ## Product review pipeline (`src/iac_review/`)
 
@@ -22,7 +24,7 @@ plan file -> ingest -> rules -> evidence -> report -> write_report -> bundle
 | `contracts/report_inventory.py` | Bundle inventory types: bound manifest 1.1.0 (8 files), legacy 1.0.0 (7 files), `COMPLETE`/`ABORTED` export markers, `classify_bundle` |
 | `ingest/` | Bounded local bytes, raw SHA256, strict JSON, ordered actions and deposed identity, format/coverage inventory; never runs Terraform or HCL |
 | `rules/` | R1-R4 applicability, outcome, severity and reason codes; unknown required facts stay indeterminate |
-| `evidence/` | Reopens only the digest-pinned document; resolves RFC 6901 pointers with mask, side and identity checks (`resolved`, `unknown`, `sensitive`, `missing`, `mismatch`) |
+| `evidence/` | Standalone resolution safely reopens the digest-pinned document per call; `resolve_many` uses an explicit entry/exit snapshot transaction. Both share pointer, mask, exact-type, side and identity checks (`resolved`, `unknown`, `sensitive`, `missing`, `mismatch`) |
 | `report/` | `build_report`: binds references to their resource, withholds unverified decision evidence (outcome becomes indeterminate), computes exit precedence, builds both projections and escaped HTML; `write_report` stages and publishes the bundle |
 | `provenance.py` | `ReportProvenance` descriptor (`run-manifest.json`) pinning installed core source files; source profile v2 (eleven files, including `report_wire.py` and `report_inventory.py`) is current, while v1 (nine files) descriptors keep verifying against v1 |
 | `source_view.py` | Read-only verification of COMPLETE bundles; legacy bundles stay explicitly unbound; one selected fact via an explicitly supplied original plan |
@@ -36,6 +38,21 @@ Import direction for the report types: `provenance` imports `contracts` and
 `contracts.report_inventory` imports `report_wire`, `contracts.manifest` and `provenance`.
 `contracts/__init__.py` imports `report_wire` lazily, so there is no cycle. `report_wire` never imports `report/`,
 `rules` or `source_view`.
+
+### Evidence observation boundary
+
+Report construction gathers eligible references in order and calls `resolve_many`
+once with its original start time plus the 30-second budget. Duplicate references
+and IDs retain their positions; mismatched decision/supporting references retain
+their withholding behavior. The transaction reads and verifies the source at entry,
+resolves against that fresh snapshot, and independently reopens and checks the
+digest at exit before returning results. The report keeps its entry/final checks.
+
+A transient modification restored wholly between observations may be missed;
+this is not continuous mutation monitoring or identical observation to standalone
+per-fact reopening. Persistent changes, unreadable/link-replaced input, read races
+and deadline failures abort. No global/path cache or trusted `plan.raw` shortcut
+is used. Details: [evidence transaction](docs/EVIDENCE-BATCH.md).
 
 ### Export protocol
 
@@ -62,7 +79,9 @@ independently supplied labels and measurements; it does not derive gold from det
 `scripts/` holds the thin entrypoints for these (for example `eval.py`, `run_benchmark.py`,
 `run_frozen_benchmark.py`, `record_exposure.py`, `eval_model.py`, `eval_scanners.py`,
 `prepare_consumed_edition.py`, `demo.py`, `export_schemas.py`,
-`check_source_boundaries.py`). None has run.
+`check_source_boundaries.py`). Development tests exercise these interfaces with
+synthetic metadata and fakes; live provider/scanner comparisons and genuine held-out
+custody remain separate, incomplete obligations.
 
 ## Held-out exposure: two events, two records
 
@@ -108,9 +127,11 @@ a binary prediction never fabricates a full outcome, and model totals require ev
 attempt, including failed and no-row attempts. `edition_release` prepares a consumed
 edition only from externally pinned completion references for all seven arms.
 
-## Boundaries that remain unverified
+## Validation boundary
 
 Hash and metadata agreement do not authenticate a producer, an execution or oracle
-independence. The bounded AST boundary checker (`scripts/check_source_boundaries.py`)
-has not run and is not a runtime sandbox. See [limitations](docs/LIMITATIONS.md) and
+independence. Source-policy and runtime effect regressions have executed, but the
+bounded AST checker (`scripts/check_source_boundaries.py`) is not an operating-system
+sandbox. Passing synthetic custody/journal tests is not a genuine held-out run or
+universal crash/filesystem guarantee. See [limitations](docs/LIMITATIONS.md) and
 [testing](docs/TESTING.md).

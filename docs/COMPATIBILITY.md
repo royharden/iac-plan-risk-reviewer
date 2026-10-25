@@ -1,66 +1,77 @@
-# Compatibility targets and evidence
+# Compatibility and evidence scope
 
-| JSON minor format: parser-tested | AWS resource shape: fixture-tested | Producer Terraform / AWS pin | State |
+The recorded keyless development environment is Python 3.12.13, Pydantic 2.14.1
+and pytest 9.0.3. Dependencies are pinned in `pyproject.toml` and `uv.lock`.
+The combined code passed 946 development tests, a public 24-case matrix and four
+host/container CLI journeys. These results establish the bounded synthetic checks
+in [testing](TESTING.md), not compatibility with every producer or environment.
+
+| JSON minor format: parser-tested | AWS resource shape: fixture-tested | Producer Terraform / AWS pin | Evidence state |
 |---|---|---|---|
-| None yet; implementation targets 1.0 / 1.1 / 1.2 | None yet; intended `aws_security_group_rule`, `aws_db_instance`, `aws_ebs_volume` | Unresolved, no real producer run | Runtime unverified |
+| 1.2, public synthetic inputs | Standalone `aws_security_group_rule` for R1, including IPv4/IPv6 and unknown/unsupported components | None; handwritten fixtures, not generated Terraform/provider plans | Development cases passed |
+| 1.2, public synthetic inputs | `aws_db_instance` for R2/R3/R4 | None; illustrative Terraform strings are not provenance | Development cases passed |
+| 1.2, public synthetic inputs | `aws_ebs_volume` for R3/R4 | None; no producing Terraform/AWS version established | Development cases passed |
+| 1.0 / 1.1 are accepted implementation targets; separate per-minor fixture evidence is not established | No additional tested shape claim from acceptance alone | Unresolved | Per-minor validation remains open |
 
-Other major formats reject input; unlisted minor formats are unsupported for this policy edition. Familiar resource type strings require canonical `registry.terraform.io/hashicorp/aws` provider and managed mode. Data resources are not applicable. Unsupported targeted shapes or unresolved required fields make required review inconclusive rather than negative.
+Other major formats reject input; unlisted minor formats are unsupported for this
+policy edition. Familiar resource names require canonical
+`registry.terraform.io/hashicorp/aws` identity and managed mode. Data resources
+are not applicable. Missing completeness/errored flags stay unknown unless a
+separately tested producer profile establishes their omission semantics. Unknown
+extra fields do not expand detector coverage.
 
-Inline `aws_security_group.ingress` and `aws_vpc_security_group_ingress_rule` are unsupported R1 shapes. R4 excludes RDS clusters, DynamoDB, S3, EFS, ElastiCache and generic instances. Known facts can still yield a bounded finding alongside an unsupported component. Exact tested Terraform/provider/scanner versions must be pinned after activation, with separate fixture results for each format/shape cell. Synthetic handwritten fixtures are not evidence of a producer version.
+Inline `aws_security_group.ingress` and newer standalone
+`aws_vpc_security_group_ingress_rule` are unsupported R1 shapes. Prefix-list and
+security-group sources retain unsupported coverage even beside a known risky CIDR.
+R1 covers ports 22/3389 only. R4 excludes RDS clusters, DynamoDB, S3, EFS, ElastiCache
+and generic instances. Unsupported targeted shapes and unresolved required facts
+make review inconclusive rather than negative. A valid finding can coexist with
+that coverage loss. No Terraform or AWS provider compatibility version is inferred.
 
-| Interface | Source state | What remains unverified |
+| Interface | Development evidence | Remaining boundary |
 |---|---|---|
-| Python package / CLI | Python >=3.12, Pydantic v2 dependency range, `iac-review` entrypoint in `pyproject.toml` | Resolution/lock/audit, package build/install and entrypoint execution |
-| Report bundle | Schema 1.0.0 private/shareable JSON/HTML, local artifact manifest and COMPLETE/ABORTED marker | Target-filesystem behavior, deadlines, failure/rollback/crash cases |
-| Pinned evidence viewer | `source_view.verify_report` / `view_evidence` plus main CLI `verify-report` / `evidence` source | Actual invocation, mutation/privacy/effect execution; producer authentication deliberately not claimed |
-| L/P/M | Fake-only CLI; separate disabled journal-bound programmatic HTTPS source | External admission/model/price/caps, credential/I/O/runtime checks, usage and independent scoring/rubric evidence |
-| C/C-custom/T | Runner/adapters, explicit driver and scorer bridge source | Exact scanner/binary/dependency/policy pins, sandbox, mapping and real capture compatibility |
-| Integrated run metadata | Separate RunManifest/preflight library, binary-target scoring and schema-export bindings now present | Actual schema generation, metadata/payload trust boundaries and end-to-end consumption |
-| Ledger operation | [Operator source](LEDGER.md): read-only status/pinned append-only reconciliation | Replay/ownership/receipt/crash/concurrency execution |
-| Safe sharing | [Canonical regeneration source](SHARING.md), explicit plan/current bound core pins | Privacy/HTML/rollback/fresh identity execution; stale bundles require reinspection |
-| Typed report artifacts | `report_wire` Private/Shareable/LegacyPrivate projections 1.0.0; `report_inventory` bound 1.1.0 / legacy 1.0.0 manifests and markers | Writer/reader adoption, actual validation of produced bundles, privacy/escaping behavior |
-| Pre-access input exposure | [Journal source](EXPOSURE-LEDGER.md): `InputExposureReceipt` `m4-input-exposure-v1`, commit `m4-input-exposure-commit-v1`, authorization 1 | Locking, crash durability, Windows/POSIX semantics, real custody |
-| Held-out access / frozen run / scoring handoff | `HeldoutAuthorization` `m4-heldout-input-access-v2` (v1 refused), `FrozenRunPins`, `ScoringHandoff` `m4-scoring-handoff-v1` | Real authorization, guarded reads, actual frozen run and scoring |
-| Consumed edition | [Local preparation source](CONSUMED-EDITIONS.md), `CompletionReference` v2 (v1 refused), `edition.json` v2 | Genuine seven-arm records, independent authorization, copy/failure/privacy/expiry/crash behavior |
-| Schema catalogue | [Fixed actual types](schemas/README.md), 121 declarations, catalogue v1/export manifest v2, legacy callable/--out retention | Actual schema generation/references/alias/validator/strictness compatibility; no payload/authority admission |
+| Python package / CLI | Pinned environment, installation/build and keyless CLI checks executed | Rebuild/recheck the final distributable after doc changes; broader dependency/license audit and release remain separate |
+| Report bundle and typed wire | Bound/legacy inventories, validation, finalization, privacy, escaping and selected failure/deadline regressions passed | Not every crash, filesystem or operating system is established |
+| Evidence resolver / viewer | Exact JSON types, pointers/masks, mutation refusal, explicit source pin, standalone and batch tests passed | Hash consistency is not producer authentication; entry/exit transactions may miss restored transient changes |
+| Safe sharing | Fresh opaque identities and canonical regeneration verified on synthetic inputs | Whole bundles remain private; legacy/stale source must be reinspected |
+| Schemas and integrated metadata | Fixed-registry/schema-export and version/admission regressions executed; 121 declarations | Descriptions do not replace validators or establish payload authority, independent custody or genuine execution |
+| Journal/exposure/custody | Public synthetic accounting, replay, exposure, guarded-access and handoff regressions executed | Real authority, provider billing and sealed hidden custody are not established; selected failure tests are not universal crash/concurrency proof |
+| L/P/M | Fake/offline finite-selection and protocol tests | Live provider/model/price/cap admission, independent semantic rubrics and genuine measurements remain incomplete |
+| C/C-custom/T | Scanner adapters and public development plumbing are separate from the product | Actual binary/custom-policy pins and compatible captures need their own development receipts and required comparative measurements; no live scanner result is claimed here |
+| Consumed edition | Public metadata/version/refusal regressions | Genuine seven-arm completion, external approval and real release custody remain incomplete |
 
-No cell in this table advertises a tested version. JSON format and provider shape
-support are separate axes; passing synthetic parser examples later cannot by itself
-pin a real Terraform/AWS producer profile. Missing flags stay missing unless an
-explicit tested producer profile resolves their semantics. Unknown extra fields
-do not add detector coverage.
+Default review has no model, scanner, network, subprocess, cloud or apply path.
+The development scanner harness has separately gated subprocess capability;
+passing its synthetic tests does not establish an actual tool version or mapping.
+A missing tool or mapping is incomplete work, not a true negative or proof of
+incompatibility. All seven comparative arms remain NOT MEASURED.
 
-Binary introduced-risk rows are a separate explicit target, not an equivalent
-full outcome. D exact requires full-outcome rows. Optional producer exports and
-strict all-attempt accounting do not confer live eligibility; fake/legacy rows
-still require rejection or explicit incomplete status under v2 pins.
+## Distinct version namespaces
 
-Version namespaces remain distinct. Report JSON stays 1.0.0; its artifact inventory
-is legacy 1.0.0 (seven files, unbound) or bound 1.1.0 (eight files including private
-run-manifest descriptor). Canonical types for both now exist in
-[report_inventory](../src/iac_review/contracts/report_inventory.py) (`BoundManifest`
-1.1.0, `LegacyManifest` 1.0.0) and the typed report projections in
-[report_wire](../src/iac_review/contracts/report_wire.py); [source_view](../src/iac_review/source_view.py)
-remains the exact inventory consumer boundary. Legacy integrity does not become provenance binding.
-Report provenance declares source profiles `1` (nine files) and `2` (ten files,
-adding report_wire); v2 is a deliberate new version, never an implicit upgrade of
-v1 bundles.
-Exposure namespaces are separate: pre-access `m4-input-exposure-v1` intents versus
-the unversioned legacy post-measurement `ExposureReceipt` results; consumed-edition
-`CompletionReference`/`edition.json` version 2 name both separately and refuse v1.
-Share regeneration requires a bound current bundle and refuses legacy/stale source.
-RunManifest schema_version 1 separately distinguishes deterministic/evaluation
-stages with actual validators; a schema-valid evaluation declaration is not custody
-or genuine execution. ArmRow versions 1/2 retain old defaults without upgrading
-unverified rows. Batch transport accepts only `m4-assessment-batch-transport-v1`;
-the data catalogue `m4-schema-catalogue-v1` does not select or authorize batch intake.
+- Report private/shareable JSON stays 1.0.0. Artifact manifests are legacy 1.0.0
+  (seven files, unbound) or bound 1.1.0 (eight files, including the private
+  `run-manifest.json`). Verification counts four/five hashed payloads respectively;
+  control files are not payloads. Legacy integrity never becomes provenance binding.
+- Provenance profile 1 pins nine files; profile 2 pins eleven, including
+  `contracts/report_wire.py` and `contracts/report_inventory.py`. Old bundles are
+  not silently upgraded or repinned. Current-source sharing can require reinspection.
+- Pre-access `m4-input-exposure-v1` intents and the legacy post-measurement
+  `ExposureReceipt` results are different records. `HeldoutAuthorization` v2,
+  `CompletionReference`/edition v2 and their separate pins do not grant oracle or
+  scoring permission implicitly; obsolete v1 access/completion forms are refused.
+- RunManifest schema version 1 distinguishes deterministic/evaluation stages.
+  ArmRow versions 1/2 retain explicit legacy/live-eligibility limits. Binary
+  introduced-risk predictions are not full-outcome predictions.
+- Batch intake selects `m4-assessment-batch-transport-v1`, not the data-only
+  `m4-schema-catalogue-v1`. The catalogue has description revision 1 and export
+  manifest version 2 with a separate catalogue pin and COMPLETE marker.
 
-The [registry](../eval/runner/schema_registry.py) reports fixed description revision
-1, canonical type identity, literal payload versions and private/shareable_shape
-classification. It does not invent a version for unversioned types. Ordinary
-dataclass TypeAdapter output is descriptive and does not add extra-field rejection;
-Pydantic root closure does not prove nested dict/Any privacy. Existing exported
-schema filenames/API/--out remain, while the export manifest explicitly becomes
-version 2 for its separate catalogue pin and COMPLETE marker. No schema has been
-generated and no compatibility pass is claimed. Literal versions in the registry
-were read from committed source (static inspection), not from imported modules.
+The [registry](../eval/runner/schema_registry.py) names actual canonical types and
+literal payload versions; it invents no version for unversioned types. Dataclass
+TypeAdapter descriptions do not add unknown-field rejection, and closed Pydantic
+roots do not prove nested dict/Any privacy. The dictionary `ReviewReport` facade
+and typed [report projections](../src/iac_review/contracts/report_wire.py) are
+separate; [inventory](../src/iac_review/contracts/report_inventory.py) is the
+canonical layout boundary. See [schema documentation](schemas/README.md) for
+those descriptive limits; generation has executed, but descriptions confer no
+provider activation, actor authentication or release approval.
