@@ -1,0 +1,13 @@
+FROM aquasec/trivy:0.76.1@sha256:2e6c00d711ab4ae41d8a30c2c1fd3bd3b62704c177bb120f95012e939edfb3df AS trivy
+FROM python:3.12.13-slim@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36
+LABEL agentports.project="m4"
+COPY pins/checkov.requirements.txt /opt/m4/pins/checkov.requirements.txt
+RUN python -m venv /opt/m4-checkov && /opt/m4-checkov/bin/python -m pip --isolated install --no-cache-dir --require-hashes --only-binary=:all: -r /opt/m4/pins/checkov.requirements.txt
+COPY --from=trivy /usr/local/bin/trivy /usr/local/bin/trivy
+COPY pins/source.json /opt/m4/pins/source.json
+COPY probe.py /opt/m4/probe.py
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+USER 65532:65532
+WORKDIR /tmp
+# Metadata only. No primary scan entrypoint or corpus/expected labels in this image.
+ENTRYPOINT ["/usr/local/bin/python", "-I", "/opt/m4/probe.py"]
