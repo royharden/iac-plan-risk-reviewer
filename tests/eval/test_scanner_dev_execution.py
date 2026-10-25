@@ -9,19 +9,25 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import subprocess
+import uuid
 from dataclasses import asdict, replace
 from pathlib import Path
 
 import pytest
+from test_scanner_execution_source import fixture, load
+
 from eval.scanners.runner import (
     BoundedSubprocessRunner,
     Limits,
     ScannerPin,
     capture,
     digest,
+    fixed_environment,
     invocation_digest,
+    stage_guarded_input,
 )
-from test_scanner_execution_source import fixture, load
 
 
 class PublicProcess:
@@ -228,3 +234,138 @@ def test_no_grant_refuses_before_any_start_or_raw_file(tmp_path, monkeypatch):
     with pytest.raises(PermissionError, match="pinned operator grant"):
         BoundedSubprocessRunner(True)(invocation)
     assert not list(Path(tmp_path).glob(".scanner-*"))
+
+
+def retained_workspace(name):
+    """Keep link fixtures outside pytest's automatically removed temporary tree."""
+    root = (
+        Path(__file__).resolve().parents[2]
+        / ".agent-work"
+        / "RV2-0040-junction-regression"
+        / f"{name}-{uuid.uuid4().hex}"
+    )
+    root.mkdir(parents=True, exist_ok=False)
+    return root
+
+
+def linked_workspace(kind, position):
+    root = retained_workspace(f"{kind}-{position}")
+    target = root / "target"
+    target.mkdir()
+    workspace = target if position == "direct" else target / "ordinary-child"
+    if position != "direct":
+        workspace.mkdir()
+    link = root / "linked"
+    if kind == "junction":
+        if os.name != "nt":
+            pytest.skip("Windows junction regression requires Windows")
+        # The only real process allowed in these tests creates this owned junction.
+        # No scanner Popen mock has been installed yet, and no cleanup is registered.
+        powershell = (
+            Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+        )
+
+        def quote(value):
+            return "'" + str(value).replace("'", "''") + "'"
+
+        completed = subprocess.run(
+            [
+                str(powershell),
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                (
+                    "$ErrorActionPreference='Stop'; $null=New-Item -ItemType Junction "
+                    f"-Path {quote(link)} -Target {quote(target)}"
+                ),
+            ],
+            shell=False,
+            capture_output=True,
+            check=False,
+            timeout=20,
+            env=dict(fixed_environment(root)),
+        )
+        assert completed.returncode == 0, completed.stderr.decode(errors="replace")
+        assert link.is_junction()
+    else:
+        os.symlink(target, link, target_is_directory=True)
+        assert link.is_symlink()
+    return workspace, link if position == "direct" else link / "ordinary-child"
+
+
+def file_snapshot(directory):
+    return {
+        str(path.relative_to(directory)): digest(path.read_bytes())
+        for path in directory.rglob("*")
+        if path.is_file()
+    }
+
+
+@pytest.mark.parametrize("kind", ["symlink", "junction"])
+@pytest.mark.parametrize("position", ["direct", "ancestor"])
+def test_workspace_links_refuse_before_approval_writes_or_process(monkeypatch, kind, position):
+    """what_bug_this_catches: junction or linked ancestor redirects exact-grant capture writes out of its physical workspace."""
+    physical, linked = linked_workspace(kind, position)
+    invocation, approval, manifest, grant, _ = fixture(physical)
+    invocation = replace(
+        invocation,
+        cwd=linked,
+        environment=fixed_environment(linked),
+        limits=Limits(timeout_seconds=0.1, stdout_bytes=16, stderr_bytes=16),
+    )
+    approval = replace(approval, invocation_sha256=invocation_digest(invocation))
+    grant = dict(grant, invocations=[asdict(approval)])
+    runner = BoundedSubprocessRunner(True, load(physical, manifest, grant))
+    before = file_snapshot(physical)
+    calls = []
+
+    def synthetic_process(*args, **kwargs):
+        calls.append((args, kwargs))
+        return PublicProcess()
+
+    monkeypatch.setattr("subprocess.Popen", synthetic_process)
+    refused = []
+    for operation in (runner.approval, runner):
+        try:
+            operation(invocation)
+        except (ValueError, PermissionError):
+            refused.append(True)
+        else:
+            refused.append(False)
+    # Check effects even when the approval check unexpectedly accepted the link.
+    assert not calls, f"linked workspace reached mocked Popen: {linked}"
+    assert file_snapshot(physical) == before, f"linked workspace wrote evidence: {linked}"
+    assert not list(physical.glob(".scanner-*"))
+    assert refused == [True, True], f"linked workspace approval admitted: {linked}"
+
+
+@pytest.mark.parametrize("kind", ["symlink", "junction"])
+@pytest.mark.parametrize("position", ["direct", "ancestor"])
+def test_guarded_staging_links_refuse_without_writes(kind, position):
+    """what_bug_this_catches: workspace validation fix leaves guarded input staging inconsistent for link ancestors."""
+    physical, linked = linked_workspace(kind, position)
+    (physical / "guarded-input").mkdir()
+    before = file_snapshot(physical)
+    raw = b"public synthetic guarded plan"
+    with pytest.raises((ValueError, PermissionError)):
+        stage_guarded_input(linked, raw, digest(raw), 1024)
+    assert file_snapshot(physical) == before
+    assert not list((physical / "guarded-input").iterdir())
+
+
+def test_ordinary_workspace_approval_has_no_effect_then_keeps_capture(monkeypatch):
+    """what_bug_this_catches: link confinement rejects ordinary isolated directories or makes approval write artifacts."""
+    physical = retained_workspace("ordinary")
+    runner, invocation, approval, _, calls, _ = setup(physical, monkeypatch)
+    before = file_snapshot(physical)
+    assert runner.approval(invocation) == approval
+    assert not calls and file_snapshot(physical) == before
+    raw = b"public synthetic guarded plan"
+    (physical / "guarded-input").mkdir()
+    staged = stage_guarded_input(physical, raw, digest(raw), 1024)
+    assert staged.read_bytes() == raw
+    result = runner(invocation)
+    assert len(calls) == 1 and result.error_code is None
+    receipt = terminal(physical, approval.invocation_sha256)
+    assert (physical / receipt["stdout_file"]).read_bytes() == result.stdout
+    assert (physical / receipt["stderr_file"]).read_bytes() == result.stderr
