@@ -256,7 +256,10 @@ def stage_guarded_input(workspace: Path, data: bytes, plan_sha256: str, cap: int
     if type(data) is not bytes or len(data) > cap or digest(data) != plan_sha256:
         raise ValueError("guarded input bytes differ from the permitted pin")
     path = guarded_input_path(workspace, plan_sha256)
-    _plain_directory(path.parent)
+    try:
+        _plain_directory(path.parent)
+    except FileNotFoundError as exc:
+        raise ValueError("pre-existing guarded input directory required") from exc
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
     fd = os.open(path, flags, 0o600)
     try:
