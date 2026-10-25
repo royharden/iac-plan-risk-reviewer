@@ -55,6 +55,3 @@ try {
     product_acceptance = $false; completed_at = (Get-Date -Format o)
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidencePath 'result.json') -Encoding utf8
 exit $testExitCode
-
-
-
