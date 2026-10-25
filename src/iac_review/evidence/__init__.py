@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import re
+from collections.abc import Callable
 from pathlib import Path
+from time import monotonic
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -14,7 +17,13 @@ from iac_review.contracts import (
     ResourceChange,
     ValueState,
 )
-from iac_review.ingest import SourceChangedError, decode_source, read_source_bytes
+from iac_review.ingest import (
+    MAX_SECONDS,
+    InputError,
+    SourceChangedError,
+    decode_source,
+    read_source_bytes,
+)
 
 Side = Literal["before", "after", "actions", "metadata"]
 Token = str | int
@@ -197,8 +206,17 @@ def _same_json_value(actual: Any, expected: Any) -> bool:
     return actual == expected
 
 
-def resolve(plan: PlanDocument, ref: EvidenceRef) -> ResolvedEvidence:
-    """Validate digest, resource identity, exact locator, masks and expected state."""
+def _pinned_raw(plan: PlanDocument) -> dict[str, Any]:
+    data = read_source_bytes(Path(plan.source_path))
+    if hashlib.sha256(data).hexdigest() != plan.identity.sha256:
+        raise SourceChangedError("source_digest_changed")
+    return decode_source(data)
+
+
+def _resolve_checked(
+    plan: PlanDocument, ref: EvidenceRef, raw_source: Callable[[], dict[str, Any]],
+) -> ResolvedEvidence:
+    """One checker for standalone reads and the explicit snapshot transaction."""
     empty = ValueState(state="absent")
 
     def result(status: Literal["resolved", "unknown", "sensitive", "missing", "mismatch"],
@@ -210,11 +228,9 @@ def resolve(plan: PlanDocument, ref: EvidenceRef) -> ResolvedEvidence:
     resource = next((item for item in plan.resources if item.key == ref.resource_key), None)
     if resource is None or resource.index != ref.resource_index:
         return result("mismatch", reason="wrong_resource")
-    # Mutation aborts rather than quietly withholding a single finding.
-    data = read_source_bytes(Path(plan.source_path))
-    if hashlib.sha256(data).hexdigest() != plan.identity.sha256:
-        raise SourceChangedError("source_digest_changed")
-    raw = decode_source(data)
+    # The standalone caller reopens here, preserving early identity rejection.
+    # The batch caller supplies only its freshly reopened, digest-checked raw.
+    raw = raw_source()
     try:
         entry = raw["resource_changes"][resource.index]
         if (entry.get("address"), entry.get("deposed")) != (resource.address, resource.deposed):
@@ -245,4 +261,43 @@ def resolve(plan: PlanDocument, ref: EvidenceRef) -> ResolvedEvidence:
         return result("mismatch", reason="pointer_or_shape_malformed")
 
 
-__all__ = ["make_ref", "read_value", "resolve", "verify_unchanged"]
+def resolve(plan: PlanDocument, ref: EvidenceRef) -> ResolvedEvidence:
+    """Validate one fact against independently reopened and decoded source bytes."""
+    return _resolve_checked(plan, ref, lambda: _pinned_raw(plan))
+
+
+def resolve_many(
+    plan: PlanDocument, refs: tuple[EvidenceRef, ...], *, deadline: float | None = None,
+) -> tuple[ResolvedEvidence, ...]:
+    """Resolve ordered refs atomically against one freshly verified snapshot.
+
+    Entry and exit reopen the source. A transient mutation restored wholly
+    between those boundaries may go unobserved; this is not continuous source
+    monitoring. No raw snapshot or partial result escapes this invocation.
+    """
+    started = monotonic()
+    if deadline is not None and (
+        type(deadline) not in (int, float) or not math.isfinite(deadline)
+    ):
+        raise ValueError("deadline_invalid")
+    end = started + MAX_SECONDS if deadline is None else min(deadline, started + MAX_SECONDS)
+
+    def check_deadline() -> None:
+        if monotonic() >= end:
+            raise InputError("review_time_limit")
+
+    check_deadline()
+    raw = _pinned_raw(plan)
+    check_deadline()
+    results: list[ResolvedEvidence] = []
+    for ref in refs:
+        check_deadline()
+        results.append(_resolve_checked(plan, ref, lambda: raw))
+        check_deadline()
+    # Refuse the entire transaction if closure cannot verify the original input.
+    verify_unchanged(plan)
+    check_deadline()
+    return tuple(results)
+
+
+__all__ = ["make_ref", "read_value", "resolve", "resolve_many", "verify_unchanged"]
