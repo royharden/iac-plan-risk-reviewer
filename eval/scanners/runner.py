@@ -442,15 +442,19 @@ class BoundedSubprocessRunner:
         return matches[0]
 
     @staticmethod
-    def _receipt(path: Path, payload: dict) -> str:
+    def _write_bytes(path: Path, raw: bytes) -> str:
         import os
-        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"),
-                         allow_nan=False).encode()
         with path.open("xb") as stream:
             stream.write(raw)
             stream.flush()
             os.fsync(stream.fileno())
         return digest(raw)
+
+    @staticmethod
+    def _receipt(path: Path, payload: dict) -> str:
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                         allow_nan=False).encode()
+        return BoundedSubprocessRunner._write_bytes(path, raw)
 
     def __call__(self, invocation: Invocation) -> RunResult:
         approved = self.approval(invocation)
@@ -472,12 +476,21 @@ class BoundedSubprocessRunner:
                    elapsed: float, timed_out: bool = False, truncated: bool = False,
                    error_code: str | None = None, process_id: int | None = None) -> RunResult:
             terminal_sha = None
+            stdout_name = ".scanner-stdout-" + stem + ".bin"
+            stderr_name = ".scanner-stderr-" + stem + ".bin"
+            try:
+                self._write_bytes(invocation.cwd / stdout_name, stdout)
+                self._write_bytes(invocation.cwd / stderr_name, stderr)
+            except OSError:
+                error_code = "raw_output_write_failed"
             try:
                 terminal_sha = self._receipt(invocation.cwd / (".scanner-terminal-" + stem + ".json"), {
                     "schema_version": "m4-local-scanner-terminal-v1", "operator_grant_sha256": grant_sha,
                     "start_receipt_sha256": start_sha, "invocation_sha256": stem,
                     "process_started": kind == "live", "process_id": process_id,
                     "raw_exit_code": code, "stdout_sha256": digest(stdout), "stderr_sha256": digest(stderr),
+                    "stdout_file": stdout_name, "stderr_file": stderr_name,
+                    "retained_output_complete": error_code != "raw_output_write_failed",
                     "elapsed_seconds": elapsed, "timed_out": timed_out, "output_truncated": truncated,
                     "error_code": error_code})
             except OSError:
@@ -857,7 +870,8 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
                            reasons=("untrusted_runner_cannot_attest_execution",))
         if result.error_code is not None or result.execution_kind == "none":
             reason = result.error_code if result.error_code in {
-                "process_start_failed", "terminal_receipt_write_failed"} else "process_not_started"
+                "process_start_failed", "terminal_receipt_write_failed",
+                "raw_output_write_failed"} else "process_not_started"
             return replace(base, status="error", reasons=(reason,))
         if result.timed_out or result.elapsed_seconds > limits.timeout_seconds + 2:
             return replace(base, status="timeout", reasons=("scanner_timeout",))

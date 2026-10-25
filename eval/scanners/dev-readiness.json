@@ -1,0 +1,464 @@
+{
+  "schema_version": "m4-scanner-dev-readiness-v1",
+  "status": "NOT_RUN",
+  "source_enrichment": false,
+  "product_acceptance": false,
+  "input_scope": "development_synthetic",
+  "original_input_commit": "484eb2208f877bb55add90ee5de6080cf08e4e4e",
+  "original_inputs": [
+    {
+      "path": "fixtures/scenarios/dev/r1-add-rdp-to-ssh.json",
+      "sha256": "7df720e9e442275163f58084b60b52813ee717a9c9531a278f91011b4d472f74",
+      "bytes": 775,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r1-cidr-reorder.json",
+      "sha256": "61c9f38da703d7d14c636bb99dd70330df3eb3e6d7dbb049b6fc0d5e80eff6dd",
+      "bytes": 799,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r1-https-outside-policy.json",
+      "sha256": "65722f1c3d8904e96ee9aa5fd36bb0f97592037207ff86e19db2e16fa13729fb",
+      "bytes": 600,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r1-inline-unsupported.json",
+      "sha256": "5f5ddce54ba1a40124fdc0692bba68ec60311dd74b7f6ffd50019bf965289b8d",
+      "bytes": 411,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r1-ipv6-rdp.json",
+      "sha256": "77e8fa1489d12785d56f7fd85bb7339cd5d8b8fc16bf7765a2c5107f89d47772",
+      "bytes": 597,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r1-unknown-prior.json",
+      "sha256": "5d2a4b60c6c831054d4eb8a7f5cfc4a2d661a988ee2a48ca406977c2a5444845",
+      "bytes": 596,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r1-world-ssh-create.json",
+      "sha256": "69910c98ea2c7f08bd04f7423edc71557a7c5a2f2f54dbabf7fbae6d859607a1",
+      "bytes": 598,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r2-becomes-private.json",
+      "sha256": "89dd5e07cd95ae5a184c6956443f907077c6896a689c79772b9a5878d0f90e12",
+      "bytes": 506,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r2-public-create.json",
+      "sha256": "e8fe0c426263d2eaf34110541fd3015b703997d33e5f67bbdbdf42b8bc435b54",
+      "bytes": 456,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r2-sensitive-after.json",
+      "sha256": "c9b568b83881245ecb314e8232611fbef23b8c4cd2c59d281eeac4f0ff865d76",
+      "bytes": 532,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r2-still-public.json",
+      "sha256": "08cd39b77faf64af44dc81240d0f5736af893b90236b1b70f7ddfc3dbf2648ae",
+      "bytes": 505,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r2-unknown-prior.json",
+      "sha256": "a6978ab782a18fbaccf2c36f8c2129d9853ef225023fcb9c8d6d1947fd74ccae",
+      "bytes": 478,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r3-create-unencrypted.json",
+      "sha256": "c39efdb5b679bc22c86d0677dd93e6691d18b66328b2551a552e3d7c611e849c",
+      "bytes": 420,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r3-missing-after.json",
+      "sha256": "a353a5d60a6975a34dd5884165db45753bc3f624890e365dbb497a3f1ca5f331",
+      "bytes": 417,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r3-removes-encryption.json",
+      "sha256": "1b2f90d017eab7b8a779a39dc65bf6a1f658d862743d0cd3a5073f322e7e5a1d",
+      "bytes": 434,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r3-still-encrypted.json",
+      "sha256": "35604884710ab13ba854d67c2cf0bb6160085c7c8e5a41e70301d24094cd8ddd",
+      "bytes": 433,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r3-unknown-prior.json",
+      "sha256": "5a567235f077ef0dd2dfaa9e226b5eb154f667d5eab82ff4fc0b8ff6447324e2",
+      "bytes": 418,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r4-contradictory-prior.json",
+      "sha256": "bf3d2864a171f4a71cf41a8c1c93b8a3efbf36ae4b33ece4c42c4d228623eab6",
+      "bytes": 405,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r4-create-destroy.json",
+      "sha256": "891b57605d5e723b071205b461602c5ad0ca32dad5e7657b5762c642a80eafb1",
+      "bytes": 470,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r4-create.json",
+      "sha256": "4740c51f195bf30f0b2a4ff226546441103786810bc76f6a316cddf46c44fe61",
+      "bytes": 419,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r4-delete.json",
+      "sha256": "5873ee63d8a99d69c9dbad34b73ad1a0c7ec7fbfab7ae75ec204be3337e51b6a",
+      "bytes": 447,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r4-destroy-create.json",
+      "sha256": "c4b90eda8e376234fa63bdb45cf7b69f41220909d8768164a3166d5587a76d65",
+      "bytes": 470,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r4-other-stateful.json",
+      "sha256": "b1e486d53aacea07767e221af396a22ebc90bfb65bdf49e65d7ded1e34c96263",
+      "bytes": 411,
+      "has_planned_values": false,
+      "has_configuration": false
+    },
+    {
+      "path": "fixtures/scenarios/dev/r4-update.json",
+      "sha256": "35604884710ab13ba854d67c2cf0bb6160085c7c8e5a41e70301d24094cd8ddd",
+      "bytes": 433,
+      "has_planned_values": false,
+      "has_configuration": false
+    }
+  ],
+  "original_input_disposition": "All24 omit planned_values. Preserve as original admission/compatibility diagnostics; no comparable primary scanner rows inferred. Fixture-owner successor requires INT approval.",
+  "images": {
+    "checkov": {
+      "image": "bridgecrew/checkov:3.3.30@sha256:a1b2d159f46b452bc87eb6d6d07ac04d82855b7530079197f86f6221e0d77158",
+      "index_digest": "sha256:4b65e89f1fde292249fc0aa0d0db43302c036dfe39f7370b2d3517571082b894",
+      "linux_amd64_digest": "sha256:a1b2d159f46b452bc87eb6d6d07ac04d82855b7530079197f86f6221e0d77158",
+      "metadata_url": "https://hub.docker.com/v2/repositories/bridgecrew/checkov/tags/3.3.30/",
+      "version": "3.3.30"
+    },
+    "trivy": {
+      "image": "aquasec/trivy:0.76.1@sha256:2e6c00d711ab4ae41d8a30c2c1fd3bd3b62704c177bb120f95012e939edfb3df",
+      "index_digest": "sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c",
+      "linux_amd64_digest": "sha256:2e6c00d711ab4ae41d8a30c2c1fd3bd3b62704c177bb120f95012e939edfb3df",
+      "metadata_url": "https://hub.docker.com/v2/repositories/aquasec/trivy/tags/0.76.1/",
+      "version": "0.76.1"
+    }
+  },
+  "checkov_install": {
+    "version": "3.3.30",
+    "python": "3.12",
+    "venv": "/opt/m4-checkov",
+    "executable": "/opt/m4-checkov/bin/checkov",
+    "requirements_path": "eval/scanners/checkov-3.3.30.requirements.txt",
+    "requirements_sha256": "3bc130464fd7c4e7c17a2bf8441cbe046cee0db4aa067ea64433da6c368c44d2",
+    "install_flags": [
+      "--isolated",
+      "--require-hashes",
+      "--only-binary=:all:"
+    ],
+    "installed": false,
+    "reason": "Official Checkov image Dockerfile is Python3.11; isolated hashlocked deps align orchestrator Python3.12 without changing core lock."
+  },
+  "trivy_executable": "/usr/local/bin/trivy",
+  "config": {
+    "path": "eval/scanners/dev-empty-config.json",
+    "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+  },
+  "custom_policy_files": [
+    {
+      "path": "policies/checkov-custom/__init__.py",
+      "sha256": "7ce0b52ef7a7150ce1008abf206fab47fa1435782e615f42f92b47978e40d61e",
+      "bytes": 83
+    },
+    {
+      "path": "policies/checkov-custom/m4_checks.py",
+      "sha256": "2c7d461436f16c37e03de3eb85f56ddf48b2526213a050635d52b2991b4e6f8a",
+      "bytes": 2632
+    },
+    {
+      "path": "policies/checkov-custom/m4_policy.py",
+      "sha256": "54a0421eab88a068cc7224a3b07a22fb16f59f9be9b53ec3dd977baa4d2cce57",
+      "bytes": 10786
+    }
+  ],
+  "check_ids": {
+    "C": [
+      "CKV_AWS_24",
+      "CKV_AWS_25",
+      "CKV_AWS_17"
+    ],
+    "C-custom": [
+      "CKV_M4_R1",
+      "CKV_M4_R2",
+      "CKV_M4_R3",
+      "CKV_M4_R4"
+    ],
+    "T": []
+  },
+  "overlap_declarations": [
+    {
+      "arm": "C",
+      "rule_id": "R1",
+      "actions": [
+        [
+          "create"
+        ]
+      ],
+      "resource_types": [
+        "aws_security_group_rule"
+      ],
+      "check_ids": [
+        "CKV_AWS_24",
+        "CKV_AWS_25"
+      ],
+      "compatibility": "unverified",
+      "limits": "Only known nonsensitive create exposure candidates. Before/after transitions, masks, malformed/unsupported sources need explicit compatibility proof, never TN."
+    },
+    {
+      "arm": "C",
+      "rule_id": "R2",
+      "actions": [
+        [
+          "create"
+        ]
+      ],
+      "resource_types": [
+        "aws_db_instance"
+      ],
+      "check_ids": [
+        "CKV_AWS_17"
+      ],
+      "compatibility": "unverified",
+      "limits": "Known nonsensitive declared Boolean create only; no routing proof or transition equivalence."
+    },
+    {
+      "arm": "C",
+      "rule_id": "R3",
+      "actions": [],
+      "compatibility": "unmapped",
+      "reason": "Configuration encryption checks do not prove true-to-false removal."
+    },
+    {
+      "arm": "C",
+      "rule_id": "R4",
+      "actions": [],
+      "compatibility": "unmapped",
+      "reason": "Configuration checks do not encode action/prior-existence predicate."
+    },
+    {
+      "arm": "C-custom",
+      "rule_ids": [
+        "R1",
+        "R2",
+        "R3",
+        "R4"
+      ],
+      "compatibility": "unverified",
+      "candidate_contract": "policies/checkov-custom/mapping.json",
+      "reason": "Actual Checkov callback and UNKNOWN behavior must be observed; deletion absent from planned_values remains incomplete."
+    },
+    {
+      "arm": "T",
+      "rule_ids": [
+        "R1",
+        "R2",
+        "R3",
+        "R4"
+      ],
+      "compatibility": "unmapped",
+      "reason": "Requires exact installed local policy bundle and check-ID/resource/semantics mapping; no guessed AVD mappings."
+    }
+  ],
+  "runtime_authorization": {
+    "owner": "RV2",
+    "status": "requires image introspection, fixture disposition, actual invocation pins and explicit INT dev-execution grant",
+    "runner": "eval.scanners.runner.BoundedSubprocessRunner",
+    "driver": "eval.scanners.driver.compare",
+    "entrypoint": "scripts/eval_scanners.py --mode pinned-local",
+    "no_scanner_execution_by_preparer": true
+  },
+  "raw_capture": {
+    "directory": "private per-arm workspace",
+    "stdout": ".scanner-stdout-<invocation_sha256>.bin",
+    "stderr": ".scanner-stderr-<invocation_sha256>.bin",
+    "terminal": ".scanner-terminal-<invocation_sha256>.json",
+    "bounded": true,
+    "exclusive_create": true,
+    "no_shareable_raw_output": true
+  },
+  "sources": [
+    {
+      "snapshot_name": "checkov-attrs.source",
+      "sha256": "f50198a232dbc0a742ce324b6e303602e463f0441518453bc8f87a623d69b545",
+      "bytes": 1558
+    },
+    {
+      "snapshot_name": "checkov-cli.source",
+      "sha256": "ac4c94febb8224c8913fbc0112dc44b1e96466995573bb122a81ce81b51e22ee",
+      "bytes": 1024
+    },
+    {
+      "snapshot_name": "checkov-const.source",
+      "sha256": "2b82d3c687012ff105af0b8837110e85f6d3fe746974b1779dede45b0ac0f612",
+      "bytes": 565
+    },
+    {
+      "snapshot_name": "checkov-customattrs.source",
+      "sha256": "56127633b907d4e32252b12a3ad2bb29ac1be4dc90c1e62c1983ddd540804915",
+      "bytes": 101
+    },
+    {
+      "snapshot_name": "checkov-dockerfile.source",
+      "sha256": "9214dbe717b0ea494e27569c925954ea8a6b135d754f6975abeb61310e5189db",
+      "bytes": 1905
+    },
+    {
+      "snapshot_name": "checkov-enum.source",
+      "sha256": "c649d586b63600940eeaf4e032c6fa79e9cf9c78b5e5811b19fccb94a5eabb00",
+      "bytes": 1455
+    },
+    {
+      "snapshot_name": "checkov-parser.source",
+      "sha256": "3d1aa6717deff9f35c4df07f8fd7854deceeeeb0b40cf1094737bb6a9db33b43",
+      "bytes": 24605
+    },
+    {
+      "snapshot_name": "checkov-rdp.source",
+      "sha256": "9cc3af1023927428c6dc82af292f183a4879968d5ddf0e8e448d3833520bf92f",
+      "bytes": 337
+    },
+    {
+      "snapshot_name": "checkov-rds.source",
+      "sha256": "20e6a78f0065116436e327ec4c58215a6e2b0290cebb758378ca24af9492c512",
+      "bytes": 754
+    },
+    {
+      "snapshot_name": "checkov-runner.source",
+      "sha256": "2607f2c8be7df87fdad3053c9432a714319a0960926f5a94d78236b45858f52e",
+      "bytes": 15661
+    },
+    {
+      "snapshot_name": "checkov-ssh.source",
+      "sha256": "b37d4ab7264814d4b38dbcb9416db0369c2f043bf8fee3e19c00c717a601bfdf",
+      "bytes": 331
+    },
+    {
+      "snapshot_name": "trivy-dockerfile.source",
+      "sha256": "1e3e7c35b2fb05a1aa7512a211bc9520432fd86dc4193ad3957d7d3d35a416be",
+      "bytes": 263
+    },
+    {
+      "snapshot_name": "trivy-global-flags.source",
+      "sha256": "9d69c5e6f1bbc541ff4b116e35815b4be7f1891b049f8e490e2cb098229cc3d5",
+      "bytes": 5837
+    },
+    {
+      "snapshot_name": "trivy-json-analyzer.source",
+      "sha256": "743fc2679e3c299438182cbb53ad0f2f70b2a6b18c3cd5ad3fa7b196014c9e11",
+      "bytes": 1285
+    },
+    {
+      "snapshot_name": "trivy-misconf-flags.source",
+      "sha256": "26cfb3dcfe4bcf57619447facd5e97d1f1140b63d0f5b1d5ffb63992f9daadde",
+      "bytes": 10418
+    },
+    {
+      "snapshot_name": "trivy-parser.source",
+      "sha256": "ffe8484c4effc55c8caf285cf77bfd3b8b481834da92befa67bebf4c4dd5e45f",
+      "bytes": 8365
+    },
+    {
+      "snapshot_name": "trivy-planfile.source",
+      "sha256": "b1c627ad1a6d6712dca8f46877b7c205045490f80b743932b4b4d571f736f595",
+      "bytes": 1391
+    },
+    {
+      "snapshot_name": "trivy-policy.source",
+      "sha256": "452873766dc8a2fd3ed33ef3fb27239f86d021477fce641db860b9f65ed3f2c9",
+      "bytes": 8202
+    },
+    {
+      "snapshot_name": "trivy-report-flags.source",
+      "sha256": "d336dd5c7296e8e3b3d81c4af3b8ba1ac161146a07442cff8c45235546b877d3",
+      "bytes": 10380
+    },
+    {
+      "snapshot_name": "trivy-scan-flags.source",
+      "sha256": "56c94020af2b04d82ffd413fa65af5b15ace65d144914ea96d6bc5c86e0e3575",
+      "bytes": 10649
+    },
+    {
+      "snapshot_name": "trivy-scanner.source",
+      "sha256": "b5fef4b462b42a0e7392c72b68fafbb1d0254bca5e99625acca61ee469870aa3",
+      "bytes": 1951
+    },
+    {
+      "snapshot_name": "trivy-tree.source",
+      "sha256": "6ff5adf2894d39e882f4731b69bd1c34ce571e5b4a5c54d07b3b8e4eca162709",
+      "bytes": 1279740
+    }
+  ],
+  "successor_input_authority": {
+    "edition": "m4-public-fullplan-dev-v2",
+    "approval": "agentops/runs/PB-M4-R03/assignments/I-RV2-public-dev-v2-amendment-r1.md",
+    "scope": "Fixture construction, integrity tests and packaging/version probes only; no primary scanner execution",
+    "owner": "RV2",
+    "independent_integrity_reviewer": "RV1",
+    "input_pin_status": "awaiting frozen bytes/hash inventory",
+    "requirements": [
+      "Preserve original24 bytes and resource_changes semantics",
+      "Honor after_unknown in planned_values; preserve list positions and sensitivity",
+      "No planned placeholders for delete-only/null-after resources; no invented configuration",
+      "Same dev ancestry and independent labels only after integrity proof",
+      "D rerun on all new hashes before primary C/C-custom/T; L/P/M unmeasured"
+    ]
+  }
+}
