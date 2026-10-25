@@ -58,7 +58,8 @@ from Terraform/AWS producers. No HCL/source enrichment is allowed.
 
 Use the existing `checkov_adapter.scan` and `trivy_adapter.scan` argv builders.
 The only config is `eval/scanners/dev-empty-config.json`, containing `{}`.
-Each arm/case needs its own private writable workspace and exclusive receipt names.
+Use one private writable workspace per arm. Distinct case invocation hashes separate
+exclusive receipt names inside it; the batch manifest has one settings object per arm.
 
 Checkov options are `--file <exact-plan> --framework terraform_plan --output json
 --compact --check <fixed-ids> --config-file <empty-config> --skip-download
