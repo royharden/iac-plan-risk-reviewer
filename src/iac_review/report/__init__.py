@@ -5,31 +5,44 @@ projection sensitive even though all attribute values pass the safe-fact filter.
 """
 from __future__ import annotations
 
-from collections import Counter
-from datetime import datetime, timezone
-from hashlib import sha256
-from html import escape
 import json
 import math
 import os
-from pathlib import Path
 import re
+from collections import Counter
+from datetime import UTC, datetime
+from hashlib import sha256
+from html import escape
+from pathlib import Path
 from time import monotonic
 from typing import Any
 from uuid import uuid4
 
 from iac_review.contracts import (
-    PARSER_VERSION, POLICY_VERSION, EvidenceRef, PlanDocument, ReviewReport,
-    RuleEvaluation, ValueState,
+    PARSER_VERSION,
+    POLICY_VERSION,
+    EvidenceRef,
+    PlanDocument,
+    ReviewReport,
+    RuleEvaluation,
+    ValueState,
 )
 from iac_review.contracts.report_inventory import (
-    BOUND_PAYLOADS, PRIVACY_TEXT, AbortedMarker, classify_bundle, validate_export_state,
+    BOUND_PAYLOADS,
+    PRIVACY_TEXT,
+    AbortedMarker,
+    classify_bundle,
+    validate_export_state,
 )
 from iac_review.evidence import resolve_many, verify_unchanged
-from iac_review.ingest import InputError, MAX_BYTES, MAX_SECONDS
+from iac_review.ingest import MAX_BYTES, MAX_SECONDS, InputError
 from iac_review.provenance import (
-    DESCRIPTOR_FILE, ReportProvenance, descriptor_bytes, local_descriptor,
-    private_binding, verify_descriptor,
+    DESCRIPTOR_FILE,
+    ReportProvenance,
+    descriptor_bytes,
+    local_descriptor,
+    private_binding,
+    verify_descriptor,
 )
 
 REPORT_VERSION = "1.0.0"
@@ -446,7 +459,7 @@ def write_report(report: ReviewReport, out: Path, *, deadline: float | None = No
         payloads[DESCRIPTOR_FILE] = provenance_bytes
         private_manifest = {
             "schema_version": "1.1.0", "run_id": private["run_id"],
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "plan_sha256": private["plan"]["sha256"],
             "parser_version": PARSER_VERSION, "policy_version": POLICY_VERSION,
             "artifacts": {name: sha256(data).hexdigest() for name, data in payloads.items()},
