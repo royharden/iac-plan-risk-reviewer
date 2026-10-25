@@ -118,3 +118,79 @@ Missing checks, input incompatibility, timeouts and parser failures remain visib
 RV2 owns container execution and independent regressions; INT owns acceptance and
 combined checks. Hidden/holdout, live models, paid calls and final required-arm
 measurement remain unmeasured regardless of public development results.
+
+## Complete Trivy cache transport (development v2)
+
+`m4-scanner-run-v2` is explicit and restricted to `development_synthetic`.
+The T arm uses `bundle_inventory` with exactly `profile`, `root`, `manifest_path`
+and `tree_sha256`; `bundle_files` is forbidden in this mode. The root is exactly
+`<T workspace>/policy`, with an external manifest. C/C-custom retain their v1
+interfaces. V1 refuses complete-tree fields; its invocation digest, pinned file
+limits, policy file inventory and capture/report wires are unchanged.
+
+`eval.scanners.bundle_inventory.BundleInventory` is immutable. Its profile
+`m4-trivy-complete-cache-v1` fixes 1,024 regular files, 256 directories and 1,280
+entries (root excluded), 65,536 bytes per file, 2,097,152 aggregate file bytes,
+256 relative path bytes, depth 12, and 524,288 canonical manifest bytes.
+No caller may raise these caps. `load_bundle_inventory` validates the closed
+input descriptor and canonical expected manifest; `verify_tree` independently
+walks and hashes the entire actual tree. No cache/subset can substitute for a walk.
+
+The manifest has exactly `schema_version: m4-scanner-bundle-tree-v1`,
+`algorithm: sha256`, `paths: normalized-posix-relative-utf8`, and `rows`.
+Directory rows have `path` and `kind: directory`; file rows also have `bytes`
+and `sha256`, with `kind: file`. Rows are sorted by exact UTF-8 path bytes.
+Serialization is ASCII JSON with `ensure_ascii=True`, sorted keys, compact comma
+and colon separators, finite values and no newline. Duplicate keys or a different
+encoding fail. The tree digest is SHA256 of these exact bytes and of the separately
+reconstructed actual tree. Root relocation preserves portable tree identity and
+changes invocation identity through the absolute binding.
+
+Relative paths use ASCII `[A-Za-z0-9_.-]+` segments. Empty, dot/dotdot, absolute,
+UNC/drive, backslash, ADS, control, trailing-dot and Windows-device aliases fail.
+All parents and empty directories are explicit. Duplicate and casefold collisions
+fail across files and directories; equal basenames at different relative paths
+are legal. The traversal streams bounded directory entries, rejects symlinks,
+reparse points, junctions, special objects and non-single-link regular files,
+and checks opened file and directory identities before/after. No-follow final
+opens are used where supported. These checks do not provide atomic handle-relative
+race immunity: the operator must exclude concurrent mutation in an isolated sandbox.
+
+T's policy receipt has exactly `schema_version: m4-scanner-policy-manifest-v2`,
+`scanner_name: trivy`, `check_ids` (actual enabled IDs), and `bundle_tree_sha256`.
+The invocation binds the typed descriptor, all effective caps and pinned external
+manifest bytes. Existing closed `ApprovedInvocation`, `LocalExecutionGrant`,
+`ScanArtifact`, comparison and report fields stay unchanged. The invocation,
+policy, comparison manifest, capture and terminal hashes transitively bind the
+tree. New policy bytes require new mapping compatibility/pins and an exact external
+grant; a transport hash never proves check semantics or scoring eligibility.
+
+One monotonic deadline covers preparation, approval, verification, process and
+closure, at most 30 seconds or a tighter caller limit. The internal clock is
+excluded from identity. Successful complete walks occur before approval/start,
+immediately before process invocation and after it. Any missing/extra/drifted
+entry, read error, link or cap failure prevents eligible prediction. Failed phases
+retain null summaries rather than fabricated counts. After start, raw/terminal
+persistence is attempted even if the eligibility deadline expires; this recovery
+does not extend the eligible attempt. The private terminal alone gains a
+`bundle_inventory` object with `expected_tree_sha256`, `before`, `after`, and
+`closure_error`. Successful phase summaries contain exactly `tree_sha256`, `files`,
+`directories`, `aggregate_file_bytes` and `elapsed_seconds`. A null `after` or
+non-null closure error cannot establish success. Legacy terminal payloads omit
+this object.
+
+The approved proposed complete cache is 642 files (641 OCI payload files plus
+174 bytes of locally generated metadata), 99 directories below `policy`, and
+1,056,327 bytes. Canonical tree SHA256 is
+`6168428f0f5260c79536f13b9697dd5d7fb6866e96a4762e3f8e651b34a342b2`.
+D8 independently audited the actual tree using a different canonical format;
+its digest is not a parity claim. This profile does not copy cache payloads into
+Git or authorize scanner execution. RV2 must establish Linux performance,
+complete seed copy, final-image loaded bytes, policy closure and retained outputs
+under a later exact INT resource/execution grant.
+
+INT explicitly selected exact Git LF custom-policy blobs for the future Linux
+image in `CONTRACT-TRIVY-TREE-R03-v1.md`. `dev-readiness.json` v2 records their
+new exact hashes and preserves the earlier Windows CRLF pins as provenance.
+Policy source semantics are unchanged; the final loaded image still needs RV2
+verification. Historical candidates and records retain their original bytes.

@@ -11,9 +11,12 @@ import json
 import math
 import re
 import stat
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Literal, Protocol
+
+from .bundle_inventory import BundleInventory, verify_tree
 
 if TYPE_CHECKING:
     from .artifacts import Capture, Mapping
@@ -132,25 +135,58 @@ class Invocation:
     # Rechecked immediately before and after every trusted runner invocation.
     pinned_files: tuple[tuple[Path, str, int], ...]
 
-    def verify(self) -> None:
+    bundle_inventory: BundleInventory | None = None
+    # Attempt-local clock is deliberately excluded from invocation identity.
+    attempt_deadline: float | None = field(default=None, repr=False, compare=False)
+
+    def verify(self, *, deadline: float | None = None) -> None:
         if not self.argv or not Path(self.argv[0]).is_absolute():
             raise ValueError("absolute pinned scanner command required")
         _plain_directory(self.cwd)
         if len(dict(self.environment)) != len(self.environment):
             raise ValueError("duplicate environment key")
+        if self.bundle_inventory is not None:
+            _tree_roles(self)
+            verify_tree(self.bundle_inventory, deadline=self.attempt_deadline if deadline is None else deadline)
         for path, expected, cap in self.pinned_files:
             if not path.is_absolute() or digest(bounded_read(path, cap)) != expected:
                 raise ValueError("pinned scanner input changed")
+        if self.bundle_inventory is not None:
+            effective_deadline = self.attempt_deadline if deadline is None else deadline
+            if effective_deadline is not None and time.monotonic() >= effective_deadline:
+                raise TimeoutError("complete-tree attempt deadline exhausted")
 
 
 def invocation_digest(invocation: Invocation) -> str:
     """Exact local command/environment/files/bounds fingerprint, no execution."""
-    return digest(json.dumps({"argv": invocation.argv, "cwd": str(invocation.cwd),
-                              "environment": invocation.environment,
-                              "limits": asdict(invocation.limits),
-                              "files": [(str(path), sha, cap)
-                                        for path, sha, cap in invocation.pinned_files]},
-                             sort_keys=True, separators=(",", ":")).encode())
+    payload = {"argv": invocation.argv, "cwd": str(invocation.cwd),
+               "environment": invocation.environment, "limits": asdict(invocation.limits),
+               "files": [(str(path), sha, cap) for path, sha, cap in invocation.pinned_files]}
+    if invocation.bundle_inventory is not None:
+        payload["bundle_inventory"] = invocation.bundle_inventory.identity()
+    return digest(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode())
+
+
+def _tree_roles(invocation: Invocation) -> None:
+    binding = invocation.bundle_inventory
+    if type(binding) is not BundleInventory or binding.root != invocation.cwd / "policy":
+        raise ValueError("typed complete-tree binding at exact workspace/policy required")
+    paths = [path for path, _, _ in invocation.pinned_files]
+    if (len(paths) != len(set(paths))
+            or any(path.is_relative_to(binding.root) for path in paths)
+            or any(path.name.startswith(".scanner-") and path.parent == invocation.cwd for path in paths)
+            or (binding.manifest_path, binding.tree_sha256, 524288) not in invocation.pinned_files):
+        raise ValueError("tree/manifest/input roles must be distinct and pinned")
+
+
+def _tree_policy(value: object, check_ids: tuple[str, ...], binding: BundleInventory) -> None:
+    if (not isinstance(value, dict)
+            or set(value) != {"schema_version", "scanner_name", "check_ids", "bundle_tree_sha256"}
+            or value["schema_version"] != "m4-scanner-policy-manifest-v2"
+            or value["scanner_name"] != "trivy" or value["check_ids"] != list(check_ids)
+            or value["bundle_tree_sha256"] != binding.tree_sha256):
+        raise ValueError("closed Trivy policy-v2 tree/check binding required")
+
 
 
 @dataclass(frozen=True)
@@ -362,6 +398,22 @@ def _local_profile(invocation: Invocation, approved: ApprovedInvocation) -> None
             or any(pin not in file_pins.values() for pin in (approved.dependency_manifest_sha256,
                    approved.version_evidence_sha256, approved.policy_sha256))):
         raise PermissionError("approved input/installation/config/policy files differ")
+    if invocation.bundle_inventory is not None:
+        if approved.arm != "T" or approved.scanner_name != "trivy":
+            raise PermissionError("complete-tree binding only permitted for Trivy T")
+        _tree_roles(invocation)
+        policy_files = [path for path, sha, _ in invocation.pinned_files if sha == approved.policy_sha256]
+        if len(policy_files) != 1:
+            raise PermissionError("one exact complete-tree policy receipt required")
+        _tree_policy(strict_json(bounded_read(policy_files[0], 1024 * 1024)),
+                     approved.check_ids, invocation.bundle_inventory)
+    else:
+        for path, sha, _ in invocation.pinned_files:
+            if sha == approved.policy_sha256:
+                value = strict_json(bounded_read(path, 1024 * 1024))
+                if isinstance(value, dict) and (value.get("schema_version") == "m4-scanner-policy-manifest-v2"
+                                                or "bundle_tree_sha256" in value):
+                    raise PermissionError("policy-v2 requires complete-tree invocation binding")
     version_files = [path for path, sha, _ in invocation.pinned_files if sha == approved.version_evidence_sha256]
     version = strict_json(bounded_read(version_files[0], 64 * 1024))
     if not isinstance(version, dict) or any(version.get(key) != expected for key, expected in (
@@ -448,6 +500,8 @@ class BoundedSubprocessRunner:
                    if item.invocation_sha256 == invocation_digest(invocation)]
         if len(matches) != 1:
             raise PermissionError("this exact scanner invocation is not approved")
+        if invocation.bundle_inventory is not None and self.execution_grant.input_scope != "development_synthetic":
+            raise PermissionError("complete-tree mode is development synthetic only")
         invocation.verify()
         _local_profile(invocation, matches[0])
         if any((invocation.cwd / name).exists() for name in (
@@ -475,12 +529,29 @@ class BoundedSubprocessRunner:
         return BoundedSubprocessRunner._write_bytes(path, raw)
 
     def __call__(self, invocation: Invocation) -> RunResult:
-        approved = self.approval(invocation)
         import subprocess
         import threading
         import time
+        from dataclasses import replace
 
         started = time.monotonic()
+        if invocation.bundle_inventory is not None:
+            maximum_deadline = started + min(30.0, invocation.limits.timeout_seconds)
+            supplied = invocation.attempt_deadline
+            if supplied is not None and (type(supplied) not in {int, float} or not math.isfinite(supplied)):
+                raise ValueError("finite absolute attempt deadline required")
+            invocation = replace(invocation, attempt_deadline=min(maximum_deadline, supplied)
+                                 if supplied is not None else maximum_deadline)
+        approved = self.approval(invocation)
+        if invocation.bundle_inventory is None:
+            # Preserve legacy v1 timing: its budget starts after approval.
+            started = time.monotonic()
+        deadline = (invocation.attempt_deadline if invocation.bundle_inventory is not None
+                    else started + invocation.limits.timeout_seconds)
+        tree_evidence = None
+        if invocation.bundle_inventory is not None:
+            tree_evidence = {"expected_tree_sha256": invocation.bundle_inventory.tree_sha256,
+                             "before": None, "after": None, "closure_error": None}
         grant_sha = self.execution_grant.approved_bytes_sha256
         stem = approved.invocation_sha256
         try:
@@ -494,6 +565,16 @@ class BoundedSubprocessRunner:
                    elapsed: float, timed_out: bool = False, truncated: bool = False,
                    error_code: str | None = None, process_id: int | None = None) -> RunResult:
             terminal_sha = None
+            if tree_evidence is not None:
+                try:
+                    tree_evidence["after"] = verify_tree(invocation.bundle_inventory, deadline=deadline)
+                except TimeoutError:
+                    tree_evidence["closure_error"] = "complete_tree_attempt_timeout"
+                    error_code, timed_out = "complete_tree_attempt_timeout", True
+                except (OSError, ValueError, TypeError, RecursionError, UnicodeError):
+                    tree_evidence["closure_error"] = "complete_tree_verification_failed"
+                    error_code = "complete_tree_verification_failed"
+                elapsed = time.monotonic() - started
             stdout_name = ".scanner-stdout-" + stem + ".bin"
             stderr_name = ".scanner-stderr-" + stem + ".bin"
             try:
@@ -502,7 +583,9 @@ class BoundedSubprocessRunner:
             except OSError:
                 error_code = "raw_output_write_failed"
             try:
-                terminal_sha = self._receipt(invocation.cwd / (".scanner-terminal-" + stem + ".json"), {
+                if tree_evidence is not None and time.monotonic() >= deadline:
+                    error_code, timed_out = "complete_tree_attempt_timeout", True
+                terminal_payload = {
                     "schema_version": "m4-local-scanner-terminal-v1", "operator_grant_sha256": grant_sha,
                     "start_receipt_sha256": start_sha, "invocation_sha256": stem,
                     "process_started": kind == "live", "process_id": process_id,
@@ -510,13 +593,26 @@ class BoundedSubprocessRunner:
                     "stdout_file": stdout_name, "stderr_file": stderr_name,
                     "retained_output_complete": error_code != "raw_output_write_failed",
                     "elapsed_seconds": elapsed, "timed_out": timed_out, "output_truncated": truncated,
-                    "error_code": error_code})
+                    "error_code": error_code}
+                if tree_evidence is not None:
+                    terminal_payload["bundle_inventory"] = tree_evidence
+                terminal_sha = self._receipt(invocation.cwd / (".scanner-terminal-" + stem + ".json"), terminal_payload)
             except OSError:
                 error_code = "terminal_receipt_write_failed"
             return RunResult(kind, code, stdout, stderr, elapsed, timed_out, truncated,
                              grant_sha, start_sha, terminal_sha, error_code)
 
         _plain_directory(invocation.cwd)
+        if tree_evidence is not None:
+            try:
+                tree_evidence["before"] = verify_tree(invocation.bundle_inventory, deadline=deadline)
+                invocation.verify()
+            except TimeoutError:
+                return finish("none", None, b"", b"", time.monotonic() - started,
+                              timed_out=True, error_code="complete_tree_attempt_timeout")
+            except (OSError, ValueError, TypeError, RecursionError, UnicodeError):
+                return finish("none", None, b"", b"", time.monotonic() - started,
+                              error_code="complete_tree_verification_failed")
         try:
             proc = subprocess.Popen(list(invocation.argv), cwd=invocation.cwd,
                                     env=dict(invocation.environment), shell=False,
@@ -545,7 +641,6 @@ class BoundedSubprocessRunner:
                    invocation.limits.stderr_bytes), daemon=True)]
         for reader in readers:
             reader.start()
-        deadline = started + invocation.limits.timeout_seconds
         timed_out = False
         try:
             while proc.poll() is None:
@@ -773,7 +868,9 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
             policy_sha256: str | None = None, limits: Limits = Limits(),
             policy_manifest_path: Path | None = None,
             extra_files: tuple[tuple[Path, str, int], ...] = (),
-            extra_environment: tuple[tuple[str, str], ...] = ()) -> ScanArtifact:
+            extra_environment: tuple[tuple[str, str], ...] = (),
+            bundle_inventory: BundleInventory | None = None,
+            attempt_deadline: float | None = None) -> ScanArtifact:
     """Capture raw observations, not detector outcomes or scorer ArmRow records.
 
     No executable/version probes, installs, writes, retries or implicit runners.
@@ -781,6 +878,12 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
     """
     from dataclasses import replace
 
+    if bundle_inventory is not None:
+        maximum_deadline = time.monotonic() + min(30.0, limits.timeout_seconds)
+        if attempt_deadline is not None and (type(attempt_deadline) not in {int, float}
+                                             or not math.isfinite(attempt_deadline)):
+            raise ValueError("finite absolute attempt deadline required")
+        attempt_deadline = min(maximum_deadline, attempt_deadline) if attempt_deadline is not None else maximum_deadline
     base = ScanArtifact(arm, "trivy" if arm == "T" else "checkov", "not_run", "none",
                         None, pin.version, pin.executable_sha256,
                         pin.dependency_manifest_sha256, pin.version_evidence_sha256,
@@ -824,9 +927,17 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
                 or policy_receipt.get("check_ids") != list(check_ids)
                 or policy_receipt.get("scanner_name") != base.scanner_name):
             raise ValueError("policy manifest/check selection mismatch")
-        files = [{"name": path.name, "sha256": sha} for path, sha, _ in extra_files]
-        if policy_receipt.get("files") != sorted(files, key=lambda value: value["name"]):
-            raise ValueError("policy/bundle inventory differs from manifest")
+        if bundle_inventory is not None:
+            if arm != "T" or extra_files or extra_environment:
+                raise ValueError("complete-tree mode only supports plain T arm")
+            _tree_policy(policy_receipt, check_ids, bundle_inventory)
+        else:
+            if (policy_receipt.get("schema_version") == "m4-scanner-policy-manifest-v2"
+                    or "bundle_tree_sha256" in policy_receipt):
+                raise ValueError("policy-v2 cannot omit complete-tree binding")
+            files = [{"name": path.name, "sha256": sha} for path, sha, _ in extra_files]
+            if policy_receipt.get("files") != sorted(files, key=lambda value: value["name"]):
+                raise ValueError("policy/bundle inventory differs from manifest")
         plan = strict_json(raw)
         if not isinstance(plan, dict) or plan.get("format_version") not in {"1.0", "1.1", "1.2"}:
             raise ValueError("unsupported saved-plan JSON format")
@@ -852,7 +963,10 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
                                  (pin.version_evidence_path,
                                   pin.version_evidence_sha256, 64 * 1024),
                                  (policy_manifest_path, policy_sha256, 1024 * 1024))
-                                + extra_files)
+                                + extra_files + (((bundle_inventory.manifest_path,
+                                                   bundle_inventory.tree_sha256, 524288),)
+                                                 if bundle_inventory is not None else ()),
+                                bundle_inventory, attempt_deadline)
         invocation.verify()
         invocation_hash = invocation_digest(invocation)
         base = replace(base, plan_sha256=digest(raw), config_sha256=digest(raw_config),
@@ -863,7 +977,8 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
                     or approval.scanner_version != pin.version):
                 raise PermissionError("approved scanner arm/version differs from capture")
         result = runner(invocation)
-        invocation.verify()
+        if bundle_inventory is None:
+            invocation.verify()
         if (result.execution_kind not in {"fake", "live", "none"}
                 or not math.isfinite(result.elapsed_seconds) or result.elapsed_seconds < 0
                 or (result.exit_code is not None and type(result.exit_code) is not int)
@@ -880,6 +995,13 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
                        operator_grant_sha256=result.operator_grant_sha256,
                        start_receipt_sha256=result.start_receipt_sha256,
                        terminal_receipt_sha256=result.terminal_receipt_sha256)
+        if bundle_inventory is not None:
+            try:
+                invocation.verify()
+            except TimeoutError:
+                return replace(base, status="timeout", reasons=("complete_tree_attempt_timeout",))
+            except (OSError, ValueError):
+                return replace(base, status="invalid", reasons=("complete_tree_closure_failed",))
         if result.execution_kind == "live" and (
                 type(runner) is not BoundedSubprocessRunner
                 or any(not isinstance(pin, str) or not SHA256.fullmatch(pin) for pin in (
@@ -887,10 +1009,13 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
             return replace(base, status="invalid", execution_kind="none",
                            operator_grant_sha256=None, start_receipt_sha256=None, terminal_receipt_sha256=None,
                            reasons=("untrusted_runner_cannot_attest_execution",))
+        if bundle_inventory is not None and (result.timed_out or time.monotonic() >= attempt_deadline):
+            return replace(base, status="timeout", reasons=("complete_tree_attempt_timeout",))
         if result.error_code is not None or result.execution_kind == "none":
             reason = result.error_code if result.error_code in {
                 "process_start_failed", "terminal_receipt_write_failed",
-                "raw_output_write_failed"} else "process_not_started"
+                "raw_output_write_failed", "complete_tree_verification_failed",
+                "complete_tree_attempt_timeout"} else "process_not_started"
             return replace(base, status="error", reasons=(reason,))
         if result.timed_out or result.elapsed_seconds > limits.timeout_seconds + 2:
             return replace(base, status="timeout", reasons=("scanner_timeout",))
@@ -919,7 +1044,11 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
                        for row in observations):
                 reasons.append("enabled_check_has_no_decidable_observation")
                 break
+        if bundle_inventory is not None and time.monotonic() >= attempt_deadline:
+            return replace(base, status="timeout", reasons=("complete_tree_attempt_timeout",))
         return replace(base, status="ok", observations=observations, reasons=tuple(reasons))
+    except TimeoutError:
+        return replace(base, status="timeout", reasons=("complete_tree_attempt_timeout",))
     except PermissionError:
         return replace(base, status="not_run", reasons=("runtime_activation_not_authorized",))
     except (OSError, ValueError, TypeError, KeyError, RecursionError, UnicodeError):
