@@ -112,8 +112,11 @@ def _exposures(resource: dict, side: str) -> tuple[frozenset, bool, tuple[str, .
         ports = tuple(port for port in (22, 3389) if lower <= port <= upper)
     elif protocol is MISSING or protocol is None or type(protocol) is bool:
         return frozenset(), False, limitations
-    elif isinstance(protocol, (str, int)):
-        # Only the declared TCP/all-protocol predicate is represented.
+    elif (protocol in ("udp", "icmp", "icmpv6")
+          or (type(protocol) is int and 0 <= protocol <= 255)
+          or (isinstance(protocol, str) and len(protocol) <= 3
+              and protocol.isascii() and protocol.isdecimal() and int(protocol) <= 255)):
+        # A recognized non-TCP protocol proves this TCP predicate absent.
         return frozenset(), True, limitations
     else:
         return frozenset(), False, limitations
@@ -143,6 +146,8 @@ def evaluate_change(resource: dict, rule: str) -> Decision:
             before = change.get("before", MISSING)
             if before is MISSING or before is None or not isinstance(before, dict):
                 return unknown(rule, "contradictory_prior_existence")
+            if change.get("before_sensitive") is True:
+                return unknown(rule, "required_prior_unknown_or_invalid")
             return Decision(rule, "supported", "introduced_risk", "declared_stateful_destruction")
         return Decision(rule, "supported", "clear", "no_destructive_action")
     if actions == ("delete",):
