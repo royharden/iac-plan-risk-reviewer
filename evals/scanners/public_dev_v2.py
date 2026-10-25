@@ -20,6 +20,10 @@ ROOT = Path(__file__).resolve().parents[2]
 EDITION = "m4-public-fullplan-dev-v2"
 RELATIVE = Path("evals/scanners/fixtures") / EDITION
 OLD_MANIFEST = Path("fixtures/expected/dev/rv2-policy-v1.json")
+# Frozen policy bytes at original_commit; a caller's rewritten manifest cannot
+# authorize different IDs, ancestry, or expected labels for this fixed edition.
+ORIGINAL_MANIFEST_SHA256 = "f49c737ac06ade866e5658b8c3c4501195e370c0ba5065af8608f780133e89b9"
+INVENTORY_SHA256 = "dda8cbc05f5200569ce007b4d29ee159f50c7cb950f67e09472c33210f28509d"
 MAX_BYTES = 16 * 1024 * 1024
 _OMIT = object()
 
@@ -201,24 +205,119 @@ def generate(root=ROOT):
     return metadata
 
 
+def _case_rows(document):
+    cases = document.get("cases") if isinstance(document, dict) else None
+    if not isinstance(cases, list) or len(cases) != 24:
+        raise ValueError("fixed v2 inventory requires 24 cases")
+    indexed = {}
+    for row in cases:
+        case_id = row.get("case_id") if isinstance(row, dict) else None
+        if (
+            not isinstance(case_id, str)
+            or not re.fullmatch(r"[a-z0-9-]+", case_id)
+            or case_id in indexed
+        ):
+            raise ValueError("invalid or duplicate fixed v2 case ID")
+        indexed[case_id] = row
+    return indexed
+
+
+def _fixed_metadata(document, required):
+    if not isinstance(document, dict) or canonical(
+        {key: document.get(key) for key in required}
+    ) != canonical(required):
+        raise ValueError("fixed public v2 edition metadata required")
+
+
+def _admit(root):
+    """Admit all metadata/paths, then all raw hashes, before any core evaluation."""
+    original_raw = read(root / OLD_MANIFEST)
+    if sha(original_raw) != ORIGINAL_MANIFEST_SHA256:
+        raise ValueError("fixed original public policy digest mismatch")
+    originals = _case_rows(json.loads(original_raw))
+
+    inventory_raw = read(root / RELATIVE / "inventory.json")
+    inventory = json.loads(inventory_raw)
+    expected = json.loads(read(root / RELATIVE / "expected.json"))
+    _fixed_metadata(
+        inventory,
+        {
+            "schema_version": "m4-public-fullplan-development-v2",
+            "edition_id": EDITION,
+            "split": "dev",
+            "scenario_count": 24,
+            "original_commit": "484eb2208f877bb55add90ee5de6080cf08e4e4e",
+            "original_inventory_sha256": ORIGINAL_MANIFEST_SHA256,
+            "additional_independent_scenarios": 0,
+            "synthetic_envelope_only": True,
+            "producer_provider_compatibility_tested": False,
+            "schema_version_zero_is_synthetic": True,
+            "configuration_or_hcl_added": False,
+        },
+    )
+    _fixed_metadata(
+        expected, {"edition_id": EDITION, "split": "dev", "hidden_acceptance_oracle": False}
+    )
+    items, targets = _case_rows(inventory), _case_rows(expected)
+    if items.keys() != originals.keys() or targets.keys() != originals.keys():
+        raise ValueError("v2 case membership differs from fixed original inventory")
+
+    admitted = []
+    resolved_root = root.resolve()
+    resolved_plans = (root / RELATIVE / "plans").resolve()
+    for case_id, item in items.items():
+        target, original = targets[case_id], originals[case_id]
+        relative = (RELATIVE / "plans" / f"{case_id}.json").as_posix()
+        if item.get("path") != relative:
+            raise ValueError("v2 case path differs from fixed inventory")
+        path = root / item["path"]
+        unlinked(path)
+        resolved_path = path.resolve()
+        if (
+            not resolved_path.is_relative_to(resolved_root)
+            or resolved_path.parent != resolved_plans
+        ):
+            raise ValueError("v2 case escapes resolved public plans root")
+        if (
+            item.get("split") != "dev"
+            or item.get("original_path") != original["path"]
+            or item.get("original_sha256") != original["sha256"]
+            or item.get("scenario_ancestor") != case_id
+        ):
+            raise ValueError("v2 case ancestry differs from fixed original inventory")
+        digest = item.get("sha256")
+        if (
+            not isinstance(digest, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            or target.get("sha256") != digest
+        ):
+            raise ValueError("v2 input/expected hash mismatch")
+        keys = ("rule_id", "applicability", "outcome")
+        if any(key not in target for key in keys) or canonical(
+            {key: target[key] for key in keys}
+        ) != canonical({key: original[key] for key in keys}):
+            raise ValueError("v2 labels differ from fixed original policy")
+        admitted.append((item, target, path))
+
+    # Pin the accepted v2 row hashes as well as the original IDs/policy labels:
+    # an arbitrary corpus cannot authorize itself by changing both manifests.
+    if sha(inventory_raw) != INVENTORY_SHA256:
+        raise ValueError("fixed public v2 inventory digest mismatch")
+    # Repeated raw hashes are legitimate: distinct rule cases share one plan.
+    for item, _, path in admitted:
+        if sha(read(path)) != item["sha256"]:
+            raise ValueError("v2 input/expected hash mismatch")
+    return inventory_raw, admitted
+
+
 def evaluate(root=ROOT):
     from iac_review.ingest import load_plan
     from iac_review.report import build_report
     from iac_review.rules import evaluate as rules
 
-    inventory_raw = read(root / RELATIVE / "inventory.json")
-    inventory = json.loads(inventory_raw)
-    expected = {
-        row["case_id"]: row for row in json.loads(read(root / RELATIVE / "expected.json"))["cases"]
-    }
+    inventory_raw, admitted = _admit(root)
     rows = []
-    for item in inventory["cases"]:
-        target = expected[item["case_id"]]
-        path = root / item["path"]
-        if item["path"] != (RELATIVE / "plans" / f"{item['case_id']}.json").as_posix():
-            raise ValueError("v2 case path differs from fixed inventory")
-        if sha(read(path)) != item["sha256"] or target["sha256"] != item["sha256"]:
-            raise ValueError("v2 input/expected hash mismatch")
+    for item, target, path in admitted:
         plan = load_plan(path)
         report = build_report(plan, rules(plan))
         found = [
