@@ -33,9 +33,13 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-def read(path):
+def unlinked(path):
     if any(p.is_symlink() or p.is_junction() for p in (path, *path.parents)):
         raise ValueError("linked public input refused")
+
+
+def read(path):
+    unlinked(path)
     if not path.is_file() or path.stat().st_size > MAX_BYTES:
         raise ValueError("bounded regular public input required")
     with path.open("rb") as stream:
@@ -185,6 +189,7 @@ def generate(root=ROOT):
     # Check every collision before publishing anything; no overwrite or cleanup.
     for relative, raw in outputs.items():
         path = root / relative
+        unlinked(path)
         if path.exists() and read(path) != raw:
             raise ValueError("immutable v2 output differs")
     for relative, raw in outputs.items():

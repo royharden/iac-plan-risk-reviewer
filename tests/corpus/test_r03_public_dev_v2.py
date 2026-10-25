@@ -136,3 +136,18 @@ def test_generator_preserves_all_original_bytes_lineage_and_policy_labels(tmp_pa
     path.write_bytes(path.read_bytes() + b" ")
     with pytest.raises(ValueError, match="immutable"):
         v2.generate(tmp_path)
+
+
+def test_new_output_cannot_publish_through_a_linked_ancestor(tmp_path):
+    """what_bug_this_catches: a nonexistent output file bypasses a linked-parent refusal."""
+    root = Path(__file__).resolve().parents[2]
+    for relative in ("fixtures/scenarios/dev", "fixtures/expected/dev"):
+        shutil.copytree(root / relative, tmp_path / relative)
+    edition = tmp_path / v2.RELATIVE
+    edition.mkdir(parents=True)
+    outside = tmp_path / "outside-edition"
+    outside.mkdir()
+    (edition / "plans").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="linked"):
+        v2.generate(tmp_path)
+    assert list(outside.iterdir()) == []
