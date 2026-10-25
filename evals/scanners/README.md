@@ -69,3 +69,53 @@ the evidence collision and junction controls exercise the real filesystem.
 ```powershell
 python -m pytest evals/scanners/tests/test_metadata_launcher.py -q
 ```
+
+## Linux metadata readiness
+
+The separate `Dockerfile.scanners-linux`, `linux_readiness.py` and
+`scripts/docker_scanners_linux.ps1` implement INT grant
+`I-RV2-Linux-metadata-readiness-r1.md` for provisional source `cb298a8a`.
+This entrypoint has only fixed tool version commands, the two frozen mocked
+Trivy-tree test modules, and complete-cache metadata verification. It exposes no
+primary scanner command and copies no public plan corpus or policy-label tables.
+
+The context is built from exact Git blobs and a closed public cache inventory.
+Core/test requirements are exported from the accepted `uv.lock` with exact
+versions and wheel hashes; Checkov uses its separate approved 96-entry lock.
+Three approved Git-LF custom policy files are read and hashed, never imported.
+The six resource/evidence guard functions are unchanged copies of the reviewed
+`ebbc370` launcher. Every Docker command pins the local `desktop-linux` context.
+
+Run only under an exact INT resource grant with a fresh absolute evidence leaf:
+
+```powershell
+./scripts/docker_scanners_linux.ps1 -EvidenceDirectory 'C:/Worktrees/PortfolioBuilder/iac-plan-risk-reviewer/R03-RV2-scanner-linux/.agent-work/linux-run-r1'
+```
+
+The new M4 instance has no ports or host mounts, no runtime network, read-only
+root, user 65532, dropped capabilities, no new privileges, 768 MiB / one CPU and a
+128 MiB temporary filesystem. Exact test copies run in writable temporary scratch;
+product source and image seeds remain read-only. Reporters are exported fully as
+bounded base64 with byte counts and SHA256 through preserved Docker logs, then
+decoded and verified on the host. No deletion or cleanup is performed. Temporary
+fixture objects disappear with the temporary filesystem; their complete reporters
+and immutable input bytes remain retained. A stopped container alone does not
+retain temporary-filesystem contents.
+
+The private `m4-linux-readiness-diagnostics-v1` envelope records each reporter as
+complete, missing, read-error or truncated. Collection runs after the test stream
+closes, including timeout, native child failure and XML/import parse failures.
+Each available reporter retains at most 1 MiB (a smaller diagnostic bound than
+the existing 2 MiB artifact limit), with retained size/hash and original size when
+readable. A truncated file is an explicit prefix, never a complete reporter.
+The host saves independently valid reporter bytes and status/failure receipts
+even when another reporter is missing or invalid. Failure causes and native exit
+or timeout state remain in the raw report. Partial diagnostics cannot pass.
+
+The metadata result requires completed pytest with native exit zero on both
+runtime and host, all complete reporters, all 168 cases without failure/error, explicitly
+lists Linux/Windows-specific skips, and requires the Linux O_NOFOLLOW case to
+execute. Two complete 642-file/99-directory verifier passes share one 30s deadline,
+with independent complete before/after audits. This is Linux metadata evidence,
+not scanner consumption, policy compatibility, semantic mapping or product
+acceptance. Actual primary scans still require a separate exact grant.
