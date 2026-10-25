@@ -577,11 +577,13 @@ class BoundedSubprocessRunner:
                 elapsed = time.monotonic() - started
             stdout_name = ".scanner-stdout-" + stem + ".bin"
             stderr_name = ".scanner-stderr-" + stem + ".bin"
-            try:
-                self._write_bytes(invocation.cwd / stdout_name, stdout)
-                self._write_bytes(invocation.cwd / stderr_name, stderr)
-            except OSError:
-                error_code = "raw_output_write_failed"
+            retained_output_complete = True
+            for name, raw in ((stdout_name, stdout), (stderr_name, stderr)):
+                try:
+                    self._write_bytes(invocation.cwd / name, raw)
+                except OSError:
+                    retained_output_complete = False
+                    error_code = "raw_output_write_failed"
             try:
                 if tree_evidence is not None and time.monotonic() >= deadline:
                     error_code, timed_out = "complete_tree_attempt_timeout", True
@@ -591,7 +593,7 @@ class BoundedSubprocessRunner:
                     "process_started": kind == "live", "process_id": process_id,
                     "raw_exit_code": code, "stdout_sha256": digest(stdout), "stderr_sha256": digest(stderr),
                     "stdout_file": stdout_name, "stderr_file": stderr_name,
-                    "retained_output_complete": error_code != "raw_output_write_failed",
+                    "retained_output_complete": retained_output_complete,
                     "elapsed_seconds": elapsed, "timed_out": timed_out, "output_truncated": truncated,
                     "error_code": error_code}
                 if tree_evidence is not None:

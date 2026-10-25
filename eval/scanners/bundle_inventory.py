@@ -49,9 +49,13 @@ def plain_directory(path: Path, *, deadline: float | None = None) -> None:
         _plain(parent.lstat(), True)
 
 
-def _signature(metadata: os.stat_result) -> tuple:
+def _signature(metadata: os.stat_result, *, cross_api: bool = False) -> tuple:
+    # On Windows lstat and fstat can report different ctime meanings. Compare
+    # their common mtime across the open boundary, but retain ctime for every
+    # same-API before/after check (and across APIs on other platforms).
+    ctime = None if cross_api and os.name == "nt" else metadata.st_ctime_ns
     return (metadata.st_dev, metadata.st_ino, metadata.st_mode, metadata.st_nlink,
-            metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns,
+            metadata.st_size, metadata.st_mtime_ns, ctime,
             getattr(metadata, "st_file_attributes", 0))
 
 
@@ -67,7 +71,7 @@ def _read(path: Path, cap: int, *, deadline: float | None = None) -> bytes:
     try:
         opened = os.fstat(fd)
         _plain(opened, False)
-        if _signature(before) != _signature(opened):
+        if _signature(before, cross_api=True) != _signature(opened, cross_api=True):
             raise ValueError("complete-tree file replaced before open")
         data = bytearray()
         while True:
