@@ -4,6 +4,7 @@ The source inputs alone are modeled as regular files: OneDrive ancestors may
 be reparse points on this machine. Evidence directories use the real filesystem.
 """
 
+import base64
 import json
 import shutil
 import subprocess
@@ -13,6 +14,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 PWSH = shutil.which("pwsh")
+OBSERVATION = "M4/r03-rv2-test: stopped (docker ok, listeners ok; 1 container(s) matched)"
 
 HARNESS = r"""
 $ErrorActionPreference = 'Stop'
@@ -55,6 +57,10 @@ function python {
     if ($global:mode -eq 'observe-exit' -and $args -contains 'observe') { $global:LASTEXITCODE=1 }
     if ($global:mode -eq 'claim-exit' -and $args -contains 'claim') { $global:LASTEXITCODE=1 }
     if ($global:mode -eq 'check-exit' -and $args -contains 'check') { $global:LASTEXITCODE=1 }
+    if ($args -contains 'observe') {
+        $text = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__OBSERVATION__'))
+        if ($text.Length -gt 0) { $text }
+    }
 }
 function docker {
     $a = @($args); $op = $a[0]; $sub = $a[1]
@@ -126,7 +132,7 @@ catch { $failure=$_.ToString() }
 """
 
 
-def run_launcher(tmp_path, mode="success", evidence=None):
+def run_launcher(tmp_path, mode="success", evidence=None, observation=OBSERVATION):
     evidence = evidence or tmp_path / "evidence"
     script = tmp_path / "harness.ps1"
     outcome = tmp_path / "outcome.json"
@@ -136,6 +142,7 @@ def run_launcher(tmp_path, mode="success", evidence=None):
         "SCRIPT": ROOT / "scripts/docker_scanners.ps1",
         "EVIDENCE": evidence,
         "OUTCOME": outcome,
+        "OBSERVATION": base64.b64encode(observation.encode("utf-8")).decode("ascii"),
     }.items():
         code = code.replace(f"__{token}__", str(value).replace("'", "''"))
     script.write_text(code, encoding="utf-8")
@@ -157,6 +164,67 @@ def test_success_binds_immutable_image(tmp_path):
     assert result["probe_exit"] == 0
     run = next(c for c in observed["calls"] if c.startswith("docker run "))
     assert run.endswith("sha256:" + "a" * 64)
+
+
+def test_ports_observation_ordinary_selected_summary_succeeds(tmp_path):
+    observed, evidence = run_launcher(tmp_path)
+    assert observed["completed"], observed
+    assert (evidence / "ports-observe.log").read_text(encoding="utf-8-sig") == OBSERVATION + "\n"
+    exits = json.loads((evidence / "command-exits.json").read_text(encoding="utf-8-sig"))
+    assert any(
+        item["argv"] == ["mock-ports.py", "observe", "m4/r03-rv2-test"] and item["exit_code"] == 0
+        for item in exits
+    )
+    assert (evidence / "result.json").exists()
+
+
+@pytest.mark.parametrize(
+    "observation",
+    [
+        "",
+        " \t ",
+        "observation completed",
+        "M4/wrong-instance: stopped (docker ok, listeners ok; 1 container(s) matched)",
+        "OTHER/r03-rv2-test: stopped (docker ok, listeners ok; 1 container(s) matched)",
+        "M4/r03-rv2-test: up (docker ok, listeners ok; 1 container(s) matched)",
+        "M4/r03-rv2-test: held (docker ok, listeners ok; 1 container(s) matched)",
+        "M4/r03-rv2-test: stopped (docker unknown, listeners ok; 1 container(s) matched)",
+        "M4/r03-rv2-test: stopped (docker ok, listeners unknown; 1 container(s) matched)",
+        "M4/r03-rv2-test: stopped (docker ok, listeners ok; 0 container(s) matched)",
+        "M4/r03-rv2-test: stopped (docker ok, listeners ok; 2 container(s) matched)",
+        "M4/r03-rv2-test: stopped (docker ok, listeners ok; unknown container(s) matched)",
+        OBSERVATION + "\nCONFLICT: another container matched",
+        OBSERVATION + "\n" + OBSERVATION,
+    ],
+    ids=[
+        "empty",
+        "whitespace",
+        "malformed",
+        "wrong-instance",
+        "wrong-project",
+        "running",
+        "held",
+        "docker-unknown",
+        "listeners-unknown",
+        "no-container",
+        "multiple-containers",
+        "malformed-count",
+        "conflict-output",
+        "duplicate-summary",
+    ],
+)
+def test_ports_observation_invalid_exit_zero_cannot_succeed(tmp_path, observation):
+    # Regression: exit 0 alone previously let absent, unrelated or contradictory
+    # observation text accompany a successful selected-instance result.
+    observed, evidence = run_launcher(tmp_path, observation=observation)
+    assert not observed["completed"], observed
+    assert not (evidence / "result.json").exists()
+    assert (evidence / "failure.json").exists()
+    retained = (evidence / "ports-observe.log").read_text(encoding="utf-8-sig")
+    assert retained == (observation + "\n" if observation else "")
+    exits = json.loads((evidence / "command-exits.json").read_text(encoding="utf-8-sig"))
+    assert exits[-1]["argv"] == ["mock-ports.py", "observe", "m4/r03-rv2-test"]
+    assert exits[-1]["exit_code"] == 0
 
 
 @pytest.mark.parametrize(
@@ -249,9 +317,12 @@ def test_traversing_evidence_path_refused_before_external_calls(tmp_path):
 
 
 def test_real_linked_evidence_ancestor_rejected_before_external_calls(tmp_path):
-    target = tmp_path / "target"
+    # Keep the real junction and target outside pytest's cleanup-owned basetemp.
+    retained = tmp_path.parent.parent / f"{tmp_path.parent.name}-{tmp_path.name}-junction"
+    retained.mkdir()
+    target = retained / "target"
     target.mkdir()
-    junction = tmp_path / "junction"
+    junction = retained / "junction"
     # An actual owned junction, not a mocked attribute on the evidence path.
     command = f"New-Item -ItemType Junction -Path '{junction}' -Target '{target}' | Out-Null"
     result = subprocess.run(

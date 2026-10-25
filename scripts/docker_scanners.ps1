@@ -64,6 +64,17 @@ function Read-RequiredJson([string]$Receipt) {
     if ([string]::IsNullOrWhiteSpace($raw)) { throw "Missing receipt content: $Receipt" }
     return ConvertFrom-Json -InputObject $raw -ErrorAction Stop
 }
+function Assert-PortsObservation {
+    $raw = Get-Content -LiteralPath (Join-Path $EvidenceDirectory 'ports-observe.log') -Raw
+    if ([string]::IsNullOrWhiteSpace($raw)) { throw 'Missing ports observation receipt' }
+    # Canonical ports.py cmd_observe prints one summary; ref() uppercases project.
+    # This fresh instance must have exactly its one stopped probe container.
+    $expected = "M4/$Instance`: stopped (docker ok, listeners ok; 1 container(s) matched)"
+    $pattern = '\A' + [regex]::Escape($expected) + '(?:\r?\n)?\z'
+    if (-not [regex]::IsMatch($raw, $pattern)) {
+        throw 'Ports observation must confirm the selected instance, stopped state, known sources and exactly one matched container'
+    }
+}
 function Assert-Labels($Labels) {
     if ($Labels.'agentports.project' -ne 'm4' -or $Labels.'agentports.instance' -ne $Instance -or $Labels.'agentports.owner' -ne '0024') { throw 'Resource labels do not match selected instance' }
 }
@@ -114,6 +125,7 @@ try {
     Invoke-Recorded docker @('logs',$containerId) 'version-probes.log'
     Invoke-Recorded docker @('inspect',$containerId) 'container.json'
     Invoke-Recorded python @($PortsScript,'observe',"m4/$Instance") 'ports-observe.log'
+    Assert-PortsObservation
     if ($probeExit -ne 0) { throw "Metadata probe failed exit $probeExit; evidence and stopped container preserved" }
     $containers = @(Read-RequiredJson 'container.json')
     if ($containers.Count -ne 1) { throw 'Exactly one container receipt required' }

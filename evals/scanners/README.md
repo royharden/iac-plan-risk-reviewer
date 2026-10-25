@@ -38,6 +38,12 @@ resource preflight, inspection, logs and ports observation. Empty/malformed rece
 and incomplete raw stream metadata fail closed. `result.json` is written only after
 all checks pass. Failure retains the context, command receipts and `failure.json`;
 a nonzero probe run attempts log/inspection/observation capture before failing.
+Observation must contain the canonical `ports.py cmd_observe` summary for the
+selected instance: `M4/<instance>: stopped (docker ok, listeners ok; 1 container(s) matched)`.
+The helper uppercases the displayed project. Missing, malformed, unrelated or extra
+output, unknown sources, another status, and zero or multiple matches fail before
+`result.json`. The summary does not enumerate port conflicts; the required claim/check
+preflight remains responsible for that check.
 No Docker resource is deleted or retagged on collision. These preflight checks are
 not an exclusive Docker namespace reservation against another concurrent writer.
 The source lock is bound to D11 commit
