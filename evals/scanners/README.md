@@ -119,3 +119,5 @@ execute. Two complete 642-file/99-directory verifier passes share one 30s deadli
 with independent complete before/after audits. This is Linux metadata evidence,
 not scanner consumption, policy compatibility, semantic mapping or product
 acceptance. Actual primary scans still require a separate exact grant.
+
+Proposed preview4 reconciliation (requires exact INT grant): source `ebf0bf66337ce9fd1d97fe8e1ec615ae78bb42fc`, portable tests `616cebe5971373254d83ffb7d1fdd482a90a9706`, fresh instance `r03-rv2-linux-tree-ebf0-r2`. Prior cb298/b8 Linux diagnostic and resources remain historical failed evidence. Package2a failure-handler behavior and explicit 1 MiB diagnostic-prefix cap are preserved.

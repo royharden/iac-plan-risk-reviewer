@@ -21,7 +21,7 @@ import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-BASE = "cb298a8a96749ae633f108f61b62515732faf1fe"
+BASE = "ebf0bf66337ce9fd1d97fe8e1ec615ae78bb42fc"
 TREE_SHA = "6168428f0f5260c79536f13b9697dd5d7fb6866e96a4762e3f8e651b34a342b2"
 CHECKOV_LOCK = "3bc130464fd7c4e7c17a2bf8441cbe046cee0db4aa067ea64433da6c368c44d2"
 POLICIES = {

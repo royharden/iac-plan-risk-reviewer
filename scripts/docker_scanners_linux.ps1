@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory=$true)][string]$EvidenceDirectory,
     [string]$CacheRoot = 'C:\Users\Roy Harden\OneDrive\PJ-OD\PortfolioBuilder\iac-plan-risk-reviewer\agentops\runs\PB-M4-R03\evals\RV2-trivy-cache-acquisition-r1\cache\policy',
     [string]$TreeManifest = 'C:\Users\Roy Harden\OneDrive\PJ-OD\PortfolioBuilder\iac-plan-risk-reviewer\agentops\runs\PB-M4-R03\requests\D11-Trivy-bundle-tree-candidate-r1.json',
-    [ValidatePattern('^r03-rv2-linux-tree-cb298[a-z0-9-]*$')][string]$Instance = 'r03-rv2-linux-tree-cb298',
+    [ValidatePattern('^r03-rv2-linux-tree-ebf0-r2[a-z0-9-]*$')][string]$Instance = 'r03-rv2-linux-tree-ebf0-r2',
     [string]$PortsScript = 'C:\Users\Roy Harden\OneDrive\PJ-OD\skills\skills-bts\agent-ports\scripts\ports.py'
 )
 $ErrorActionPreference = 'Stop'
@@ -144,7 +144,7 @@ try {
     Invoke-Recorded git @('-C',$taskRoot,'rev-parse','HEAD') 'packaging-head.txt'
     $packagingHead = (Get-Content -LiteralPath (Join-Path $EvidenceDirectory 'packaging-head.txt') -Raw).Trim()
     Invoke-Recorded git @('-C',$taskRoot,'diff','--quiet','HEAD') 'source-clean.txt'
-    Invoke-Recorded git @('-C',$taskRoot,'merge-base','--is-ancestor','cb298a8a96749ae633f108f61b62515732faf1fe','HEAD') 'base-ancestry.txt'
+    Invoke-Recorded git @('-C',$taskRoot,'merge-base','--is-ancestor','ebf0bf66337ce9fd1d97fe8e1ec615ae78bb42fc','HEAD') 'base-ancestry.txt'
     Invoke-LinuxDocker @('context','show') 'docker-context.txt'
     if ((Get-Content -LiteralPath (Join-Path $EvidenceDirectory 'docker-context.txt') -Raw).Trim() -cne 'desktop-linux') { throw 'Expected local desktop-linux context' }
     Invoke-LinuxDocker @('context','inspect','desktop-linux','--format','{{json .Endpoints.docker.Host}}') 'docker-endpoint.json'
@@ -158,7 +158,7 @@ try {
     $context = Join-Path $EvidenceDirectory 'context'
     Invoke-Recorded python @('-B',(Join-Path $taskRoot 'evals/scanners/linux_readiness.py'),'stage','--root',$taskRoot,'--context',$context,'--cache',$CacheRoot,'--manifest',$TreeManifest) 'stage.json'
     $stage = Read-RequiredJson 'stage.json'
-    if ($stage.source -cne 'cb298a8a96749ae633f108f61b62515732faf1fe' -or $stage.packaging -cne $packagingHead -or $stage.primary_scans -ne 0) { throw 'Staged source identity mismatch' }
+    if ($stage.source -cne 'ebf0bf66337ce9fd1d97fe8e1ec615ae78bb42fc' -or $stage.packaging -cne $packagingHead -or $stage.primary_scans -ne 0) { throw 'Staged source identity mismatch' }
     Assert-ClosedContext $context
     Invoke-LinuxDocker (@('build') + $labels + @('--platform','linux/amd64','--progress','plain','--file',(Join-Path $context 'Dockerfile.scanners-linux'),'--iidfile',(Join-Path $EvidenceDirectory 'build-image-id.txt'),'--tag',$imageName,$context)) 'build.log'
     $imageId = (Get-Content -LiteralPath (Join-Path $EvidenceDirectory 'build-image-id.txt') -Raw).Trim()
