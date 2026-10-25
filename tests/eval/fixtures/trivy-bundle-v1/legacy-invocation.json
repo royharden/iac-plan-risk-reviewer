@@ -1,0 +1,1 @@
+{"argv":["/m4/scanner.fixture","config"],"cwd":"/m4/workspace","environment":[["A","B"]],"files":[["/m4/input.json","aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",123]],"limits":{"max_observations":50000,"plan_bytes":16777216,"stderr_bytes":262144,"stdout_bytes":2097152,"timeout_seconds":30.0}}
