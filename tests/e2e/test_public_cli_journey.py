@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+import iac_review
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -15,7 +17,8 @@ def invoke(*arguments):
     # Supply only process essentials, never credentials or provider configuration.
     environment = {name: os.environ[name] for name in ("SystemRoot", "PATH", "TEMP", "TMP")
                    if name in os.environ}
-    environment.update(PYTHONPATH=str(ROOT / "src"), PYTHONUTF8="1")
+    environment.update(PYTHONPATH=str(Path(iac_review.__file__).resolve().parents[1]),
+                       PYTHONUTF8="1")
     return subprocess.run([sys.executable, "-m", "iac_review", *map(str, arguments)],
                           cwd=ROOT, env=environment, text=True, encoding="utf-8",
                           capture_output=True, timeout=35, check=False)
