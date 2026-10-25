@@ -38,10 +38,11 @@ def test_outer_capture_and_assessment_bookkeeping_gate_observation():
     assert "receipt.observation is not None" in source
 
 
-def test_capture_case_identity_is_unique_before_join():
-    source = inspect.getsource(assessment_import.import_assessments)
-    assert "duplicate P outcome in verified capture index" in source
-    assert "len(candidate_artifacts) != 1" in source
+def test_capture_case_identity_is_unique_before_join(monkeypatch):
+    import pytest
+    from test_r03_assessment_join import public_join
+    with pytest.raises(ValueError, match="duplicate P"):
+        public_join(monkeypatch, duplicate=True)
 
 
 def test_all_attempt_accounting_and_ineligibility_survive_result():

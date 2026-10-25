@@ -44,7 +44,7 @@ def edition_metadata():
         "components": components, "cases": [{"case_id": "case", "split": "heldout",
             "configuration_id": "config-case", "family_id": "family", "mutation_lineage": "mutation",
             "raw_source_sha256": H}], "invocations": invocations, "artifacts": artifacts,
-        "eligibility": claims,
+        "eligibility": claims, "attempts": [],
     }))
     rows = (("case", "resource", "R1"),)
     completion = release.CompletionReference(

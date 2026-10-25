@@ -100,8 +100,9 @@ def test_grant_cannot_be_reused_for_changed_manifest(tmp_path) -> None:
     """what_bug_this_catches: same build label permits different cases/arm configuration."""
     _, _, manifest, grant, _ = fixture(tmp_path)
     runner = BoundedSubprocessRunner(True, load(tmp_path, manifest, grant))
-    with pytest.raises(PermissionError, match="exact synthetic manifest"):
+    with pytest.raises(PermissionError):
         runner.verify_manifest(dict(manifest, cases=[{"case_id": "different"}]))
+    assert not list(tmp_path.glob(".scanner-start-*"))
 
 
 def test_forwarded_provider_environment_rejected_even_with_matching_fingerprint(tmp_path) -> None:

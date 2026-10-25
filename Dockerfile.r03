@@ -1,0 +1,15 @@
+# Supply an immutable python:3.12.13-slim@sha256:... base; the runner requires it.
+ARG PYTHON_IMAGE
+FROM ${PYTHON_IMAGE}
+LABEL agentports.project="m4"
+WORKDIR /app
+COPY evals/requirements-runtime.txt /app/evals/requirements-runtime.txt
+RUN python -m pip install --no-cache-dir --require-hashes -r /app/evals/requirements-runtime.txt
+# An explicit copy allowlist excludes credentials, .env, private captures and exports.
+COPY src/iac_review /app/src/iac_review
+COPY fixtures/scenarios/dev /app/fixtures/scenarios/dev
+COPY fixtures/expected/dev /app/fixtures/expected/dev
+COPY evals/__init__.py evals/run_public.py evals/docker_journey.py /app/evals/
+ENV PYTHONPATH=/app/src:/app PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+USER 65532:65532
+ENTRYPOINT ["python", "/app/evals/docker_journey.py"]
