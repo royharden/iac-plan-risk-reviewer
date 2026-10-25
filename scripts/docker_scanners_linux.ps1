@@ -102,6 +102,33 @@ function Invoke-LinuxDocker([string[]]$Arguments, [string]$Receipt, [switch]$All
     Invoke-Recorded docker (@('--context','desktop-linux') + $Arguments) $Receipt -AllowFailure:$AllowFailure
 }
 
+function Save-LinuxDiagnostics($Report) {
+    # Preserve every independently valid reporter before considering success.
+    $failures = [Collections.Generic.List[string]]::new()
+    $diagnostics = $Report.diagnostics
+    ConvertTo-Json -InputObject $diagnostics -Depth 12 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'reporter-status.json')
+    if ($diagnostics.schema_version -cne 'm4-linux-readiness-diagnostics-v1') { $failures.Add('Missing/unknown diagnostic schema') }
+    foreach ($name in @('pytest.xml','pytest.log','imports.json')) {
+        try {
+            $status = $diagnostics.reporters.$name
+            $artifact = $Report.artifacts.$name
+            if ($status.status -cne 'complete') { $failures.Add("Incomplete reporter: $name ($($status.status))") }
+            if ($null -eq $artifact) { $failures.Add("Missing reporter bytes: $name"); continue }
+            if (($artifact.bytes -isnot [long] -and $artifact.bytes -isnot [int]) -or $artifact.bytes -lt 0 -or $artifact.bytes -gt 2097152 -or $artifact.base64 -isnot [string] -or $artifact.sha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Malformed/over-cap reporter' }
+            if ($artifact.base64.Length -ne (4 * [Math]::Ceiling($artifact.bytes / 3.0))) { throw 'Reporter encoded length mismatch' }
+            $raw = [Convert]::FromBase64String($artifact.base64)
+            $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($raw)).ToLowerInvariant()
+            if ($raw.Length -ne $artifact.bytes -or $hash -cne $artifact.sha256) { throw 'Reporter byte/hash mismatch' }
+            [IO.File]::WriteAllBytes((Join-Path $EvidenceDirectory $name),$raw)
+            if (($status.source_bytes -isnot [long] -and $status.source_bytes -isnot [int]) -or $status.cap_bytes -ne 1048576 -or $status.retained_bytes -ne $raw.Length -or $raw.Length -gt $status.cap_bytes -or ($status.status -ceq 'complete' -and $status.source_bytes -ne $raw.Length) -or ($status.status -ceq 'truncated' -and ($status.source_bytes -le $raw.Length -or $raw.Length -ne $status.cap_bytes))) { throw 'Reporter status/length mismatch' }
+        } catch {
+            $failures.Add("Invalid reporter: $name ($($_.ToString()))")
+        }
+    }
+    ConvertTo-Json -InputObject @($failures) -Depth 4 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'reporter-failures.json')
+    return $failures.Count -eq 0
+}
+
 if (-not [IO.Path]::IsPathFullyQualified($EvidenceDirectory)) { throw 'Absolute evidence directory required' }
 if (@($EvidenceDirectory.Split([char[]]@('\','/')) | Where-Object { $_ -eq '..' }).Count) { throw 'Evidence traversal refused' }
 $EvidenceDirectory = [IO.Path]::GetFullPath($EvidenceDirectory)
@@ -155,14 +182,7 @@ try {
     if ($container.Id -cne $containerId -or $container.Image -cne $imageId -or $container.Name -cne "/$containerName" -or $container.State.Running -ne $false -or $container.State.OOMKilled -ne $false -or $container.State.ExitCode -ne $runtimeExit -or $container.Config.User -cne '65532:65532' -or $container.HostConfig.NetworkMode -cne 'none' -or -not $container.HostConfig.ReadonlyRootfs -or $container.Mounts.Count -ne 0 -or $container.HostConfig.Memory -ne 805306368 -or $container.HostConfig.NanoCpus -ne 1000000000 -or @($container.HostConfig.PortBindings.PSObject.Properties).Count -ne 0 -or 'ALL' -notin $container.HostConfig.CapDrop -or $container.HostConfig.Privileged -ne $false -or 'no-new-privileges' -notin $container.HostConfig.SecurityOpt) { throw 'Container identity/resource receipt mismatch' }
     $report = Read-RequiredJson 'linux-readiness.json'
     if ($report.kind -cne 'm4-linux-readiness-v1' -or $report.source.source_commit -cne $stage.source -or $report.source.packaging_commit -cne $packagingHead -or $report.primary_scans -ne 0) { throw 'Linux report source identity mismatch' }
-    foreach ($entry in @(@{field='pytest.xml';target='pytest.xml'},@{field='pytest.log';target='pytest.log'},@{field='imports.json';target='imports.json'})) {
-        $artifact = $report.artifacts.($entry.field)
-        if ($null -eq $artifact -or $artifact.bytes -gt 2097152) { throw 'Required complete reporter missing/over cap' }
-        $raw = [Convert]::FromBase64String($artifact.base64)
-        $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($raw)).ToLowerInvariant()
-        if ($raw.Length -ne $artifact.bytes -or $hash -cne $artifact.sha256) { throw 'Reporter byte/hash mismatch' }
-        [IO.File]::WriteAllBytes((Join-Path $EvidenceDirectory $entry.target),$raw)
-    }
+    $reportersComplete = Save-LinuxDiagnostics $report
     foreach ($probe in @($report.versions)) { Assert-StreamReceipt $probe.stdout; Assert-StreamReceipt $probe.stderr }
     Invoke-Recorded git @('-C',$taskRoot,'rev-parse','HEAD') 'packaging-after.txt'
     Invoke-Recorded git @('-C',$taskRoot,'diff','--quiet','HEAD') 'source-clean-after.txt'
@@ -173,7 +193,7 @@ try {
         if ($actual.Hash.ToLowerInvariant() -cne $entry.Value.sha256) { throw 'Build context bytes changed' }
     }
     Assert-ClosedContext $context
-    if ($runtimeExit -ne 0 -or $report.passed -ne $true -or $report.pytest.tests -ne 168 -or $report.pytest.failures -ne 0 -or $report.pytest.errors -ne 0 -or $report.pytest.nofollow_executed -ne $true -or $report.tree.expected_match -ne $true -or $report.tree.unchanged -ne $true -or $report.tree.shared_seconds -gt 30) { throw 'Linux metadata/test checks failed; raw report preserved' }
+    if ($runtimeExit -ne 0 -or $reportersComplete -ne $true -or $report.passed -ne $true -or $report.pytest.completed -isnot [bool] -or $report.pytest.completed -ne $true -or ($report.pytest.exit_code -isnot [long] -and $report.pytest.exit_code -isnot [int]) -or $report.pytest.exit_code -ne 0 -or $report.pytest.tests -ne 168 -or $report.pytest.failures -ne 0 -or $report.pytest.errors -ne 0 -or $report.pytest.nofollow_executed -ne $true -or $report.tree.expected_match -ne $true -or $report.tree.unchanged -ne $true -or $report.tree.shared_seconds -gt 30) { throw 'Linux metadata/test checks failed; raw report preserved' }
     @{passed=$true; source=$stage.source; packaging=$packagingHead; image=$imageId; container=$containerId; primary_scans=0} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'result.json')
 } catch {
     @{passed=$false; error=$_.ToString(); image=$imageName; container=$containerName; primary_scans=0} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'failure.json')

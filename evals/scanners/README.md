@@ -102,7 +102,18 @@ fixture objects disappear with the temporary filesystem; their complete reporter
 and immutable input bytes remain retained. A stopped container alone does not
 retain temporary-filesystem contents.
 
-The metadata result requires all 168 cases without failure/error, explicitly
+The private `m4-linux-readiness-diagnostics-v1` envelope records each reporter as
+complete, missing, read-error or truncated. Collection runs after the test stream
+closes, including timeout, native child failure and XML/import parse failures.
+Each available reporter retains at most 1 MiB (a smaller diagnostic bound than
+the existing 2 MiB artifact limit), with retained size/hash and original size when
+readable. A truncated file is an explicit prefix, never a complete reporter.
+The host saves independently valid reporter bytes and status/failure receipts
+even when another reporter is missing or invalid. Failure causes and native exit
+or timeout state remain in the raw report. Partial diagnostics cannot pass.
+
+The metadata result requires completed pytest with native exit zero on both
+runtime and host, all complete reporters, all 168 cases without failure/error, explicitly
 lists Linux/Windows-specific skips, and requires the Linux O_NOFOLLOW case to
 execute. Two complete 642-file/99-directory verifier passes share one 30s deadline,
 with independent complete before/after audits. This is Linux metadata evidence,

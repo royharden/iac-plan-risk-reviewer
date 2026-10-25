@@ -196,6 +196,39 @@ def artifact(path):
     return {"bytes": len(raw), "sha256": sha(raw), "base64": base64.b64encode(raw).decode()}
 
 
+def diagnostic_artifact(path):
+    """Retain a bounded reporter prefix without hiding missing or unreadable files."""
+    # Three encoded prefixes must fit MAX_REPORT alongside source/tree metadata.
+    cap = MAX_ARTIFACT // 2
+    try:
+        plain_chain(path)
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise ValueError("bounded regular reporter required")
+        with path.open("rb") as stream:
+            raw = stream.read(cap + 1)
+        if len(raw) != min(info.st_size, cap + 1):
+            raise ValueError("reporter size changed")
+        raw = raw[:cap]
+        return (
+            {"bytes": len(raw), "sha256": sha(raw), "base64": base64.b64encode(raw).decode()},
+            {
+                "status": "truncated" if info.st_size > cap else "complete",
+                "source_bytes": info.st_size,
+                "retained_bytes": len(raw),
+                "cap_bytes": cap,
+            },
+        )
+    except FileNotFoundError as error:
+        return None, {"status": "missing", "type": type(error).__name__, "message": str(error)}
+    except (OSError, ValueError) as error:
+        return None, {
+            "status": "read-error",
+            "type": type(error).__name__,
+            "message": str(error),
+        }
+
+
 def image_pins(root, source):
     observed = {}
     for relative, expected in source["files"].items():
@@ -342,6 +375,8 @@ def runtime():
         "source": source,
         "platform": sys.platform,
         "artifacts": {},
+        "diagnostics": {"schema_version": "m4-linux-readiness-diagnostics-v1", "reporters": {}},
+        "pytest": {"completed": False, "exit_code": None, "timed_out": False},
         "passed": False,
     }
     try:
@@ -391,15 +426,20 @@ def runtime():
             os.environ, PYTHONPATH=f"{root / 'src'}:{root}:{test_copy / 'tests/eval'}"
         )
         with log.open("xb") as stream:
-            completed = subprocess.run(
-                argv,
-                stdin=subprocess.DEVNULL,
-                stdout=stream,
-                stderr=subprocess.STDOUT,
-                env=environment,
-                timeout=300,
-                check=False,
-            )
+            try:
+                completed = subprocess.run(
+                    argv,
+                    stdin=subprocess.DEVNULL,
+                    stdout=stream,
+                    stderr=subprocess.STDOUT,
+                    env=environment,
+                    timeout=300,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired:
+                report["pytest"].update(timed_out=True, timeout_seconds=300)
+                raise
+        report["pytest"].update(completed=True, exit_code=completed.returncode)
         suites = ET.parse(xml).getroot().findall("testsuite")
         counts = {
             k: sum(int(s.attrib[k]) for s in suites)
@@ -418,6 +458,7 @@ def runtime():
             if c.attrib.get("name", "").startswith("test_file_open_uses_nofollow_where_available")
         ]
         report["pytest"] = {
+            **report["pytest"],
             "exit_code": completed.returncode,
             **counts,
             "skips": skipped,
@@ -425,9 +466,6 @@ def runtime():
             "nofollow_executed": bool(nofollow)
             and all(c.find("skipped") is None for c in nofollow),
         }
-        report["artifacts"]["pytest.xml"] = artifact(xml)
-        report["artifacts"]["pytest.log"] = artifact(log)
-        report["artifacts"]["imports.json"] = artifact(scratch / "imports.json")
         report["test_imports"] = json.loads((scratch / "imports.json").read_bytes())
         report["test_copy_unchanged"] = all(
             sha((test_copy / rel).read_bytes()) == digest for rel, digest in test_before.items()
@@ -483,6 +521,7 @@ def runtime():
         report["passed"] = (
             core_match
             and versions_match
+            and completed.returncode == 0
             and all(p.get("exit_code") == 0 for p in report["versions"])
             and counts["tests"] == 168
             and counts["failures"] == counts["errors"] == 0
@@ -505,6 +544,18 @@ def runtime():
         ImportError,
     ) as error:
         report["error"] = {"type": type(error).__name__, "message": str(error)}
+    finally:
+        # The test stdout stream has closed before collection, including on timeout.
+        # Collect independently: one missing/bad reporter must not discard the rest.
+        for name in ("pytest.xml", "pytest.log", "imports.json"):
+            retained, status = diagnostic_artifact(scratch / name)
+            report["diagnostics"]["reporters"][name] = status
+            if retained is not None:
+                report["artifacts"][name] = retained
+        if any(
+            status["status"] != "complete" for status in report["diagnostics"]["reporters"].values()
+        ):
+            report["passed"] = False
     raw = encode(report)
     if len(raw) > MAX_REPORT:
         report["passed"] = False
