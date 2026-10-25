@@ -215,7 +215,7 @@ def _replace_manifest(bundle, change):
     change(value)
     raw = json.dumps(value, sort_keys=True).encode("utf-8")
     path.write_bytes(raw)
-    (bundle / "manifest.sha256").write_text(sha256(raw).hexdigest() + "\n", encoding="ascii")
+    (bundle / "manifest.sha256").write_bytes((sha256(raw).hexdigest() + "\n").encode("ascii"))
 
 
 def test_bound_and_legacy_inventory_keep_distinct_integrity_meanings(registry_report_bundle, tmp_path):

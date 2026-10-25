@@ -39,7 +39,7 @@ def test_default_inspect_never_calls_model_network_or_process_and_writes_only_bu
     assert created == {out.relative_to(tmp_path)} | {
         (out / name).relative_to(tmp_path) for name in (
             "private.json", "private.html", "shareable.json", "shareable.html",
-            "manifest.json", "manifest.sha256", "export-state.json",
+            "run-manifest.json", "manifest.json", "manifest.sha256", "export-state.json",
         )
     }
     assert all("SYNTHETIC_UNUSED_CANARY" not in path.read_text(encoding="utf-8")
