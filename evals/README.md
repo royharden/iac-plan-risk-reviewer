@@ -35,9 +35,10 @@ separate required check. It retains M4-owned temporary output and deletes nothin
 
 ## Docker execution gate
 
-Docker is blocked for PB-M4-R03 until INT resolves the agent-ports overlap with M1.
-No container execution is claimed by the prepared packaging. Once explicitly
-unblocked, run `scripts/docker_e2e.ps1` with an immutable base image reference:
+PB-M4-R03's operator correction assigns M4 loopback block 22100–22199, replacing
+the overlapping launch block 21830–21839. INT's run addition 3 permits Docker after
+the M4 instance claim/check succeed. Prepared packaging alone establishes no
+container execution. Run `scripts/docker_e2e.ps1` with an immutable base reference:
 
 ```powershell
 & '<checkout>\scripts\docker_e2e.ps1' -BaseImage 'python:3.12.13-slim@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36'

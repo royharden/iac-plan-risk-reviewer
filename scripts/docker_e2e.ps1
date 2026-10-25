@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory=$true)][ValidatePattern('^python:3\.12\.13-slim@sha256:[a-f0-9]{64}$')]
     [string]$BaseImage,
     [string]$PortsScript = 'C:\Users\Roy Harden\OneDrive\PJ-OD\skills\skills-bts\agent-ports\scripts\ports.py',
-    [string]$Owner = '0024_Codex_gpt-61-sol_RV2',
+    [ValidatePattern('^[0-9A-Z]{4}$')][string]$Owner = '0024',
     [ValidatePattern('^r03-rv2-[a-z0-9-]+$')][string]$Instance = 'r03-rv2-e2e'
 )
 $ErrorActionPreference = 'Stop'
