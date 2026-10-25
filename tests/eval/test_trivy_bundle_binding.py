@@ -19,6 +19,7 @@ from test_trivy_bundle_inventory import FIXTURES, SMALL_SHA, canonical, small_tr
 
 from eval.runner.scoring import EligibilityManifest, record_digest
 from eval.scanners import bundle_inventory, trivy_adapter
+from eval.scanners import runner as runner_module
 from eval.scanners.driver import compare
 from eval.scanners.run_manifest import ScannerComponents, ScannerRunContext, adapt_scanner_report
 from eval.scanners.runner import (
@@ -26,6 +27,7 @@ from eval.scanners.runner import (
     BoundedSubprocessRunner,
     Invocation,
     Limits,
+    LocalExecutionGrant,
     RunResult,
     ScannerPin,
     invocation_digest,
@@ -583,3 +585,66 @@ def test_legacy_v1_closed_grant_golden_roundtrip(tmp_path):
         **json.loads(raw)["invocations"][0],
         "check_ids": ("GOLDEN_TEST",),
     }
+
+
+def test_raw_persistence_failure_stays_incomplete_when_deadline_also_expires(tmp_path, monkeypatch):
+    """what_bug_this_catches: timeout overwrites write error and falsely attests retained bytes.
+
+    This isolates terminal bookkeeping: approval/tree verification and receipt
+    storage are controlled doubles; no scanner, policy, or filesystem cleanup is
+    exercised. The original integration controls retain the real gates.
+    """
+    (tmp_path / "policy").mkdir()
+    binding = bundle_inventory.BundleInventory(
+        "m4-trivy-complete-cache-v1",
+        tmp_path / "policy",
+        tmp_path.parent / "not-read-manifest.json",
+        "a" * 64,
+    )
+    invocation = Invocation(
+        (str(tmp_path / "not-executed.fixture"),), tmp_path, (), Limits(), (), binding
+    )
+    approval = ApprovedInvocation(
+        "T", "trivy", "test-only", *(["a" * 64] * 6), invocation_digest(invocation), ("TEST_R2",)
+    )
+    grant = LocalExecutionGrant("test-only", "test-only", "a" * 64, "b" * 64, (approval,), "c" * 64)
+    clock, receipts, writes, calls = [0.0], {}, [], []
+    summary = {
+        "tree_sha256": "a" * 64,
+        "files": 1,
+        "directories": 0,
+        "aggregate_file_bytes": 1,
+        "elapsed_seconds": 0.0,
+    }
+
+    def receipt(path, payload):
+        receipts[path.name] = payload
+        return sha(canonical(payload))
+
+    def persist(path, raw):
+        writes.append(path.name)
+        if path.name.startswith(".scanner-stdout-"):
+            clock[0] = 31.0
+            raise OSError("owned synthetic stdout persistence failure")
+        return sha(raw)
+
+    def popen(*args, **kwargs):
+        calls.append((args, kwargs))
+        return MockProcess(b"captured synthetic raw")
+
+    monkeypatch.setattr(BoundedSubprocessRunner, "approval", lambda self, inv: approval)
+    monkeypatch.setattr(Invocation, "verify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner_module, "verify_tree", lambda *args, **kwargs: dict(summary))
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(BoundedSubprocessRunner, "_receipt", staticmethod(receipt))
+    monkeypatch.setattr(BoundedSubprocessRunner, "_write_bytes", staticmethod(persist))
+    monkeypatch.setattr("subprocess.Popen", popen)
+    result = BoundedSubprocessRunner(True, grant)(invocation)
+    terminal = next(
+        value for name, value in receipts.items() if name.startswith(".scanner-terminal-")
+    )
+    assert len(calls) == 1 and result.error_code is not None and result.timed_out
+    assert any(name.startswith(".scanner-stdout-") for name in writes)
+    # The successful mocked terminal storage reports a failed raw persistence
+    # honestly, regardless of which failure code wins or whether stderr is tried.
+    assert terminal["retained_output_complete"] is False

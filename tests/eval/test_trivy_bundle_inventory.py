@@ -625,3 +625,30 @@ def test_enumeration_is_bounded_before_materializing_directory(tmp_path, monkeyp
     with pytest.raises(REFUSAL):
         verify_tree(binding)
     assert len(consumed) <= 1281
+
+
+def test_stable_expected_file_rewritten_before_verification_is_accepted(tmp_path):
+    """what_bug_this_catches: Windows birth/change-time mismatch rejects an unchanged valid tree.
+
+    The rewrite finishes before verification. There is no concurrent writer and
+    the independently frozen expected payload, hashes, and membership never change.
+    """
+    descriptor, root, manifest = small_tree(tmp_path)
+    time.sleep(0.05)  # Separate creation from rewrite even on coarse filesystem clocks.
+    (root / "a/check.rego").write_bytes(b"alpha\n")
+    before = (root / "a/check.rego").lstat()
+    binding = BundleInventory(descriptor["profile"], root, manifest, SMALL_SHA)
+    summary = verify_tree(binding)
+    assert {key: value for key, value in summary.items() if key != "elapsed_seconds"} == {
+        "tree_sha256": SMALL_SHA,
+        "files": 3,
+        "directories": 3,
+        "aggregate_file_bytes": 26,
+    }
+    after = (root / "a/check.rego").lstat()
+    assert (before.st_ino, before.st_size, before.st_mtime_ns) == (
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+    )
+    assert manifest.read_bytes() == (FIXTURES / "small-tree.json").read_bytes()
