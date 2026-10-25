@@ -11,17 +11,32 @@ invocation, import or tests executed during that construction.
 """
 from __future__ import annotations
 
+import json
+import re
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable, Literal
-import json
-import re
 
 from . import checkov_adapter, trivy_adapter
 from .artifacts import Mapping
-from .runner import (BoundedSubprocessRunner, FakeRunner, Limits, Runner, SHA256, ScanArtifact, ScannerPin,
-                     bounded_read, cell_status, digest, remove_guarded_input, simulate_capture,
-                     stage_guarded_input, strict_json)
+from .bundle_inventory import load_bundle_inventory
+from .runner import (
+    SHA256,
+    BoundedSubprocessRunner,
+    FakeRunner,
+    Limits,
+    Runner,
+    ScanArtifact,
+    ScannerPin,
+    bounded_read,
+    cell_status,
+    digest,
+    remove_guarded_input,
+    simulate_capture,
+    stage_guarded_input,
+    strict_json,
+)
 
 SCOPES = ("development_synthetic", "heldout")
 
@@ -100,7 +115,9 @@ def _path(value: object) -> Path:
 def _load_cases(manifest: dict, limits: Limits,
                 guarded: GuardedScannerInput | None = None) -> tuple[Case, ...]:
     scope = manifest.get("input_scope")
-    if manifest.get("schema_version") != "m4-scanner-run-v1" or scope not in SCOPES:
+    if (manifest.get("schema_version") not in {"m4-scanner-run-v1", "m4-scanner-run-v2"}
+            or scope not in SCOPES
+            or (manifest.get("schema_version") == "m4-scanner-run-v2" and scope != "development_synthetic")):
         raise ValueError("only declared development synthetic or guarded heldout inputs are authorized")
     heldout = scope == "heldout"
     if heldout != (guarded is not None) or (guarded is not None and type(guarded) is not GuardedScannerInput):
@@ -220,7 +237,7 @@ def _absent(arm: str, reason: str) -> ScanArtifact:
 
 
 def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
-             fake_only: bool, limits: Limits) -> tuple[ScanArtifact, tuple[Mapping, ...]]:
+             fake_only: bool, limits: Limits, *, tree_mode: bool = False) -> tuple[ScanArtifact, tuple[Mapping, ...]]:
     if settings is None:
         return _absent(arm, "missing_arm_configuration"), ()
     check_ids = settings.get("check_ids", [])
@@ -244,6 +261,8 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
     if runner is None:
         return _absent(arm, "no_explicit_authorized_runtime_runner"), ()
     staged = None
+    attempt_deadline = (time.monotonic() + min(30.0, limits.timeout_seconds)
+                        if tree_mode and arm == "T" else None)
     try:
         mappings = _mappings(settings)
         workspace = _path(settings.get("workspace"))
@@ -263,7 +282,13 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
                       policy_manifest_path=_path(settings["policy_manifest_path"])
                       if settings.get("policy_manifest_path") else None, limits=limits)
         if arm == "T":
-            artifact = adapter.scan(**common, checks_bundle_files=_files(settings, "bundle_files"))
+            if tree_mode:
+                binding = load_bundle_inventory(settings.get("bundle_inventory"), workspace,
+                                                deadline=attempt_deadline)
+                artifact = adapter.scan(**common, bundle_inventory=binding,
+                                        attempt_deadline=attempt_deadline)
+            else:
+                artifact = adapter.scan(**common, checks_bundle_files=_files(settings, "bundle_files"))
         elif arm == "C-custom":
             if not settings.get("custom_policy_dir"):
                 return _absent(arm, "missing_custom_policy_directory"), mappings
@@ -275,7 +300,7 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
         if artifact.arm != arm:
             raise ValueError("adapter arm mismatch")
         return artifact, mappings
-    except (OSError, ValueError, TypeError, KeyError):
+    except (OSError, ValueError, TypeError, KeyError, RecursionError, UnicodeError):
         return _absent(arm, "unavailable_or_unverified_activation_inputs"), ()
     finally:
         if staged is not None and not remove_guarded_input(staged, case.plan_sha256, limits.plan_bytes):
@@ -309,12 +334,18 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
         raise ValueError("unknown comparison arm")
     if any(not isinstance(settings, dict) for settings in arms.values()):
         raise ValueError("arm settings must be objects")
+    tree_mode = manifest["schema_version"] == "m4-scanner-run-v2"
+    for arm, settings in arms.items():
+        if "bundle_inventory" in settings and (not tree_mode or arm != "T"):
+            raise ValueError("complete-tree binding requires explicit v2 T arm")
+        if tree_mode and arm == "T" and ("bundle_inventory" not in settings or "bundle_files" in settings):
+            raise ValueError("v2 requires complete-tree descriptor without legacy bundle_files")
     rows, receipts = [], []
     for case in cases:
         for arm in ARMS:
             if digest(_case_bytes(case, limits)) != case.plan_sha256:
                 raise ValueError("plan mutation between arms aborts comparison")
-            artifact, mappings = _collect(case, arm, arms.get(arm), runner, fake_only, limits)
+            artifact, mappings = _collect(case, arm, arms.get(arm), runner, fake_only, limits, tree_mode=tree_mode)
             if artifact.plan_sha256 not in (None, case.plan_sha256):
                 raise ValueError("scanner capture used different plan bytes")
             capture_hash = _capture_digest(artifact)

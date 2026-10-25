@@ -1,5 +1,5 @@
 {
-  "schema_version": "m4-scanner-dev-readiness-v1",
+  "schema_version": "m4-scanner-dev-readiness-v2",
   "status": "NOT_RUN",
   "source_enrichment": false,
   "product_acceptance": false,
@@ -215,18 +215,18 @@
   "custom_policy_files": [
     {
       "path": "policies/checkov-custom/__init__.py",
-      "sha256": "7ce0b52ef7a7150ce1008abf206fab47fa1435782e615f42f92b47978e40d61e",
-      "bytes": 83
+      "bytes": 82,
+      "sha256": "e523016a83ad9ddff7ec4d156463598e55a152b384ad74184e8153bdf8e384bc"
     },
     {
       "path": "policies/checkov-custom/m4_checks.py",
-      "sha256": "2c7d461436f16c37e03de3eb85f56ddf48b2526213a050635d52b2991b4e6f8a",
-      "bytes": 2632
+      "bytes": 2576,
+      "sha256": "f3e6a47c5b5c821c4d0a01f5a46e18cf207237bfc1181e39a7b018f67764d8f7"
     },
     {
       "path": "policies/checkov-custom/m4_policy.py",
-      "sha256": "54a0421eab88a068cc7224a3b07a22fb16f59f9be9b53ec3dd977baa4d2cce57",
-      "bytes": 10786
+      "bytes": 10556,
+      "sha256": "ebb08944a9e72025dbd2a04d85982e9bdb5455d29c4ee489d671eed07ecccc74"
     }
   ],
   "check_ids": {
@@ -460,5 +460,59 @@
       "Same dev ancestry and independent labels only after integrity proof",
       "D rerun on all new hashes before primary C/C-custom/T; L/P/M unmeasured"
     ]
+  },
+  "prior_representation": {
+    "source_commit": "836645ac5063d5ea6e340c1e0c10b579a7c8107d",
+    "custom_policy_windows_crlf": [
+      {
+        "path": "policies/checkov-custom/__init__.py",
+        "sha256": "7ce0b52ef7a7150ce1008abf206fab47fa1435782e615f42f92b47978e40d61e",
+        "bytes": 83
+      },
+      {
+        "path": "policies/checkov-custom/m4_checks.py",
+        "sha256": "2c7d461436f16c37e03de3eb85f56ddf48b2526213a050635d52b2991b4e6f8a",
+        "bytes": 2632
+      },
+      {
+        "path": "policies/checkov-custom/m4_policy.py",
+        "sha256": "54a0421eab88a068cc7224a3b07a22fb16f59f9be9b53ec3dd977baa4d2cce57",
+        "bytes": 10786
+      }
+    ],
+    "record": "REVIEW-RV2-D11-scanner-readiness-r2.json; historical records preserved"
+  },
+  "custom_policy_representation": {
+    "encoding": "exact Git LF blobs, binary extraction; no policy semantic delta",
+    "authority": "CONTRACT-TRIVY-TREE-R03-v1.md",
+    "final_image_loaded_bytes_verified": false,
+    "owner": "RV2"
+  },
+  "complete_trivy_cache": {
+    "comparison_schema": "m4-scanner-run-v2",
+    "policy_schema": "m4-scanner-policy-manifest-v2",
+    "profile": "m4-trivy-complete-cache-v1",
+    "manifest_schema": "m4-scanner-bundle-tree-v1",
+    "tree_sha256": "6168428f0f5260c79536f13b9697dd5d7fb6866e96a4762e3f8e651b34a342b2",
+    "files": 642,
+    "directories_excluding_policy_root": 99,
+    "aggregate_file_bytes": 1056327,
+    "local_metadata_bytes": 174,
+    "metadata_origin": "locally materialized acquisition metadata; not OCI-producer-authenticated",
+    "caps": {
+      "max_regular_files": 1024,
+      "max_directories_excluding_root": 256,
+      "max_all_entries_excluding_root": 1280,
+      "max_file_bytes": 65536,
+      "max_aggregate_file_bytes": 2097152,
+      "max_relative_path_bytes": 256,
+      "max_relative_depth": 12,
+      "max_canonical_manifest_bytes": 524288
+    },
+    "attempt_deadline_seconds": 30,
+    "primary_scans_authorized": false,
+    "scanner_consumption_verified": false,
+    "linux_verification_performance_verified": false,
+    "runtime_mapping_eligibility": "requires actual installed checks/resource/semantics proof and new policy/map/grant pins"
   }
 }

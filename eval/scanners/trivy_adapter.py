@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .bundle_inventory import BundleInventory, plain_directory
 from .runner import Limits, Observation, Runner, ScanArtifact, ScannerPin, capture
 
 if TYPE_CHECKING:
@@ -40,7 +41,9 @@ def scan(*, plan_path: Path, pin: ScannerPin, config_path: Path, workspace: Path
          runner: Runner, check_ids: tuple[str, ...], mappings: tuple[Mapping, ...] = (),
          policy_sha256: str | None = None, limits: Limits = Limits(),
          policy_manifest_path: Path | None = None,
-         checks_bundle_files: tuple[tuple[Path, str, int], ...] = ()) -> ScanArtifact:
+         checks_bundle_files: tuple[tuple[Path, str, int], ...] = (),
+         bundle_inventory: BundleInventory | None = None,
+         attempt_deadline: float | None = None) -> ScanArtifact:
     # Flags follow upstream source, not a claimed tested release. Caller pins and
     # verifies that exact release/profile before any record can be scored.
     argv = (str(pin.executable), "config", "--format", "json", "--config", str(config_path),
@@ -49,7 +52,13 @@ def scan(*, plan_path: Path, pin: ScannerPin, config_path: Path, workspace: Path
             "--ignorefile", "",
             "--timeout", f"{limits.timeout_seconds:g}s", "--cache-dir", str(workspace),
             "--", str(plan_path))
-    if not checks_bundle_files:
+    if bundle_inventory is not None:
+        if type(bundle_inventory) is not BundleInventory or checks_bundle_files:
+            raise ValueError("complete-tree and legacy bundle modes are exclusive")
+        plain_directory(workspace, deadline=attempt_deadline)
+        if bundle_inventory.root != workspace / "policy":
+            raise ValueError("complete-tree root must be exact workspace/policy")
+    if not checks_bundle_files and bundle_inventory is None:
         from .runner import ScanArtifact
         return ScanArtifact("T", "trivy", "not_run", "none", None, pin.version,
                             pin.executable_sha256, pin.dependency_manifest_sha256,
@@ -63,4 +72,5 @@ def scan(*, plan_path: Path, pin: ScannerPin, config_path: Path, workspace: Path
                    parser=parse_output, check_ids=check_ids, mappings=mappings,
                    policy_sha256=policy_sha256, limits=limits,
                    policy_manifest_path=policy_manifest_path,
-                   extra_files=checks_bundle_files)
+                   extra_files=checks_bundle_files, bundle_inventory=bundle_inventory,
+                   attempt_deadline=attempt_deadline)
