@@ -297,7 +297,8 @@ def verify_report(bundle_path: Path, original_plan: Path | None = None,
         verify_unchanged(plan)
     _check(deadline)
     return {"status": "complete_bundle_integrity_verified", "run_id": bundle.run_id,
-            "plan_sha256": bundle.plan_sha256, "artifacts_verified": len(_ARTIFACTS),
+            "plan_sha256": bundle.plan_sha256,
+            "artifacts_verified": sum(name in BOUND_PAYLOADS for name, _ in bundle.file_hashes),
             "source_digest_verified": original_plan is not None,
             "run_manifest_bound": bundle.provenance_sha256 is not None,
             "run_manifest_sha256": bundle.provenance_sha256,
