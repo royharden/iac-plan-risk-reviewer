@@ -3,11 +3,17 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Any, Literal
 from pathlib import Path
+from typing import Any, Literal
 from uuid import uuid4
 
-from iac_review.contracts import EvidenceRef, PlanDocument, ResolvedEvidence, ResourceChange, ValueState
+from iac_review.contracts import (
+    EvidenceRef,
+    PlanDocument,
+    ResolvedEvidence,
+    ResourceChange,
+    ValueState,
+)
 from iac_review.ingest import SourceChangedError, decode_source, read_source_bytes
 
 Side = Literal["before", "after", "actions", "metadata"]
@@ -176,6 +182,21 @@ def _checked_absence(root: Any, tokens: tuple[Token, ...]) -> bool:
     return _child(current, tokens[-1]) is _ABSENT
 
 
+def _same_json_value(actual: Any, expected: Any) -> bool:
+    """Compare source facts without Python's Boolean/numeric coercion."""
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(actual, dict):
+        return actual.keys() == expected.keys() and all(
+            _same_json_value(value, expected[key]) for key, value in actual.items()
+        )
+    if isinstance(actual, (list, tuple)):
+        return len(actual) == len(expected) and all(
+            _same_json_value(left, right) for left, right in zip(actual, expected)
+        )
+    return actual == expected
+
+
 def resolve(plan: PlanDocument, ref: EvidenceRef) -> ResolvedEvidence:
     """Validate digest, resource identity, exact locator, masks and expected state."""
     empty = ValueState(state="absent")
@@ -211,7 +232,7 @@ def resolve(plan: PlanDocument, ref: EvidenceRef) -> ResolvedEvidence:
         root, sensitive, unknown = _raw_root(raw, resource.index, ref.side)
         tokens = _relative_tokens(root, decoded[len(base_parts):], sensitive, unknown)
         actual = _read(root, tokens, sensitive, unknown)
-        if actual != ref.expected:
+        if actual != ref.expected or not _same_json_value(actual.value, ref.expected.value):
             return result("mismatch", actual, "value_or_mask_mismatch")
         if actual.sensitive:
             return result("sensitive", actual, "sensitive_value_withheld")
