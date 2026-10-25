@@ -10,6 +10,7 @@ import hashlib
 import json
 import math
 import re
+import stat
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Literal, Protocol
@@ -26,6 +27,24 @@ ACTIONS = {("no-op",), ("create",), ("read",), ("update",), ("delete",),
 
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _plain_directory(path: Path) -> None:
+    """Reject linked/reparse directories, checking lexical ancestors root first.
+
+    lstat checks are fail closed but do not atomically bind later opens or cwd
+    resolution. An operator-owned sandbox must prevent concurrent path changes.
+    """
+    if not path.is_absolute():
+        raise ValueError("caller-owned absolute scratch directory required")
+    for item in reversed((path, *path.parents)):
+        metadata = item.lstat()
+        if (stat.S_ISLNK(metadata.st_mode)
+                or getattr(metadata, "st_file_attributes", 0)
+                & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)):
+            raise ValueError("scratch directory link or reparse point forbidden")
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise ValueError("caller-owned absolute scratch directory required")
 
 
 def bounded_read(path: Path, cap: int) -> bytes:
@@ -116,8 +135,7 @@ class Invocation:
     def verify(self) -> None:
         if not self.argv or not Path(self.argv[0]).is_absolute():
             raise ValueError("absolute pinned scanner command required")
-        if not self.cwd.is_absolute() or not self.cwd.is_dir() or self.cwd.is_symlink():
-            raise ValueError("caller-owned absolute scratch directory required")
+        _plain_directory(self.cwd)
         if len(dict(self.environment)) != len(self.environment):
             raise ValueError("duplicate environment key")
         for path, expected, cap in self.pinned_files:
@@ -202,11 +220,7 @@ def stage_guarded_input(workspace: Path, data: bytes, plan_sha256: str, cap: int
     if type(data) is not bytes or len(data) > cap or digest(data) != plan_sha256:
         raise ValueError("guarded input bytes differ from the permitted pin")
     path = guarded_input_path(workspace, plan_sha256)
-    for item in (path.parent, *path.parent.parents):
-        if item.is_symlink() or (hasattr(item, "is_junction") and item.is_junction()):
-            raise ValueError("guarded staging link forbidden")
-    if not path.parent.is_dir():
-        raise ValueError("pre-existing caller-owned guarded staging directory required")
+    _plain_directory(path.parent)
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
     fd = os.open(path, flags, 0o600)
     try:
@@ -442,15 +456,23 @@ class BoundedSubprocessRunner:
         return matches[0]
 
     @staticmethod
-    def _receipt(path: Path, payload: dict) -> str:
+    def _write_bytes(path: Path, raw: bytes) -> str:
         import os
-        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"),
-                         allow_nan=False).encode()
+        try:
+            _plain_directory(path.parent)
+        except ValueError as error:
+            raise OSError("capture directory link or reparse point forbidden") from error
         with path.open("xb") as stream:
             stream.write(raw)
             stream.flush()
             os.fsync(stream.fileno())
         return digest(raw)
+
+    @staticmethod
+    def _receipt(path: Path, payload: dict) -> str:
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                         allow_nan=False).encode()
+        return BoundedSubprocessRunner._write_bytes(path, raw)
 
     def __call__(self, invocation: Invocation) -> RunResult:
         approved = self.approval(invocation)
@@ -472,12 +494,21 @@ class BoundedSubprocessRunner:
                    elapsed: float, timed_out: bool = False, truncated: bool = False,
                    error_code: str | None = None, process_id: int | None = None) -> RunResult:
             terminal_sha = None
+            stdout_name = ".scanner-stdout-" + stem + ".bin"
+            stderr_name = ".scanner-stderr-" + stem + ".bin"
+            try:
+                self._write_bytes(invocation.cwd / stdout_name, stdout)
+                self._write_bytes(invocation.cwd / stderr_name, stderr)
+            except OSError:
+                error_code = "raw_output_write_failed"
             try:
                 terminal_sha = self._receipt(invocation.cwd / (".scanner-terminal-" + stem + ".json"), {
                     "schema_version": "m4-local-scanner-terminal-v1", "operator_grant_sha256": grant_sha,
                     "start_receipt_sha256": start_sha, "invocation_sha256": stem,
                     "process_started": kind == "live", "process_id": process_id,
                     "raw_exit_code": code, "stdout_sha256": digest(stdout), "stderr_sha256": digest(stderr),
+                    "stdout_file": stdout_name, "stderr_file": stderr_name,
+                    "retained_output_complete": error_code != "raw_output_write_failed",
                     "elapsed_seconds": elapsed, "timed_out": timed_out, "output_truncated": truncated,
                     "error_code": error_code})
             except OSError:
@@ -485,6 +516,7 @@ class BoundedSubprocessRunner:
             return RunResult(kind, code, stdout, stderr, elapsed, timed_out, truncated,
                              grant_sha, start_sha, terminal_sha, error_code)
 
+        _plain_directory(invocation.cwd)
         try:
             proc = subprocess.Popen(list(invocation.argv), cwd=invocation.cwd,
                                     env=dict(invocation.environment), shell=False,
@@ -857,7 +889,8 @@ def capture(*, arm: Arm, pin: ScannerPin, plan_path: Path, config_path: Path,
                            reasons=("untrusted_runner_cannot_attest_execution",))
         if result.error_code is not None or result.execution_kind == "none":
             reason = result.error_code if result.error_code in {
-                "process_start_failed", "terminal_receipt_write_failed"} else "process_not_started"
+                "process_start_failed", "terminal_receipt_write_failed",
+                "raw_output_write_failed"} else "process_not_started"
             return replace(base, status="error", reasons=(reason,))
         if result.timed_out or result.elapsed_seconds > limits.timeout_seconds + 2:
             return replace(base, status="timeout", reasons=("scanner_timeout",))
