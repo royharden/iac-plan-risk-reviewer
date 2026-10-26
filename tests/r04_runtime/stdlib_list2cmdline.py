@@ -72,4 +72,3 @@ def list2cmdline(seq):
 
 # Various tools for executing commands and looking at their output and status.
 #
-

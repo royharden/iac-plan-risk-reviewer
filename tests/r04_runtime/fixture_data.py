@@ -150,4 +150,3 @@ def expected_event(call):
         return 'os.symlink', (call['args'][0], call['args'][1], -1)
     return 'subprocess.Popen', (None, independent_windows_commandline(call['args'][0]),
                                 None, deepcopy(call['kwargs']['env']))
-
