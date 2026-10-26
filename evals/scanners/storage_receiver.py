@@ -322,7 +322,7 @@ def receive_capture(
         nonlocal expired
         try:
             now = clock()
-        except Exception:  # noqa: BLE001 - stop writes when the trusted clock fails
+        except Exception:  # noqa: BLE001 - sanitize arbitrary trusted-adapter faults
             latch("CLOCK")
             expired = True
             raise _Fault from None
@@ -429,7 +429,7 @@ def receive_capture(
             raise
         except _Fault:
             raise
-        except Exception:  # noqa: BLE001 - latch IO fault before close can also fail
+        except Exception:
             latch("STATUS_IO" if status else "CAPTURE_IO")
             raise
         finally:
@@ -480,7 +480,7 @@ def receive_capture(
             raise
         except _Fault:
             raise
-        except Exception:  # noqa: BLE001 - preserve readback failure before close
+        except Exception:
             latch("READBACK_IO")
             raise
         finally:
