@@ -125,7 +125,9 @@ def stage(root, context, cache, manifest, packaging_commit):
         raw = git(root, "cat-file", "blob", f"{head}:{relative}")
         working = regular_bytes(root / relative, MAX_ARTIFACT)
         if working not in (raw, raw.replace(b"\n", b"\r\n")):
-            raise ValueError("packaging working bytes differ from Git LF or exact CRLF representation")
+            raise ValueError(
+                "packaging working bytes differ from Git LF or exact CRLF representation"
+            )
         put(relative if relative.startswith("Dockerfile") else "product/" + relative, raw)
     for name, expected in POLICIES.items():
         raw = git(root, "cat-file", "blob", f"{BASE}:policies/checkov-custom/{name}")
