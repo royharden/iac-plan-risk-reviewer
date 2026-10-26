@@ -1,0 +1,844 @@
+{
+  "frozen_at_utc": "2026-10-26T01:09:46.442813+00:00",
+  "author": "0099",
+  "implementation_inspected": false,
+  "implementation_executed": false,
+  "case_count": 103,
+  "cases": [
+    {
+      "id": "header_magic",
+      "family": "header",
+      "step": 1,
+      "error": "HEADER_SYNTAX",
+      "condition": "0",
+      "citation": "CONTRACT-v3#/validation_order/0"
+    },
+    {
+      "id": "header_version",
+      "family": "header",
+      "step": 1,
+      "error": "HEADER_SYNTAX",
+      "condition": "3",
+      "citation": "CONTRACT-v3#/validation_order/0"
+    },
+    {
+      "id": "header_count",
+      "family": "header",
+      "step": 1,
+      "error": "HEADER_SYNTAX",
+      "condition": "22",
+      "citation": "CONTRACT-v3#/validation_order/0"
+    },
+    {
+      "id": "header_flags",
+      "family": "header",
+      "step": 1,
+      "error": "HEADER_SYNTAX",
+      "condition": "1",
+      "citation": "CONTRACT-v3#/validation_order/0"
+    },
+    {
+      "id": "header_phase",
+      "family": "header",
+      "step": 1,
+      "error": "HEADER_SYNTAX",
+      "condition": "2",
+      "citation": "CONTRACT-v3#/validation_order/0"
+    },
+    {
+      "id": "header_compat_wire0",
+      "family": "header",
+      "step": 1,
+      "error": "HEADER_SYNTAX",
+      "condition": "0",
+      "citation": "CONTRACT-v3#/validation_order/0"
+    },
+    {
+      "id": "header_compat_wire5",
+      "family": "header",
+      "step": 1,
+      "error": "HEADER_SYNTAX",
+      "condition": "5",
+      "citation": "CONTRACT-v3#/validation_order/0"
+    },
+    {
+      "id": "header_primary_wire0",
+      "family": "header",
+      "step": 1,
+      "error": "HEADER_SYNTAX",
+      "condition": "0",
+      "citation": "CONTRACT-v3#/validation_order/0"
+    },
+    {
+      "id": "header_primary_wire25",
+      "family": "header",
+      "step": 1,
+      "error": "HEADER_SYNTAX",
+      "condition": "25",
+      "citation": "CONTRACT-v3#/validation_order/0"
+    },
+    {
+      "id": "identity_E",
+      "family": "identity",
+      "step": 2,
+      "error": "IDENTITY_BINDING",
+      "condition": "Mismatch frozen tuple/operand E",
+      "citation": "CONTRACT-v3#/identity_binding"
+    },
+    {
+      "id": "identity_manifest",
+      "family": "identity",
+      "step": 2,
+      "error": "IDENTITY_BINDING",
+      "condition": "Mismatch frozen tuple/operand manifest",
+      "citation": "CONTRACT-v3#/identity_binding"
+    },
+    {
+      "id": "identity_request_wire",
+      "family": "identity",
+      "step": 2,
+      "error": "IDENTITY_BINDING",
+      "condition": "Mismatch frozen tuple/operand request_wire",
+      "citation": "CONTRACT-v3#/identity_binding"
+    },
+    {
+      "id": "identity_case_ordinal",
+      "family": "identity",
+      "step": 2,
+      "error": "IDENTITY_BINDING",
+      "condition": "Mismatch frozen tuple/operand case_ordinal",
+      "citation": "CONTRACT-v3#/identity_binding"
+    },
+    {
+      "id": "identity_case_id",
+      "family": "identity",
+      "step": 2,
+      "error": "IDENTITY_BINDING",
+      "condition": "Mismatch frozen tuple/operand case_id",
+      "citation": "CONTRACT-v3#/identity_binding"
+    },
+    {
+      "id": "identity_slot",
+      "family": "identity",
+      "step": 2,
+      "error": "IDENTITY_BINDING",
+      "condition": "Mismatch frozen tuple/operand slot",
+      "citation": "CONTRACT-v3#/identity_binding"
+    },
+    {
+      "id": "identity_host_capture_name",
+      "family": "identity",
+      "step": 2,
+      "error": "IDENTITY_BINDING",
+      "condition": "Mismatch frozen tuple/operand host_capture_name",
+      "citation": "CONTRACT-v3#/identity_binding"
+    },
+    {
+      "id": "identity_host_status_name",
+      "family": "identity",
+      "step": 2,
+      "error": "IDENTITY_BINDING",
+      "condition": "Mismatch frozen tuple/operand host_status_name",
+      "citation": "CONTRACT-v3#/identity_binding"
+    },
+    {
+      "id": "ordinal_id0",
+      "family": "order",
+      "step": 3,
+      "error": "RECORD_ORDINAL",
+      "condition": "id0",
+      "citation": "CONTRACT-v3#/validation_order/2"
+    },
+    {
+      "id": "ordinal_id24",
+      "family": "order",
+      "step": 3,
+      "error": "RECORD_ORDINAL",
+      "condition": "id24",
+      "citation": "CONTRACT-v3#/validation_order/2"
+    },
+    {
+      "id": "ordinal_duplicate",
+      "family": "order",
+      "step": 3,
+      "error": "RECORD_ORDINAL",
+      "condition": "duplicate",
+      "citation": "CONTRACT-v3#/validation_order/2"
+    },
+    {
+      "id": "ordinal_reversed",
+      "family": "order",
+      "step": 3,
+      "error": "RECORD_ORDINAL",
+      "condition": "reversed",
+      "citation": "CONTRACT-v3#/validation_order/2"
+    },
+    {
+      "id": "state_state4",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "state4",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_reason10",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "reason10",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_missing_NONE",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "missing_NONE",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_missing_GENERATION_FAILED_original",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "missing_GENERATION_FAILED_original",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_missing_NOT_STARTED_generated",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "missing_NOT_STARTED_generated",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_missing_known",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "missing_known",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_missing_logical",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "missing_logical",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_missing_payload",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "missing_payload",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_missing_digest",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "missing_digest",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_complete_reason",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "complete_reason",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_complete_unknown",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "complete_unknown",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_partial_reason",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "partial_reason",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_partial_unknown",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "partial_unknown",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_partial_generated",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "partial_generated",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_rejected_reason",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "rejected_reason",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_rejected_payload",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "rejected_payload",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_rejected_digest",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "rejected_digest",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_rejected_unknown_nonzero",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "rejected_unknown_nonzero",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_overcap_reject_not_overcap",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "overcap_reject_not_overcap",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "state_overcap_reject_unknown",
+      "family": "per_frame",
+      "step": 4,
+      "error": "STATE_ENCODING",
+      "condition": "overcap_reject_unknown",
+      "citation": "CONTRACT-v3#/wire/states"
+    },
+    {
+      "id": "overcap_1",
+      "family": "role_cap",
+      "step": 5,
+      "error": "LENGTH_CAP",
+      "condition": "complete record 1 declares 16385, actual payload absent",
+      "citation": "FINITE-ROSTER-v3#/records"
+    },
+    {
+      "id": "overcap_4",
+      "family": "role_cap",
+      "step": 5,
+      "error": "LENGTH_CAP",
+      "condition": "complete record 4 declares 2097153, actual payload absent",
+      "citation": "FINITE-ROSTER-v3#/records"
+    },
+    {
+      "id": "overcap_7",
+      "family": "role_cap",
+      "step": 5,
+      "error": "LENGTH_CAP",
+      "condition": "complete record 7 declares 262145, actual payload absent",
+      "citation": "FINITE-ROSTER-v3#/records"
+    },
+    {
+      "id": "overcap_10",
+      "family": "role_cap",
+      "step": 5,
+      "error": "LENGTH_CAP",
+      "condition": "complete record 10 declares 16385, actual payload absent",
+      "citation": "FINITE-ROSTER-v3#/records"
+    },
+    {
+      "id": "overcap_13",
+      "family": "role_cap",
+      "step": 5,
+      "error": "LENGTH_CAP",
+      "condition": "complete record 13 declares 2097153, actual payload absent",
+      "citation": "FINITE-ROSTER-v3#/records"
+    },
+    {
+      "id": "overcap_15",
+      "family": "role_cap",
+      "step": 5,
+      "error": "LENGTH_CAP",
+      "condition": "complete record 15 declares 65537, actual payload absent",
+      "citation": "FINITE-ROSTER-v3#/records"
+    },
+    {
+      "id": "overcap_17",
+      "family": "role_cap",
+      "step": 5,
+      "error": "LENGTH_CAP",
+      "condition": "complete record 17 declares 262145, actual payload absent",
+      "citation": "FINITE-ROSTER-v3#/records"
+    },
+    {
+      "id": "overcap_18",
+      "family": "role_cap",
+      "step": 5,
+      "error": "LENGTH_CAP",
+      "condition": "complete record 18 declares 65537, actual payload absent",
+      "citation": "FINITE-ROSTER-v3#/records"
+    },
+    {
+      "id": "u64_huge",
+      "family": "allocation",
+      "step": 5,
+      "error": "LENGTH_CAP",
+      "condition": "complete declares u64 max with tiny actual bytes",
+      "citation": "CONTRACT-v3#/validation_order/4"
+    },
+    {
+      "id": "hash_start",
+      "family": "raw_hash",
+      "step": 7,
+      "error": "PAYLOAD_HASH",
+      "condition": "Only retained exact raw bytes are hashed; mutation digest stale start",
+      "citation": "CONTRACT-v3#/wire/canonicalization"
+    },
+    {
+      "id": "hash_raw_NUL",
+      "family": "raw_hash",
+      "step": 7,
+      "error": "PAYLOAD_HASH",
+      "condition": "Only retained exact raw bytes are hashed; mutation digest stale raw_NUL",
+      "citation": "CONTRACT-v3#/wire/canonicalization"
+    },
+    {
+      "id": "hash_raw_invalid_utf8",
+      "family": "raw_hash",
+      "step": 7,
+      "error": "PAYLOAD_HASH",
+      "condition": "Only retained exact raw bytes are hashed; mutation digest stale raw_invalid_utf8",
+      "citation": "CONTRACT-v3#/wire/canonicalization"
+    },
+    {
+      "id": "hash_raw_unicode_utf8",
+      "family": "raw_hash",
+      "step": 7,
+      "error": "PAYLOAD_HASH",
+      "condition": "Only retained exact raw bytes are hashed; mutation digest stale raw_unicode_utf8",
+      "citation": "CONTRACT-v3#/wire/canonicalization"
+    },
+    {
+      "id": "hash_raw_CRLF",
+      "family": "raw_hash",
+      "step": 7,
+      "error": "PAYLOAD_HASH",
+      "condition": "Only retained exact raw bytes are hashed; mutation digest stale raw_CRLF",
+      "citation": "CONTRACT-v3#/wire/canonicalization"
+    },
+    {
+      "id": "hash_partial_prefix",
+      "family": "raw_hash",
+      "step": 7,
+      "error": "PAYLOAD_HASH",
+      "condition": "Only retained exact raw bytes are hashed; mutation digest stale partial_prefix",
+      "citation": "CONTRACT-v3#/wire/canonicalization"
+    },
+    {
+      "id": "json_invalid_utf8",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "invalid_utf8",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_BOM",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "BOM",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_non_ascii",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "non_ascii",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_unicode_escape",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "unicode_escape",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_slash_escape",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "slash_escape",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_control_escape",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "control_escape",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_duplicate_key",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "duplicate_key",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_whitespace",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "whitespace",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_key_order",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "key_order",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_missing_LF",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "missing_LF",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_double_LF",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "double_LF",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_trailing_space",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "trailing_space",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_float",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "float",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_exponent",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "exponent",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_negative_zero",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "negative_zero",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_leading_zero",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "leading_zero",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_NaN",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "NaN",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_Infinity",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "Infinity",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_unknown_field",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "unknown_field",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_missing_field",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "missing_field",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_bool_as_int",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "bool_as_int",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_null_as_int",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "null_as_int",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_string_as_int",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "string_as_int",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_too_deep",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "too_deep",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_key_too_long",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "key_too_long",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_string_too_long",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "string_too_long",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_integer_overflow",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "integer_overflow",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_wrong_version",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "wrong_version",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_wrong_arm_order",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "wrong_arm_order",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_original_order",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "original_order",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_generated_order",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "generated_order",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "json_metadata_identity",
+      "family": "canonical_schema",
+      "step": 8,
+      "error": "GENERATED_SCHEMA_OR_CANONICAL",
+      "condition": "metadata_identity",
+      "citation": "SCHEMAS-v3#/x-canonical-JSON-v2; $defs/record-17..23"
+    },
+    {
+      "id": "trailer_short0",
+      "family": "trailer",
+      "step": 9,
+      "error": "TRAILER",
+      "condition": "short0",
+      "citation": "CONTRACT-v3#/wire/trailer_fields"
+    },
+    {
+      "id": "trailer_short49",
+      "family": "trailer",
+      "step": 9,
+      "error": "TRAILER",
+      "condition": "short49",
+      "citation": "CONTRACT-v3#/wire/trailer_fields"
+    },
+    {
+      "id": "trailer_magic",
+      "family": "trailer",
+      "step": 9,
+      "error": "TRAILER",
+      "condition": "magic",
+      "citation": "CONTRACT-v3#/wire/trailer_fields"
+    },
+    {
+      "id": "trailer_count",
+      "family": "trailer",
+      "step": 9,
+      "error": "TRAILER",
+      "condition": "count",
+      "citation": "CONTRACT-v3#/wire/trailer_fields"
+    },
+    {
+      "id": "trailer_length",
+      "family": "trailer",
+      "step": 9,
+      "error": "TRAILER",
+      "condition": "length",
+      "citation": "CONTRACT-v3#/wire/trailer_fields"
+    },
+    {
+      "id": "trailer_digest",
+      "family": "trailer",
+      "step": 9,
+      "error": "TRAILER",
+      "condition": "digest",
+      "citation": "CONTRACT-v3#/wire/trailer_fields"
+    },
+    {
+      "id": "trailer_extra_frame",
+      "family": "trailer",
+      "step": 9,
+      "error": "TRAILER",
+      "condition": "extra_frame",
+      "citation": "CONTRACT-v3#/wire/trailer_fields"
+    },
+    {
+      "id": "trailing_byte",
+      "family": "EOF",
+      "step": 10,
+      "error": "TRAILING_BYTES",
+      "condition": "One byte after exact 50-byte trailer",
+      "citation": "CONTRACT-v3#/wire/EOF"
+    },
+    {
+      "id": "semantic_complete_start_not_started_stdout",
+      "family": "cross_record",
+      "step": 11,
+      "error": "STATE_OR_CLOSURE_INCOMPLETE",
+      "condition": "complete_start_not_started_stdout",
+      "citation": "CONTRACT-v3#/presence; SCHEMAS-v3#/x-canonical-JSON-v2/tuple_rules/16"
+    },
+    {
+      "id": "semantic_complete_start_not_started_stderr",
+      "family": "cross_record",
+      "step": 11,
+      "error": "STATE_OR_CLOSURE_INCOMPLETE",
+      "condition": "complete_start_not_started_stderr",
+      "citation": "CONTRACT-v3#/presence; SCHEMAS-v3#/x-canonical-JSON-v2/tuple_rules/16"
+    },
+    {
+      "id": "semantic_complete_start_not_started_terminal",
+      "family": "cross_record",
+      "step": 11,
+      "error": "STATE_OR_CLOSURE_INCOMPLETE",
+      "condition": "complete_start_not_started_terminal",
+      "citation": "CONTRACT-v3#/presence; SCHEMAS-v3#/x-canonical-JSON-v2/tuple_rules/16"
+    },
+    {
+      "id": "semantic_declared_unstarted_with_start",
+      "family": "cross_record",
+      "step": 11,
+      "error": "STATE_OR_CLOSURE_INCOMPLETE",
+      "condition": "declared_unstarted_with_start",
+      "citation": "CONTRACT-v3#/presence; SCHEMAS-v3#/x-canonical-JSON-v2/tuple_rules/16"
+    },
+    {
+      "id": "semantic_declared_finished_missing_terminal",
+      "family": "cross_record",
+      "step": 11,
+      "error": "STATE_OR_CLOSURE_INCOMPLETE",
+      "condition": "declared_finished_missing_terminal",
+      "citation": "CONTRACT-v3#/presence; SCHEMAS-v3#/x-canonical-JSON-v2/tuple_rules/16"
+    },
+    {
+      "id": "semantic_declared_unstarted_reason2",
+      "family": "cross_record",
+      "step": 11,
+      "error": "STATE_OR_CLOSURE_INCOMPLETE",
+      "condition": "declared_unstarted_reason2",
+      "citation": "CONTRACT-v3#/presence; SCHEMAS-v3#/x-canonical-JSON-v2/tuple_rules/16"
+    },
+    {
+      "id": "semantic_rejected_start_not_started",
+      "family": "cross_record",
+      "step": 11,
+      "error": "STATE_OR_CLOSURE_INCOMPLETE",
+      "condition": "rejected_start_not_started",
+      "citation": "CONTRACT-v3#/presence; SCHEMAS-v3#/x-canonical-JSON-v2/tuple_rules/16"
+    }
+  ],
+  "positive_families": [
+    "all28 exact identity tuples including compat2->case8/3->13/4->18",
+    "missing versus actual empty",
+    "partial prefix exact retained hash not full logical hash",
+    "raw opaque invalidUTF8/Unicode/NUL/CRLF",
+    "all23 per-ID cap-1/cap/cap+1 declared finite-small prefixes",
+    "all6 valid literal examples stay required incomplete/native unestablished",
+    "aborted/error metadata never upgrades native eligibility",
+    "rejected logical overcap carries no payload"
+  ],
+  "pending_API": "Mechanical reconciliation only; expected semantics frozen independently. Public API may not expose all schema/stager domains; report uncovered domains instead of inventing product capability."
+}

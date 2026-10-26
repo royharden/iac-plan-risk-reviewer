@@ -1,0 +1,148 @@
+{
+  "kind": "ISSUE_INFORMED_HIGH_TEST_ORACLE_REPAIR",
+  "frozen_at_utc": "2026-10-26T01:58:54.935044+00:00",
+  "author": "0104_Codex_gpt-61-sol_Sub_StorageWireTestsHigh",
+  "own_thread": "01a175eb-7b9b-7051-b847-6b895bd4881c",
+  "model": "gpt-6.1-sol",
+  "effort": "High",
+  "chronology": "Issue-informed/post-execution: prior expected4/actual5 and both interpretations seen. No product source inspection or execution by this worker before this freeze. Historical pre-source oracle bytes remain unchanged.",
+  "normative": {
+    "v3_data": {
+      "CONTRACT-v3.json": "db9ad010b39dfbe0fe697a2c206aaf2964b317761b45cd42a5bf7beb390c2fdf",
+      "FINITE-ROSTER-v3.json": "1a3591632cb050d620744febf483a44ba0b09d1248661eec7f2152dd04865fc6",
+      "IDENTITY-BIJECTION-v3.json": "740810e8d9b965e4568f32949d679abdbc71717d1f53ccb980f027787dea0ec1",
+      "RESERVATIONS-AND-STATES-v3.json": "e36dad43a27e9bea70a4197850a2fd06a707392225ccf547630afe86442cfcae",
+      "SCHEMAS-v3.json": "84e7ef50bb09a58fcf9895f95f6cf0a4517943b644385750f468bb0f3d96a9f7"
+    },
+    "length_stage_addendum_sha256": "482f39dfb017be49b4ba1e88145de506067cf59c76d9d57ec273ba56cb509240",
+    "error_stage_addendum_sha256": "4e27fc3b2001e92ba055a79ac9b5015ecc7b3fcd9fbda53f33b0167310e32e0a",
+    "refs": [
+      "CONTRACT-v3.json#/presence/driver13_14",
+      "CONTRACT-v3.json#/presence/two_completenesses",
+      "CONTRACT-v3.json#/validation_order/10",
+      "SCHEMAS-v3.json#/x-canonical-JSON-v2/tuple_rules",
+      "SCHEMAS-v3.json#/$defs/record-17",
+      "SCHEMAS-v3.json#/$defs/record-22",
+      "SCHEMAS-v3.json#/$defs/record-23"
+    ]
+  },
+  "stage01": {
+    "historical_input_sha256": "b9c2cdc059e119615dbd75f2eb3d25069601786427c39ccd5f1f28a223197df7",
+    "old_expected": [
+      4,
+      "STATE_ENCODING"
+    ],
+    "old_actual": [
+      5,
+      "LENGTH_CAP"
+    ],
+    "alternative_A": "All reason4 predicates at step4",
+    "alternative_B_selected_by_INT": "Structural known/encoding at4; numerical IDcap predicate at5",
+    "replacement": "known1 logical cap-1/cap => LENGTH_CAP5; above cap => valid refusal frame; known0 => STATE_ENCODING4. Earlier ordinal/state errors keep precedence."
+  },
+  "join02": {
+    "historical_sha256": "f30c8bee8c49cbab19152e41b0c368ac0f43e9b1e5ff6ef3e45fb03de425ae7b",
+    "historical_bytes": 8839,
+    "repaired_sha256": "73ec6bc0fbfa5b06d39516d8b64ba93c7fddaac055edc215be68b18e11fce0f0",
+    "repaired_bytes": 8839,
+    "intended_invalidity": "record17 planned record18 missing; actual record18 complete",
+    "actual_and_declared_offset21": 6769,
+    "expected": [
+      8,
+      "GENERATED_SCHEMA_OR_CANONICAL"
+    ],
+    "record_id_assertion": "Removed only unsupported cross-record JOIN02 expectation; other record-ID assertions retained"
+  },
+  "driver_family": [
+    {
+      "terminal": "normal",
+      "input_sha256": "10064e9e6838337e0c9371692e07862765b9ab970edac3662d112eb98a24cd59",
+      "bytes": 10109,
+      "expected": {
+        "framing": "valid",
+        "state": "valid",
+        "step": null,
+        "code": null,
+        "native_eligible": false,
+        "durable_verified": false
+      }
+    },
+    {
+      "terminal": "not-started",
+      "input_sha256": "9da71f0ae606584de428248a7c4dfc48de9060a09a6103e394c4adea4da14455",
+      "bytes": 10114,
+      "expected": {
+        "framing": "valid",
+        "state": "StateError",
+        "step": 11,
+        "code": "STATE_OR_CLOSURE_INCOMPLETE",
+        "native_eligible": false,
+        "durable_verified": false
+      }
+    },
+    {
+      "terminal": "unknown",
+      "input_sha256": "13b516116b885166e4834be14a527d158c357cf9064636ce60974df55bbd76a1",
+      "bytes": 10110,
+      "expected": {
+        "framing": "valid",
+        "state": "StateError",
+        "step": 11,
+        "code": "STATE_OR_CLOSURE_INCOMPLETE",
+        "native_eligible": false,
+        "durable_verified": false
+      }
+    },
+    {
+      "terminal": "error",
+      "input_sha256": "3eb26acd967df075dae45d38c1f9c496d1b3aabfd16a2702a03186954e142eee",
+      "bytes": 10108,
+      "expected": {
+        "framing": "valid",
+        "state": "StateError",
+        "step": 11,
+        "code": "STATE_OR_CLOSURE_INCOMPLETE",
+        "native_eligible": false,
+        "durable_verified": false
+      }
+    }
+  ],
+  "legitimate_incomplete": "V06 with not-started/unknown/error stays valid-but-ineligible, required_records_present false; no blanket rejection",
+  "historical_source_SW_M_01_input_sha256": "c70e9149a9e286c533d376b3f3c5c3b5a3e04bc5e4382f19c207c20c4f1cdebd",
+  "old_runs": "Both406=404PASS2FAIL/native1 remain unchanged historical editions. No relabeling or acceptance.",
+  "preserved_fixture_pins": {
+    "finite_vectors.json": {
+      "gitlf_sha256": "9d1248e4b145eef93a9df60afe68be2fa68c2e2f11397c52b5ea4335d3c2da85",
+      "current_raw_sha256": "56aa0ff595be309b3b7953e6b99216fbc0aec5e19dff8155294a899d3b3723ed",
+      "unchanged": true
+    },
+    "identity_tuples.json": {
+      "gitlf_sha256": "c3e714690670bd3f1e27766bd9b3934daacdf66826f6fc1e645a931ce624f7ee",
+      "current_raw_sha256": "1ea56759d499a5227ee901a2c4330f9c58be165f7da4b3bf1aba4026c9ba61c5",
+      "unchanged": true
+    },
+    "literal_examples.json": {
+      "gitlf_sha256": "28a22845d258fb0490d68cb18506febc5e16f29c3616b7df0e0729e40d25dfdf",
+      "current_raw_sha256": "be38f3976be3d0d93f60f6db763f9ea1733b11bd017cfe8a8bf1c6aab01cc13a",
+      "unchanged": true
+    },
+    "oracle_addendum_r2.json": {
+      "gitlf_sha256": "eebb3ec536b03f1c3a7cdcc823b416ac7483eda37362d66f0b1f838bb18507b5",
+      "current_raw_sha256": "d607c80cdf5725384a7be0a230146f228feaefec6a955d1a8bbfc2cbd9175ea5",
+      "unchanged": true
+    },
+    "oracle_matrix.json": {
+      "gitlf_sha256": "09be66706ec3796060822a3550dd89d1b054891330b975bfffa980d306f2acd7",
+      "current_raw_sha256": "6a7627bee7b73e9b01c5999f735512ea7595591563f0fde9010c104f720ca631",
+      "unchanged": true
+    },
+    "provenance.json": {
+      "gitlf_sha256": "b620252c8f31fb665e446639515551997f7db81232cb468fe417cb64e22b356e",
+      "current_raw_sha256": "56c4e5c320d14a3341f3d2728aa0a1d742e3575563533287fca31036cb3d50ab",
+      "unchanged": true
+    }
+  },
+  "literal_count": 32,
+  "identity_count": 28,
+  "limits": "No actual native/resource/custody/retention/stager/receiver/durability effects. SB03 OPEN. Fresh independent High validity review required."
+}
