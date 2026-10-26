@@ -472,6 +472,8 @@ def receive_capture(
             if (
                 held != identity
                 or size != len(data)
+                or _node(after, directory=False) != identity
+                or after.st_size != len(data)
                 or after.st_mtime_ns != before.st_mtime_ns
                 or after.st_ctime_ns != before.st_ctime_ns
             ):
