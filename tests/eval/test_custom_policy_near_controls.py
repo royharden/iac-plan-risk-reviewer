@@ -55,7 +55,7 @@ def test_r1_known_other_shortcircuits_ports(family, protocol):
     """what_bug_this_catches: required-port blanket unknown hides known other protocol negative."""
     observe(f'other-{family}-{protocol}',r1(protocol,family,ports=None),'R1',('supported','clear'))
 
-@pytest.mark.parametrize('protocol',['not-a-protocol','256','999','-2','6.0','6e0','+6',' 6','6 ','TCP','all','',None,True,False,[],{},'ï¼–'])
+@pytest.mark.parametrize('protocol',['not-a-protocol','256','999','-2','6.0','6e0','+6',' 6','6 ','TCP','all','',None,True,False,[],{},'\uFF16'])
 @pytest.mark.parametrize('family',[4,6])
 def test_r1_required_malformed_unknown(protocol,family):
     """what_bug_this_catches: malformed necessary protocol becomes benign empty set."""
