@@ -8,7 +8,7 @@ import threading
 import time
 
 from .audit_window import ORIGINAL_CLOCK, ORIGINAL_THREAD, lowered_event, render_call, validate_relation
-from .errors import ActualTrustUnavailable, Denied, Unknown
+from .errors import ActualTrustUnavailable, Denied, Unknown, sanitized_stop_reason
 from .metadata_backend import Metadata, ordinary_chain
 from .origin_validation import _read, observe_owned, validate_origin
 from .runtime_manifest import (canonical, closed, decode_canonical, digest, exact_value, hex64,
@@ -40,6 +40,7 @@ class GuardedContext:
         self._thread = ORIGINAL_THREAD()
         self._node, self._active, self._pending = None, None, None
         self._poison_reason = None
+        self._poison_cause = None
         self._used, self._finished = set(), set()
 
     @property
@@ -57,8 +58,18 @@ class GuardedContext:
     def _fail(self, reason, cause=None):
         if self._poison_reason is None:
             self._poison_reason = reason
+            self._poison_cause = cause
         # Original Protocol owns retained pre/post/UNKNOWN writers. Never clean up.
         raise Unknown(reason) from cause
+
+    def stop_original(self, reason, cause=None):
+        """Latch outer Protocol failure; retain pending/error without any I/O."""
+        if self._poison_reason is None:
+            self._poison_reason = sanitized_stop_reason(reason)
+            original_error = (self._pending.get('original_error')
+                              if self._pending is not None else None)
+            self._poison_cause = (original_error if isinstance(original_error, BaseException)
+                                  else cause if isinstance(cause, BaseException) else None)
 
     def _check_post(self):
         pending = self._pending
@@ -81,11 +92,13 @@ class GuardedContext:
         self._pending = None
         if original_error is not None:
             self._poison_reason = 'original error recorded; remaining effects blocked'
+            self._poison_cause = original_error
             raise original_error
 
     def require_exact(self, *expected):
         try:
-            need(self._poison_reason is None, 'context permanently poisoned')
+            if self._poison_reason is not None:
+                raise Denied('context permanently poisoned') from self._poison_cause
             need(time.monotonic is ORIGINAL_CLOCK and threading.get_ident is ORIGINAL_THREAD
                  and ORIGINAL_THREAD() == self._thread, 'original clock/thread required')
             need(len(expected) == 0 or (len(expected) == 2 and all(hex64(v) for v in expected)

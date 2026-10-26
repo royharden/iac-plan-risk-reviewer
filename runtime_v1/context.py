@@ -6,7 +6,8 @@ import re
 from subprocess import CompletedProcess
 
 from .audit_window import ExactInertWindow, ORIGINAL_THREAD, render_call, validate_relation
-from .errors import ActualObserverUnavailable, ActualTrustUnavailable, Denied, Unknown
+from .errors import (ActualObserverUnavailable, ActualTrustUnavailable, Denied, Unknown,
+                     sanitized_stop_reason)
 from .observer import observe_inert
 from .runtime_manifest import (GrantData, InvocationData, ManifestData, canonical, digest,
                               exact_value, hex64, lexical, load_frozen_bindings, need,
@@ -67,8 +68,9 @@ class InertContext:
         return {k: deepcopy(v) for k, v in self._pending.items() if k != 'clock'}
 
     def _poison(self, reason, cause=None):
-        if self._poison_reason is None:
-            self._poison_reason, self._poison_cause = reason, cause
+        if self._poison_reason is not None:
+            return
+        self._poison_reason, self._poison_cause = reason, cause
         if self._pending is not None:
             try:
                 self._store.mark_unknown(deepcopy(self._pending['slot']), self._poison_reason)
@@ -76,9 +78,16 @@ class InertContext:
                 # Poison is already persistent even if retaining its receipt fails.
                 pass
 
+    def stop_inert(self, reason, cause=None):
+        """Latch an outer adapter failure without effects or pending-state repair."""
+        if self._poison_reason is None:
+            self._poison_reason = sanitized_stop_reason(reason)
+            self._poison_cause = cause if isinstance(cause, BaseException) else None
+
     def require_exact(self, *expected):
         try:
-            need(not self.poisoned, 'context permanently poisoned')
+            if self.poisoned:
+                raise Denied('context permanently poisoned') from self._poison_cause
             need(len(expected) == 0 or (len(expected) == 2 and all(hex64(v) for v in expected)
                  and expected == (self._manifest.sha256, self.grant_sha256)), 'zero or exact two-hash form required')
             parse_grant(self.raw, manifest=self._manifest)
