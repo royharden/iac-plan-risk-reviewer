@@ -115,8 +115,10 @@ def _exposures(resource: dict, side: str) -> tuple[frozenset, bool, tuple[str, .
     elif (protocol in ("udp", "icmp", "icmpv6")
           or (type(protocol) is int and 0 <= protocol <= 255)
           or (isinstance(protocol, str) and len(protocol) <= 3
-              and protocol.isascii() and protocol.isdecimal() and int(protocol) <= 255)):
+              and protocol.isascii() and protocol.isdecimal() and int(protocol) <= 255
+              and int(protocol) != 6)):
         # A recognized non-TCP protocol proves this TCP predicate absent.
+        # Noncanonical spellings of TCP cannot prove a non-TCP negative.
         return frozenset(), True, limitations
     else:
         return frozenset(), False, limitations
