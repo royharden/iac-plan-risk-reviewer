@@ -1,0 +1,9 @@
+# Numbered oracle addendum04 — one API-derived clock family before source inspection
+
+App0110/workspace0680, own session01a17a06-8a82-70a0-ba51-73753e086b5c. Parent confirms it and this author have not inspected actual D8 source code; only READY metadata/declarative API documents have been read. Original independent oracle4f00, API-informed addenda02/03 and immutable40-case freeze d1cb9ba241908f703715acf87851b467649520d05436f2b42bf6c3a923f38bb6 remain unchanged.
+
+Declarative interface7903 requires clock/thread/node mismatch to persistently poison; interface addendum924e explicitly retains/checks clock/thread identities at entry, injected audit and exit. One new logical family exercises clock identity tampering at each of those three stages using an inert identity object. Expected source Denied and persistent poison come from these declarations, not source behavior/output. Junction raw timeout remains int20 and later supervisor real180; this test never sleeps or calls time/thread/device/native APIs.
+
+The provisional mechanical seam is api.set_clock_identity(context, identity), affecting only an injected clock-provider identity fact. No exact source clock-provider injection was declared, so its mapping remains **UNMET** pending inspection-only source grant. The adapter may mechanically inject an existing declared/dependency seam after inspection; it may not implement the producer's checks, mutate poison to force success, call actual time/native effects, or silently invent a source capability. Missing mapping is explicit not_run/PARTIAL.
+
+clock_suite.py and test_runtime_v1_41.py are new files; the existing40-case suite/API/wrapper/r4 and freeze snapshot are not edited. The new snapshot adds these files plus this numbered addendum and references the immutable40-case base. No additional speculative logical case work follows this checkpoint. Candidate import/execution remains unapproved; guard/source pin preflight is still required.

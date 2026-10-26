@@ -1,0 +1,58 @@
+{
+  "copied_at": "2026-10-26T18:56:18.9497109-04:00",
+  "purpose": "historical-test-lineage-only-not-operational",
+  "pins": [
+    {
+      "sha256": "4f00d7fbad9501df91ecdb8a9ecbd2bc1f21302a724d5b7fd58ddb746e5bf821",
+      "source": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV1-legacy103-runtime-v1-tests\\ORACLE-r1.md",
+      "name": "ORACLE-r1.md"
+    },
+    {
+      "sha256": "0891a7c49ffa589c522a8a9992cac9038166c6945d8bfe71f4d73c0b6174a434",
+      "source": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV1-legacy103-runtime-v1-tests\\ORACLE-ADDENDUM-02-INT-API.md",
+      "name": "ORACLE-ADDENDUM-02-INT-API.md"
+    },
+    {
+      "sha256": "3084567e44bf7222dbe8253d23f155791b21a70e546400423d5301abc8a4ccec",
+      "source": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV1-legacy103-runtime-v1-tests\\ORACLE-ADDENDUM-03-API-SIGNATURES.md",
+      "name": "ORACLE-ADDENDUM-03-API-SIGNATURES.md"
+    },
+    {
+      "sha256": "0b0f46e8c19e6e631ae0adfb8ceeb7d405473e1b50352995f65bf281e0f604e3",
+      "source": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV1-legacy103-runtime-v1-tests\\ORACLE-ADDENDUM-04-CLOCK-PRECODE.md",
+      "name": "ORACLE-ADDENDUM-04-CLOCK-PRECODE.md"
+    },
+    {
+      "sha256": "c2398a45f3ed90d0050f070de22d50bde4cab7e4d95bb10a9325bae7f97f6271",
+      "source": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV1-legacy103-runtime-v1-tests\\protocol_suite.py",
+      "name": "protocol_suite.py"
+    },
+    {
+      "sha256": "6a6bf9ab1edbd94ac7e22018d38b2958e1273dd0065eb2b6754ec7f186115383",
+      "source": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV1-legacy103-runtime-v1-tests\\parser_suite.py",
+      "name": "parser_suite.py"
+    },
+    {
+      "sha256": "b5c8fe185a9c34f0115fc4da06f232d2144679dd67539d67ad4d6a4eacdf1394",
+      "source": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV1-legacy103-runtime-v1-tests\\authority_metadata_suite.py",
+      "name": "authority_metadata_suite.py"
+    },
+    {
+      "sha256": "682dca07cc3c7a651241faa0c4504b06f4b43b691182a30f461b3b8c9589bfa0",
+      "source": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV1-legacy103-runtime-v1-tests\\clock_suite.py",
+      "name": "clock_suite.py"
+    },
+    {
+      "sha256": "c7bcb76a5bb9ad589913f1a91c97fa8a47de74697f272fda87ba2e3c4b543ecf",
+      "source": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV1-legacy103-runtime-v1-tests\\reviewer_fixtures.py",
+      "name": "reviewer_fixtures.py"
+    },
+    {
+      "sha256": "6430b8d1faad2e9e41bb1098dd4f0ec0237aa43c3619c740a705239d2c766014",
+      "source": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV1-legacy103-runtime-v1-tests\\test_runtime_v1.py",
+      "name": "test_runtime_v1.py"
+    }
+  ],
+  "schema": 1,
+  "actor": "0114_Codex_gpt-61-sol_RV3"
+}
