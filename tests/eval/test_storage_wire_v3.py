@@ -212,7 +212,8 @@ def test_huge_declared_length_stays_small(wire,n):
 @pytest.mark.parametrize("length", [0,1,19,20,51])
 def test_record_header_prefix(wire,rid,length):
     values=vectors(); prefix=header()+b"".join(frame(v) for v in values[:rid-1])
-    expect_error(wire,prefix+frame(values[rid-1])[:length],6,"PAYLOAD_EOF_OR_IO")
+    # INT frozen error-stage addendum: step3 owns the fixed52B header read.
+    expect_error(wire,prefix+frame(values[rid-1])[:length],3,"RECORD_ORDINAL")
 
 
 @pytest.mark.parametrize("rid", [1,4,7,10,13,14,15,16])
@@ -311,7 +312,7 @@ def generated_mutation(kind):
     if kind=="invalid_utf8":payload=b'\xff'+payload[1:]
     elif kind=="BOM":payload=b'\xef\xbb\xbf'+payload
     elif kind=="non_ascii":payload=payload.replace(b'"version":3',b'"version":"\xc3\xa9"')
-    elif kind=="unicode_escape":payload=payload.replace(b'"version":3',b'"version":"\\u0033"')
+    elif kind=="unicode_escape":payload=payload.replace(b'"phase":',b'"\\u0070hase":')
     elif kind=="slash_escape":payload=payload.replace(b'"version":3',b'"version":"\\/"')
     elif kind=="control_escape":payload=payload.replace(b'"version":3',b'"version":"\\n"')
     elif kind=="duplicate_key":payload=payload.replace(b'"version":3',b'"version":3,"version":3')
@@ -479,3 +480,48 @@ def test_overcap_rejection_is_zero_payload_and_keeps_unknown_state(wire,rid):
     assert record.retained_sha256=="00"*32
     assert record.logical_length==CAPS[rid-1]+1
     assert not_accepted(wire,capture).required_records_present is False
+
+
+def test_omitted_required_identity_is_python_call_binding_failure(wire):
+    with pytest.raises(TypeError):wire.decode_framing(build(vectors()))
+
+
+@pytest.mark.parametrize("expected",[None,False,0,"",[],{},object()])
+def test_explicit_invalid_identity_is_not_coerced(wire,expected):
+    with pytest.raises(wire.FramingError) as caught:wire.decode_framing(build(vectors()),expected=expected)
+    assert (caught.value.step,caught.value.code)==(2,"IDENTITY_BINDING")
+
+
+@pytest.mark.parametrize("changes",[
+    {"phase":"other"},{"phase":None},{"wire_ordinal":True},{"wire_ordinal":1.0},
+    {"wire_ordinal":"1"},{"wire_ordinal":0},{"wire_ordinal":5},
+    {"e_sha256":None},{"e_sha256":"00"*31},{"e_sha256":"AA"*32},
+    {"slot_manifest_sha256":bytes.fromhex(MANIFEST)},{"slot_manifest_sha256":"gg"*32},
+])
+def test_invalid_identity_fields_are_not_coerced(wire,changes):
+    with pytest.raises(wire.FramingError) as caught:
+        expected=identity(wire,**changes)
+        wire.decode_framing(build(vectors()),expected=expected)
+    assert (caught.value.step,caught.value.code)==(2,"IDENTITY_BINDING")
+
+
+def test_header_syntax_precedes_explicit_bad_identity(wire):
+    with pytest.raises(wire.FramingError) as caught:wire.decode_framing(b"",expected=None)
+    assert (caught.value.step,caught.value.code)==(1,"HEADER_SYNTAX")
+
+
+@pytest.mark.parametrize("phase,ordinal",[(1,0),(1,25),(1,255),(0,255)])
+def test_phase_specific_wire_ordinal_limits(wire,phase,ordinal):
+    expect_error(wire,header(phase,ordinal),1,"HEADER_SYNTAX")
+
+
+@pytest.mark.parametrize("reason",[5,6,7,9])
+@pytest.mark.parametrize("known,logical",[(0,0),(1,0),(1,2**64-1)])
+def test_rejected_source_observation_is_not_fabricated_payload(wire,reason,known,logical):
+    values=vectors();values[0].update(state=3,reason=reason,known=known,logical=logical)
+    for rid in (4,7,10):values[rid-1]["reason"]=2
+    capture=wire.decode_framing(build(values),expected=identity(wire))
+    record=capture.records[0]
+    assert record.logical_length==logical and record.logical_known is bool(known)
+    assert record.payload==b"" and record.retained_sha256=="00"*32
+    assert not_accepted(wire,capture).arm_states==("unknown","unstarted","unstarted")
