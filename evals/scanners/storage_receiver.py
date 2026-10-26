@@ -311,6 +311,7 @@ def receive_capture(
     complete_hash: str | None = None
     committed = False
     stage = "INPUT_IO"
+    created_identities: dict[Path, tuple] = {}
     verified_files: dict[Path, tuple] = {}
 
     def latch(code: str) -> None:
@@ -381,6 +382,7 @@ def receive_capture(
         try:
             check()
             identity, size = file_identity(handle, path)
+            created_identities[path] = identity
             if size != 0:
                 raise ReceiverError("OUTPUT_SIZE")
             for offset in range(0, len(data), _CHUNK):
@@ -440,7 +442,9 @@ def receive_capture(
     def readback(path: Path, data: bytes) -> str:
         anchors()
         before = call(fs.lstat, path)
-        identity = _node(before, directory=False)
+        identity = created_identities[path]
+        if _node(before, directory=False) != identity:
+            raise ReceiverError("READBACK_CHANGED")
         if before.st_size != len(data):
             raise ReceiverError("READBACK_SIZE")
         check()
@@ -582,7 +586,7 @@ def receive_capture(
 
     try:
         anchors()
-        for path, observed in verified_files.items():
+        for path, identity in created_identities.items():
             info = call(fs.lstat, path)
             current = (
                 _node(info, directory=False),
@@ -590,7 +594,9 @@ def receive_capture(
                 info.st_mtime_ns,
                 info.st_ctime_ns,
             )
-            if current != observed:
+            if current[0] != identity or (
+                path in verified_files and current != verified_files[path]
+            ):
                 prefix_hash = None
                 committed = False
                 raise ReceiverError("OUTPUT_CHANGED")
