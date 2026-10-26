@@ -238,6 +238,49 @@ def _absent(arm: str, reason: str) -> ScanArtifact:
                         reasons=(reason,))
 
 
+def _seal_arm(case_id: str, artifact: ScanArtifact, arm_rows: list[ComparisonRow], *,
+              started_at: float | None, deadline: float | None,
+              tree_mode: bool) -> tuple[list[dict], dict]:
+    # Materialize the whole arm before its last eligibility check. In particular,
+    # a later cell or row cannot leave an earlier row from this arm eligible.
+    rows = [asdict(row) for row in arm_rows]
+    receipt = asdict(artifact)
+    receipt.pop("observations")
+    receipt = dict(case_id=case_id, capture_sha256="", **receipt)
+
+    def seal(now: float | None) -> None:
+        nonlocal artifact
+        if now is not None:
+            if now >= deadline:
+                reason = ("complete_tree_attempt_timeout" if tree_mode and artifact.arm == "T"
+                          else "scanner_timeout")
+                artifact = replace(artifact, status="timeout", observations=(),
+                                   reasons=tuple(sorted(set((*artifact.reasons, reason)))))
+                for row in rows:
+                    row.update(status="timeout", introduced_prediction=None, live_eligible=False,
+                               reasons=tuple(sorted(set((*row["reasons"], reason)))))
+            # This is the whole owner's elapsed snapshot, including final cell
+            # mapping and row/receipt materialization, not capture's subduration.
+            artifact = replace(artifact, elapsed_seconds=now - started_at)
+            receipt.update(status=artifact.status, reasons=artifact.reasons,
+                           elapsed_seconds=artifact.elapsed_seconds)
+        capture_hash = _capture_digest(artifact)
+        receipt["capture_sha256"] = capture_hash
+        for row in rows:
+            row["capture_sha256"] = capture_hash
+
+    seal(time.monotonic() if deadline is not None else None)
+    if deadline is not None:
+        finished = time.monotonic()
+        if finished >= deadline:
+            # A hash or final materialization may itself return late. Permanently
+            # reject this arm and reseal all links with that observed elapsed.
+            # The snapshot cannot attest the future time hashing itself takes;
+            # this recovery never restores eligibility or renews the deadline.
+            seal(finished)
+    return rows, receipt
+
+
 def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
              fake_only: bool, limits: Limits, *, tree_mode: bool = False,
              attempt_deadline: float | None = None,
@@ -368,11 +411,7 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
                                           attempt_started_at=started_at)
             if artifact.plan_sha256 not in (None, case.plan_sha256):
                 raise ValueError("scanner capture used different plan bytes")
-            capture_hash = _capture_digest(artifact)
-            # Metadata-only private run receipt; raw scanner locators/output omitted.
-            receipt = asdict(artifact)
-            receipt.pop("observations")
-            receipts.append(dict(case_id=case.case_id, capture_sha256=capture_hash, **receipt))
+            arm_rows = []
             by_rule = {mapping.rule_id: mapping for mapping in mappings}
             for resource_id, resource in case.resources:
                 for rule in RULES:
@@ -401,11 +440,18 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
                             status, reasons = "unmapped", reasons + (cell,)
                         else:
                             reasons = reasons + ("capture_or_cell_incomplete",)
-                    rows.append(ComparisonRow(case.case_id, resource_id, rule, arm, status,
-                                              "introduced_risk", prediction,
-                                              status == "recorded" and not fake_only,
-                                              case.plan_sha256, _mapping_digest(mapping),
-                                              capture_hash, tuple(sorted(set(reasons)))))
+                    arm_rows.append(ComparisonRow(case.case_id, resource_id, rule, arm, status,
+                                                  "introduced_risk", prediction,
+                                                  status == "recorded" and not fake_only,
+                                                  case.plan_sha256, _mapping_digest(mapping),
+                                                  "", tuple(sorted(set(reasons)))))
+            # Finish this owner's serialization and eligibility before beginning
+            # an unrelated arm; later arms cannot taint an on-time sealed arm.
+            sealed_rows, receipt = _seal_arm(case.case_id, artifact, arm_rows,
+                                             started_at=started_at, deadline=deadline,
+                                             tree_mode=tree_mode)
+            rows.extend(sealed_rows)
+            receipts.append(receipt)
     for case in cases:
         if digest(_case_bytes(case, limits)) != case.plan_sha256:
             raise ValueError("plan mutation invalidates comparison")
@@ -414,9 +460,9 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
                                                  separators=(",", ":")).encode()),
             "input_scope": scope, "fake_only": fake_only,
             "measurement_status": "SIMULATED_INELIGIBLE" if fake_only else (
-                "RECORDED" if rows and all(row.live_eligible for row in rows) else "INCOMPLETE"),
+                "RECORDED" if rows and all(row["live_eligible"] for row in rows) else "INCOMPLETE"),
             "source_enrichment": False, "product_acceptance": False,
-            "rows": [asdict(row) for row in rows], "capture_receipts": receipts,
+            "rows": rows, "capture_receipts": receipts,
             "limitations": ["No gold, confusion counts or product acceptance computed.",
                             "Binary introduced-risk predictions cannot recover unchanged/clear labels.",
                             "No direct ArmRow success conversion is provided."]}
