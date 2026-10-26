@@ -194,3 +194,29 @@ image in `CONTRACT-TRIVY-TREE-R03-v1.md`. `dev-readiness.json` v2 records their
 new exact hashes and preserves the earlier Windows CRLF pins as provenance.
 Policy source semantics are unchanged; the final loaded image still needs RV2
 verification. Historical candidates and records retain their original bytes.
+
+
+## R04 exact-source packaging successor
+
+The metadata-only Linux stager fixes source commit
+`ddcdffd72cf6377b22d5ace95bafed61504652bb`. The custom policy is the approved
+f752 pure repair: Git LF `m4_policy.py`, 11,018 bytes, SHA256
+`3d73f610a236e6a9346fd3eca45a43a7e7acdd70bad6a29842edb1f111a0cc6a`.
+The other two policy blobs and complete cache tree retain their existing pins.
+Prior profiles, contexts, images and their test outcomes remain historical.
+
+`linux_readiness.py stage` now requires `--packaging-commit` with an explicit
+full lowercase Git commit, equal to the clean checkout. Source product files
+come from the fixed source commit; only `eval/scanners/dev-readiness.json`
+comes from that explicit packaging successor. Every other selected product blob
+must still equal the fixed source. The Dockerfile and stager come from the
+explicit packaging commit. Working bytes must match Git LF or its exact CRLF
+representation; staged bytes always remain exact Git LF. Contexts and
+sibling `context-pins.json` use fresh exclusive outputs. Git LF extraction
+is distinct from any CRLF checkout bytes. Inspect and commit the successor
+before staging; a branch name or implicit HEAD is insufficient.
+
+This repin prepares metadata packaging only. New context/image loaded-byte and
+runtime test evidence requires a fresh independent review and new team-owned
+resources. The readiness profile remains NOT_RUN and product_acceptance=false;
+no Checkov callbacks, primary scans, hidden/holdout or live models are admitted.

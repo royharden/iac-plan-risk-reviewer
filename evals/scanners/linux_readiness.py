@@ -12,6 +12,7 @@ import hashlib
 import importlib.metadata
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -21,13 +22,15 @@ import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-BASE = "ebf0bf66337ce9fd1d97fe8e1ec615ae78bb42fc"
+BASE = "ddcdffd72cf6377b22d5ace95bafed61504652bb"
+# Only this profile may differ from BASE in the selected product closure.
+PACKAGING_INPUTS = frozenset({"eval/scanners/dev-readiness.json"})
 TREE_SHA = "6168428f0f5260c79536f13b9697dd5d7fb6866e96a4762e3f8e651b34a342b2"
 CHECKOV_LOCK = "3bc130464fd7c4e7c17a2bf8441cbe046cee0db4aa067ea64433da6c368c44d2"
 POLICIES = {
     "__init__.py": "e523016a83ad9ddff7ec4d156463598e55a152b384ad74184e8153bdf8e384bc",
     "m4_checks.py": "f3e6a47c5b5c821c4d0a01f5a46e18cf207237bfc1181e39a7b018f67764d8f7",
-    "m4_policy.py": "ebb08944a9e72025dbd2a04d85982e9bdb5455d29c4ee489d671eed07ecccc74",
+    "m4_policy.py": "3d73f610a236e6a9346fd3eca45a43a7e7acdd70bad6a29842edb1f111a0cc6a",
 }
 TESTS = ("test_trivy_bundle_inventory.py", "test_trivy_bundle_binding.py")
 MAX_ARTIFACT = 2 * 1024 * 1024
@@ -65,12 +68,16 @@ def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args])
 
 
-def stage(root, context, cache, manifest):
+def stage(root, context, cache, manifest, packaging_commit):
     """Host only: materialize the declared allowlist from immutable Git blobs."""
+    if not isinstance(packaging_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", packaging_commit):
+        raise ValueError("explicit full packaging commit required")
     head = git(root, "rev-parse", "HEAD").decode().strip()
+    if head != packaging_commit:
+        raise ValueError("checkout does not match explicit packaging commit")
     subprocess.run(["git", "-C", str(root), "diff", "--quiet", "HEAD"], check=True)
-    if context.exists():
-        raise ValueError("fresh context required")
+    if context.exists() or (context.parent / "context-pins.json").exists():
+        raise ValueError("fresh context and sibling pins required")
     plain_chain(context.parent)
     context.mkdir()
     files = git(root, "ls-tree", "-r", "--name-only", BASE).decode().splitlines()
@@ -109,14 +116,18 @@ def stage(root, context, cache, manifest):
         mode = git(root, "ls-tree", BASE, "--", relative).split()[0]
         if mode not in (b"100644", b"100755"):
             raise ValueError("nonregular Git build input")
-        raw = git(root, "cat-file", "blob", f"{BASE}:{relative}")
-        if git(root, "cat-file", "blob", f"{head}:{relative}") != raw:
+        source_commit = packaging_commit if relative in PACKAGING_INPUTS else BASE
+        raw = git(root, "cat-file", "blob", f"{source_commit}:{relative}")
+        if git(root, "cat-file", "blob", f"{packaging_commit}:{relative}") != raw:
             raise ValueError(f"provisional base input changed: {relative}")
         put("product/" + relative, raw)
     for relative in ("Dockerfile.scanners-linux", "evals/scanners/linux_readiness.py"):
         raw = git(root, "cat-file", "blob", f"{head}:{relative}")
-        if regular_bytes(root / relative, MAX_ARTIFACT) != raw:
-            raise ValueError("packaging working bytes differ from Git")
+        working = regular_bytes(root / relative, MAX_ARTIFACT)
+        if working not in (raw, raw.replace(b"\n", b"\r\n")):
+            raise ValueError(
+                "packaging working bytes differ from Git LF or exact CRLF representation"
+            )
         put(relative if relative.startswith("Dockerfile") else "product/" + relative, raw)
     for name, expected in POLICIES.items():
         raw = git(root, "cat-file", "blob", f"{BASE}:policies/checkov-custom/{name}")
@@ -170,14 +181,15 @@ def stage(root, context, cache, manifest):
             put("cache-seed/policy/" + row["path"], data)
     source = {
         "source_commit": BASE,
-        "packaging_commit": head,
+        "packaging_commit": packaging_commit,
         "primary_scans": 0,
         "cache_sha256": TREE_SHA,
         "files": pins,
         "test_dependencies": {n: packages[n]["version"] for n in sorted(needed)},
     }
     put("pins/source.json", encode(source))
-    (context.parent / "context-pins.json").write_bytes(encode(pins))
+    with (context.parent / "context-pins.json").open("xb") as stream:
+        stream.write(encode(pins))
     print(
         json.dumps(
             {
@@ -578,10 +590,11 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument("mode", choices=["stage"])
         parser.add_argument("--root", type=Path, required=True)
+        parser.add_argument("--packaging-commit", required=True)
         parser.add_argument("--context", type=Path, required=True)
         parser.add_argument("--cache", type=Path, required=True)
         parser.add_argument("--manifest", type=Path, required=True)
         args = parser.parse_args()
-        stage(args.root, args.context, args.cache, args.manifest)
+        stage(args.root, args.context, args.cache, args.manifest, args.packaging_commit)
     else:
         raise SystemExit(runtime())

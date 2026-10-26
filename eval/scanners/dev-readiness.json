@@ -225,8 +225,8 @@
     },
     {
       "path": "policies/checkov-custom/m4_policy.py",
-      "bytes": 10556,
-      "sha256": "ebb08944a9e72025dbd2a04d85982e9bdb5455d29c4ee489d671eed07ecccc74"
+      "bytes": 11018,
+      "sha256": "3d73f610a236e6a9346fd3eca45a43a7e7acdd70bad6a29842edb1f111a0cc6a"
     }
   ],
   "check_ids": {
@@ -483,10 +483,10 @@
     "record": "REVIEW-RV2-D11-scanner-readiness-r2.json; historical records preserved"
   },
   "custom_policy_representation": {
-    "encoding": "exact Git LF blobs, binary extraction; no policy semantic delta",
-    "authority": "CONTRACT-TRIVY-TREE-R03-v1.md",
+    "encoding": "exact Git LF blobs by binary extraction; includes approved f752 pure-policy repair",
+    "authority": "PB-M4-R04 assignments/I-D15-policy-packaging-r1.json; source ddcdffd72cf6377b22d5ace95bafed61504652bb",
     "final_image_loaded_bytes_verified": false,
-    "owner": "RV2"
+    "owner": "RV4"
   },
   "complete_trivy_cache": {
     "comparison_schema": "m4-scanner-run-v2",
