@@ -1,0 +1,1192 @@
+[
+  {
+    "id": "r1_v4_tcp",
+    "rule": "R1",
+    "spec": {
+      "family": "v4",
+      "protocol": "tcp"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Recognized TCP/all-protocol with new world admin exposure must remain positive.",
+    "authority": [
+      57,
+      68,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v4_6",
+    "rule": "R1",
+    "spec": {
+      "family": "v4",
+      "protocol": "6"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Recognized TCP/all-protocol with new world admin exposure must remain positive.",
+    "authority": [
+      57,
+      68,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v4_-1",
+    "rule": "R1",
+    "spec": {
+      "family": "v4",
+      "protocol": "-1"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Recognized TCP/all-protocol with new world admin exposure must remain positive.",
+    "authority": [
+      57,
+      68,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v4_malformed",
+    "rule": "R1",
+    "spec": {
+      "family": "v4",
+      "protocol": "not-a-protocol"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "An arbitrary malformed necessary protocol is unsupported/invalid, never a known empty exposure set.",
+    "authority": [
+      53,
+      57,
+      62,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v4_other_udp",
+    "rule": "R1",
+    "spec": {
+      "family": "v4",
+      "protocol": "udp"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Recognized other protocol is a known non-TCP negative, distinguishing invalid required facts.",
+    "authority": [
+      57,
+      62
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v4_other_17",
+    "rule": "R1",
+    "spec": {
+      "family": "v4",
+      "protocol": "17"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Recognized other protocol is a known non-TCP negative, distinguishing invalid required facts.",
+    "authority": [
+      57,
+      62
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v4_other_icmp",
+    "rule": "R1",
+    "spec": {
+      "family": "v4",
+      "protocol": "icmp"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Recognized other protocol is a known non-TCP negative, distinguishing invalid required facts.",
+    "authority": [
+      57,
+      62
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v4_other_1",
+    "rule": "R1",
+    "spec": {
+      "family": "v4",
+      "protocol": "1"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Recognized other protocol is a known non-TCP negative, distinguishing invalid required facts.",
+    "authority": [
+      57,
+      62
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v6_tcp",
+    "rule": "R1",
+    "spec": {
+      "family": "v6",
+      "protocol": "tcp"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Recognized TCP/all-protocol with new world admin exposure must remain positive.",
+    "authority": [
+      57,
+      68,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v6_6",
+    "rule": "R1",
+    "spec": {
+      "family": "v6",
+      "protocol": "6"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Recognized TCP/all-protocol with new world admin exposure must remain positive.",
+    "authority": [
+      57,
+      68,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v6_-1",
+    "rule": "R1",
+    "spec": {
+      "family": "v6",
+      "protocol": "-1"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Recognized TCP/all-protocol with new world admin exposure must remain positive.",
+    "authority": [
+      57,
+      68,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v6_malformed",
+    "rule": "R1",
+    "spec": {
+      "family": "v6",
+      "protocol": "not-a-protocol"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "An arbitrary malformed necessary protocol is unsupported/invalid, never a known empty exposure set.",
+    "authority": [
+      53,
+      57,
+      62,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v6_other_udp",
+    "rule": "R1",
+    "spec": {
+      "family": "v6",
+      "protocol": "udp"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Recognized other protocol is a known non-TCP negative, distinguishing invalid required facts.",
+    "authority": [
+      57,
+      62
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v6_other_17",
+    "rule": "R1",
+    "spec": {
+      "family": "v6",
+      "protocol": "17"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Recognized other protocol is a known non-TCP negative, distinguishing invalid required facts.",
+    "authority": [
+      57,
+      62
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v6_other_icmp",
+    "rule": "R1",
+    "spec": {
+      "family": "v6",
+      "protocol": "icmp"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Recognized other protocol is a known non-TCP negative, distinguishing invalid required facts.",
+    "authority": [
+      57,
+      62
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_v6_other_1",
+    "rule": "R1",
+    "spec": {
+      "family": "v6",
+      "protocol": "1"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Recognized other protocol is a known non-TCP negative, distinguishing invalid required facts.",
+    "authority": [
+      57,
+      62
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_numeric_6",
+    "rule": "R1",
+    "spec": {
+      "protocol": 6
+    },
+    "expected": null,
+    "what_bug_this_catches": "Numeric JSON protocol domain is not expressly pinned; report observation without inventing a wire contract.",
+    "authority": [
+      57,
+      53
+    ],
+    "certainty": "unresolved_numeric_domain"
+  },
+  {
+    "id": "r1_numeric_-1",
+    "rule": "R1",
+    "spec": {
+      "protocol": -1
+    },
+    "expected": null,
+    "what_bug_this_catches": "Numeric JSON protocol domain is not expressly pinned; report observation without inventing a wire contract.",
+    "authority": [
+      57,
+      53
+    ],
+    "certainty": "unresolved_numeric_domain"
+  },
+  {
+    "id": "r1_malformed_egress",
+    "rule": "R1",
+    "spec": {
+      "protocol": "not-a-protocol",
+      "short": "egress"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Known unrelated short-circuit must not become indeterminate merely from an irrelevant malformed protocol; egress is inapplicable (binary UNKNOWN).",
+    "authority": [
+      62,
+      68,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_malformed_private",
+    "rule": "R1",
+    "spec": {
+      "protocol": "not-a-protocol",
+      "short": "private"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Known unrelated short-circuit must not become indeterminate merely from an irrelevant malformed protocol; egress is inapplicable (binary UNKNOWN).",
+    "authority": [
+      62,
+      68,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_tcp443",
+    "rule": "R1",
+    "spec": {
+      "protocol": "tcp",
+      "port": 443
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Admin port set is exactly 22/3389.",
+    "authority": [
+      68
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_unknown_protocol",
+    "rule": "R1",
+    "spec": {
+      "protocol": "tcp",
+      "mask": "after_unknown"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Required unknown protocol cannot establish absence of admin exposure.",
+    "authority": [
+      62,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_sensitive_protocol",
+    "rule": "R1",
+    "spec": {
+      "protocol": "tcp",
+      "mask": "after_sensitive"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Required sensitive protocol cannot establish absence of admin exposure.",
+    "authority": [
+      62,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_unchanged22",
+    "rule": "R1",
+    "spec": {
+      "protocol": "tcp",
+      "transition": "unchanged22"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Unchanged risky exposure is negative for introduced-risk target.",
+    "authority": [
+      68,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r1_add3389",
+    "rule": "R1",
+    "spec": {
+      "protocol": "tcp",
+      "transition": "add3389"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Adding 3389 to existing22 is introduced exposure, not any-risk-before suppression.",
+    "authority": [
+      68,
+      118
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_delete_known",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "delete"
+      ],
+      "prior": "known"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_delete_null",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "delete"
+      ],
+      "prior": "null"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_delete_absent",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "delete"
+      ],
+      "prior": "absent"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_delete_root_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "delete"
+      ],
+      "prior": "root_sensitive"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_delete_tags_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "delete"
+      ],
+      "prior": "tags_sensitive"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_delete_create_known",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "prior": "known"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_delete_create_null",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "prior": "null"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_delete_create_absent",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "prior": "absent"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_delete_create_root_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "prior": "root_sensitive"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_delete_create_tags_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "prior": "tags_sensitive"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_create_delete_known",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "known"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_create_delete_null",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "null"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_create_delete_absent",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "absent"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_create_delete_root_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "root_sensitive"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_create_delete_tags_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "tags_sensitive"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_create",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "create"
+      ],
+      "prior": "known"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Supported non-destructive action remains benign despite prior data/tags.",
+    "authority": [
+      60,
+      70,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_update",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "update"
+      ],
+      "prior": "known"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Supported non-destructive action remains benign despite prior data/tags.",
+    "authority": [
+      60,
+      70,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_no-op",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "no-op"
+      ],
+      "prior": "known"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Supported non-destructive action remains benign despite prior data/tags.",
+    "authority": [
+      60,
+      70,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_db_instance_optional_replace_paths",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_db_instance",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "known",
+      "replace_paths": null
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Optional absent/null replacement path detail cannot hide known ordered destructive intent.",
+    "authority": [
+      70,
+      117,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_delete_known",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "delete"
+      ],
+      "prior": "known"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_delete_null",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "delete"
+      ],
+      "prior": "null"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_delete_absent",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "delete"
+      ],
+      "prior": "absent"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_delete_root_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "delete"
+      ],
+      "prior": "root_sensitive"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_delete_tags_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "delete"
+      ],
+      "prior": "tags_sensitive"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_delete_create_known",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "prior": "known"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_delete_create_null",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "prior": "null"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_delete_create_absent",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "prior": "absent"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_delete_create_root_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "prior": "root_sensitive"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_delete_create_tags_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "delete",
+        "create"
+      ],
+      "prior": "tags_sensitive"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_create_delete_known",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "known"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_create_delete_null",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "null"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_create_delete_absent",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "absent"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_create_delete_root_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "root_sensitive"
+    },
+    "expected": "unknown",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_create_delete_tags_sensitive",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "tags_sensitive"
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Destruction needs verified prior existence; full root mask hides that necessary fact, unrelated nested tags do not. Null/absent prior is contradictory/indeterminate, never benign.",
+    "authority": [
+      60,
+      62,
+      70,
+      118,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_create",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "create"
+      ],
+      "prior": "known"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Supported non-destructive action remains benign despite prior data/tags.",
+    "authority": [
+      60,
+      70,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_update",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "update"
+      ],
+      "prior": "known"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Supported non-destructive action remains benign despite prior data/tags.",
+    "authority": [
+      60,
+      70,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_no-op",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "no-op"
+      ],
+      "prior": "known"
+    },
+    "expected": "pass",
+    "what_bug_this_catches": "Supported non-destructive action remains benign despite prior data/tags.",
+    "authority": [
+      60,
+      70,
+      119
+    ],
+    "certainty": "confirmed"
+  },
+  {
+    "id": "r4_aws_ebs_volume_optional_replace_paths",
+    "rule": "R4",
+    "spec": {
+      "type": "aws_ebs_volume",
+      "actions": [
+        "create",
+        "delete"
+      ],
+      "prior": "known",
+      "replace_paths": null
+    },
+    "expected": "risk",
+    "what_bug_this_catches": "Optional absent/null replacement path detail cannot hide known ordered destructive intent.",
+    "authority": [
+      70,
+      117,
+      119
+    ],
+    "certainty": "confirmed"
+  }
+]
