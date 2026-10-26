@@ -255,10 +255,10 @@ def _seal_arm(case_id: str, artifact: ScanArtifact, arm_rows: list[ComparisonRow
                 reason = ("complete_tree_attempt_timeout" if tree_mode and artifact.arm == "T"
                           else "scanner_timeout")
                 artifact = replace(artifact, status="timeout", observations=(),
-                                   reasons=tuple(sorted(set((*artifact.reasons, reason)))))
+                                   reasons=tuple(sorted({*artifact.reasons, reason})))
                 for row in rows:
                     row.update(status="timeout", introduced_prediction=None, live_eligible=False,
-                               reasons=tuple(sorted(set((*row["reasons"], reason)))))
+                               reasons=tuple(sorted({*row["reasons"], reason})))
             # This is the whole owner's elapsed snapshot, including final cell
             # mapping and row/receipt materialization, not capture's subduration.
             artifact = replace(artifact, elapsed_seconds=now - started_at)
