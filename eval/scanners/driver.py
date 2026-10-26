@@ -450,6 +450,12 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
             sealed_rows, receipt = _seal_arm(case.case_id, artifact, arm_rows,
                                              started_at=started_at, deadline=deadline,
                                              tree_mode=tree_mode)
+            if deadline is not None and time.monotonic() >= deadline:
+                # The arm-sealing operation's return is also inside the owner's
+                # allowance. A late return gets one permanently ineligible seal.
+                sealed_rows, receipt = _seal_arm(case.case_id, artifact, arm_rows,
+                                                 started_at=started_at, deadline=deadline,
+                                                 tree_mode=tree_mode)
             rows.extend(sealed_rows)
             receipts.append(receipt)
     for case in cases:
