@@ -365,3 +365,155 @@ def test_input_metadata_rejects_unqualified_snapshots(module, tmp_path, field, v
     result, _, identity = receive(module, tmp_path, reader=Reader())
     assert result.outcome != "COMPLETE" and result.complete_sha256 is None
     assert not (tmp_path / identity.host_capture_name).exists()
+
+
+class IdentityTransitionFS(FS):
+    """Metadata-only RX-ID-01 seam; every real object and byte is retained.
+
+    writer-close changes one observed inode immediately after that writer closes.
+    final changes it after status independent readback closes, a public IO event
+    after both retained objects have been read, before final-state observation.
+    No source-private state or actual host metadata is modified.
+    """
+    def __init__(self, module, clock, identity, target, transition, short=False):
+        super().__init__(module, clock)
+        self.target_name = (identity.host_capture_name if target == "capture"
+                            else identity.host_status_name)
+        self.capture_name = identity.host_capture_name
+        self.status_name = identity.host_status_name
+        self.transition = transition
+        self.short = short
+        self.short_fired = False
+        self.handles = {}
+        self.writer_inodes = {}
+        self.switched = False
+        self.trigger = None
+        self.observations = []
+
+    def observe(self, path, info, method):
+        path = Path(path)
+        if self.switched and path.name == self.target_name:
+            assert stat.S_ISREG(info.st_mode)
+            values = {name: getattr(info, name) for name in dir(info)
+                      if name.startswith("st_")}
+            values["st_ino"] = info.st_ino + 12345
+            self.observations.append({"method": method, "name": path.name,
+                                      "actual_inode": info.st_ino,
+                                      "observed_inode": values["st_ino"]})
+            return types.SimpleNamespace(**values)
+        return info
+
+    def open_exclusive(self, path):
+        handle = super().open_exclusive(path)
+        self.handles[id(handle)] = (Path(path), "writer")
+        self.writer_inodes[Path(path).name] = self.real.fstat(handle).st_ino
+        return handle
+
+    def open_read(self, path):
+        handle = super().open_read(path)
+        self.handles[id(handle)] = (Path(path), "reader")
+        return handle
+
+    def lstat(self, path):
+        return self.observe(path, super().lstat(path), "lstat")
+
+    def fstat(self, handle):
+        path, _ = self.handles[id(handle)]
+        return self.observe(path, super().fstat(handle), "fstat")
+
+    def write(self, handle, data):
+        path, _ = self.handles[id(handle)]
+        if self.short and not self.short_fired and path.name == self.capture_name:
+            self.short_fired = True
+            self.events.append(("write", str(path), self.clock.now))
+            return self.real.write(handle, data[:7])
+        return super().write(handle, data)
+
+    def close(self, handle):
+        path, role = self.handles[id(handle)]
+        super().close(handle)
+        if self.transition == "writer-close":
+            trigger = role == "writer" and path.name == self.target_name
+        else:
+            trigger = (self.transition == "final" and role == "reader"
+                       and path.name == self.status_name)
+        if trigger and not self.switched:
+            self.switched = True
+            self.trigger = {"name": path.name, "role": role,
+                            "transition": self.transition}
+
+    def retain_evidence(self, directory, result):
+        """Read real metadata without injection to disprove actual replacement."""
+        actual = {}
+        for name, writer_inode in self.writer_inodes.items():
+            path = directory / name
+            info = path.lstat()
+            assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+            assert info.st_ino == writer_inode
+            data = path.read_bytes()
+            actual[name] = {"writer_inode": writer_inode, "final_inode": info.st_ino,
+                            "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        capture = directory / self.capture_name
+        assert capture.read_bytes() == (VALID[:7] if self.short else VALID)
+        record = {"target": self.target_name, "transition": self.transition,
+                  "trigger": self.trigger, "switched": self.switched,
+                  "observations": self.observations, "actual_artifacts": actual,
+                  "short_write": self.short_fired, "outcome": result.outcome,
+                  "code": result.code, "complete_sha256": result.complete_sha256,
+                  "status_committed": result.status_committed,
+                  "physical_replacement": False, "native_qualification": False}
+        with (directory / "identity-observations.json").open("x", encoding="utf-8") as stream:
+            json.dump(record, stream, indent=2)
+        if self.transition != "stable":
+            assert self.switched and self.trigger and self.observations
+            assert all(item["observed_inode"] == item["actual_inode"] + 12345
+                       for item in self.observations)
+
+
+def receive_identity_transition(module, directory, target, transition, short=False):
+    clock = Clock()
+    identity = module.storage_wire.Identity("dev-compat-r1", 1, "00" * 32, "11" * 32)
+    fs = IdentityTransitionFS(module, clock, identity, target, transition, short)
+    destination = module.bind_destination(directory, expected=identity, filesystem=fs)
+    result = module.receive_capture(module.BytesReader(VALID), expected=identity,
+        destination=destination, reservation=module.CaseReservation(), deadline=10,
+        clock=clock)
+    fs.retain_evidence(directory, result)
+    assert result.native_eligible is False and result.durable_verified is False
+    return result, fs
+
+
+@pytest.mark.parametrize("target", ["capture", "status"])
+@pytest.mark.parametrize("transition", ["writer-close", "final"])
+def test_rx_id_01_object_identity_continuity(module, tmp_path, target, transition):
+    """RX-ID-01: never rebaseline a created object to a stable different inode."""
+    result, _ = receive_identity_transition(module, tmp_path, target, transition)
+    assert result.outcome != "COMPLETE" and result.code != "OK"
+    assert result.complete_sha256 is None
+    if target == "status" or transition == "final":
+        assert result.status_committed is False
+
+
+@pytest.mark.parametrize("transition", ["writer-close", "final"])
+def test_rx_id_01_first_fault_survives_status_identity_change(module, tmp_path, transition):
+    """RX-ID-01: later identity failure cannot replace a known short-write fault."""
+    result, fs = receive_identity_transition(module, tmp_path, "status", transition, short=True)
+    assert fs.short_fired
+    assert result.code == "SHORT_WRITE" and result.outcome != "COMPLETE"
+    assert result.capture_bytes == result.capture_charged_bytes == 7
+    assert result.complete_sha256 is None and result.status_committed is False
+
+
+@pytest.mark.parametrize("short", [False, True])
+def test_rx_id_01_stable_identity_controls(module, tmp_path, short):
+    """RX-ID-01: trusted seam itself must preserve stable identity behavior."""
+    result, fs = receive_identity_transition(module, tmp_path, "capture", "stable", short)
+    assert not fs.switched and fs.observations == []
+    assert result.status_committed is True
+    if short:
+        assert result.code == "SHORT_WRITE" and result.outcome != "COMPLETE"
+        assert result.capture_bytes == result.capture_charged_bytes == 7
+        assert result.complete_sha256 is None
+    else:
+        assert result.code == "OK" and result.outcome == "COMPLETE"
+        assert result.complete_sha256 == hashlib.sha256(VALID).hexdigest()
