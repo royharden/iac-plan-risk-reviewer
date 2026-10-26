@@ -499,6 +499,9 @@ def validate_state(capture: Capture) -> StateValidation:
     required = all(r.state == 1 for r in records)
     if 22 in meta:
         status = meta[22]
+        # Required/candidate execution needs a declared normal driver finish;
+        # complete preservation alone may still describe an incomplete run.
+        driver_finished = 23 in meta and meta[23]["driver_terminal"] == "normal"
         failed = (
             status["original_failure_observed"]
             or "aborted" in states
@@ -508,9 +511,14 @@ def validate_state(capture: Capture) -> StateValidation:
         )
         if (
             status["required_capture"] == "complete-candidate"
-            and not required
+            and (not required or not driver_finished)
             or status["original_execution"] == "candidate"
-            and (failed or not required or any(s != "finished" for s in states))
+            and (
+                failed
+                or not required
+                or not driver_finished
+                or any(s != "finished" for s in states)
+            )
         ):
             _fail(11, 22)
         if failed and status["original_execution"] != "ineligible":
