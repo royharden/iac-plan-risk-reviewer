@@ -1,4 +1,7 @@
-"""Independent finite storage-v3 conformance; provenance/oracle frozen before source.
+"""Independent finite storage-v3 conformance with preserved oracle chronology.
+
+Original provenance predates source inspection. The High repair is issue-informed;
+its length-stage expectations follow INT's normative addendum, not source output.
 
 These are pure byte tests. Neither framing nor semantic success proves native
 eligibility, staging, receiver effects, custody, retention, or durability.
@@ -183,7 +186,6 @@ def test_order_duplicate_unknown_id(wire, rid, new_id):
     (17,{"state":2,"reason":3,"known":1,"logical":1}),
     (1,{"state":3,"reason":0}),(1,{"state":3,"reason":5,"payload_hex":"61"}),
     (1,{"state":3,"reason":5,"logical":1}),
-    (1,{"state":3,"reason":4,"known":1,"logical":16384}),
     (1,{"state":3,"reason":4}),
 ], ids=lambda x: str(x))
 def test_per_frame_state_encoding(wire, rid, changes):
@@ -344,6 +346,9 @@ def generated_mutation(kind):
         else:raise AssertionError(kind)
         payload=json_bytes(obj)
     complete(values,17,payload)
+    if kind=="generated_presence":
+        # Keep the intended planned/observed mismatch, with honest prefix length.
+        refresh_accounting(values)
     return build(values)
 
 
@@ -358,7 +363,9 @@ def generated_mutation(kind):
 ])
 def test_generated_closed_canonical_schema(wire,kind):
     """Honest recomputed wire hashes cannot bless noncanonical/false metadata."""
-    expect_error(wire,generated_mutation(kind),8,"GENERATED_SCHEMA_OR_CANONICAL",17)
+    # No cross-record diagnostic record-ID precedence is specified for this join.
+    expect_error(wire,generated_mutation(kind),8,"GENERATED_SCHEMA_OR_CANONICAL",
+                 None if kind=="generated_presence" else 17)
 
 
 def refresh_accounting(values):
@@ -525,3 +532,105 @@ def test_rejected_source_observation_is_not_fabricated_payload(wire,reason,known
     assert record.logical_length==logical and record.logical_known is bool(known)
     assert record.payload==b"" and record.retained_sha256=="00"*32
     assert not_accepted(wire,capture).arm_states==("unknown","unstarted","unstarted")
+
+
+@pytest.mark.parametrize("rid", [1,4,17,23])
+@pytest.mark.parametrize("delta", [-1,0,1], ids=["below-cap","at-cap","above-cap"])
+def test_rejected_overcap_numeric_stage(wire,rid,delta):
+    """INT length-stage addendum: known numerical IDcap predicates belong to5."""
+    values=vectors();values[rid-1].update(state=3,reason=4,known=1,logical=CAPS[rid-1]+delta)
+    blob=build(values)
+    if delta<=0:
+        expect_error(wire,blob,5,"LENGTH_CAP",rid)
+    else:
+        record=wire.decode_framing(blob,expected=identity(wire)).records[rid-1]
+        assert record.state==3 and record.reason==4 and record.logical_known is True
+        assert record.logical_length==CAPS[rid-1]+1
+        assert record.retained_length==0 and record.payload==b""
+        assert record.retained_sha256=="00"*32
+
+
+@pytest.mark.parametrize("logical", [16383,16384,16385])
+def test_rejected_overcap_unknown_length_is_structural_stage4(wire,logical):
+    values=vectors();values[0].update(state=3,reason=4,known=0,logical=logical)
+    expect_error(wire,build(values),4,"STATE_ENCODING",1)
+
+
+@pytest.mark.parametrize("earlier,step,code", [
+    ({"id":2},3,"RECORD_ORDINAL"),
+    ({"reason":10},4,"STATE_ENCODING"),
+    ({"known":0},4,"STATE_ENCODING"),
+])
+def test_rejected_overcap_earlier_error_precedence(wire,earlier,step,code):
+    values=vectors();values[0].update(state=3,reason=4,known=1,logical=16384)
+    values[0].update(earlier)
+    expect_error(wire,build(values),step,code)
+
+
+def complete_candidate_values(driver_terminal="normal"):
+    """Finite synthetic step11 operand, never original execution/custody proof.
+
+    CONTRACT-v3 presence/driver13_14, two_completenesses and validation_order11;
+    SCHEMAS-v3 record17..23 and canonical tuple_rules determine each declaration.
+    Only the requested driver enum differs across the four candidate specimens.
+    """
+    values=vectors("V06_CLOSED_METADATA_INCOMPLETE")
+    for rid in range(1,17):
+        complete(values,rid,f"SYNTHETIC-ORIGINAL-{rid:02d}\n".encode("ascii"))
+    inventory=json.loads(bytes.fromhex(values[16]["payload_hex"]))
+    for arm in inventory["arm_states"]:arm["state"]="finished"
+    for observed,value in zip(inventory["originals"],values[:16]):
+        payload=bytes.fromhex(value["payload_hex"])
+        observed.update(state="complete",logical_bytes=len(payload),retained_bytes=len(payload),
+                        retained_sha256=hashlib.sha256(payload).hexdigest(),
+                        regular_nlink1_verified=True,source_stable_verified=True)
+    complete(values,17,json_bytes(inventory))
+    fault=json.loads(bytes.fromhex(values[17]["payload_hex"]))
+    fault.update(first_fault="NONE",errors=[])
+    complete(values,18,json_bytes(fault))
+    custody=json.loads(bytes.fromhex(values[19]["payload_hex"]))
+    for key in ("results_consumer_read_only","continuous_same_mount_verified",
+                "all_writers_quiescent_verified","no_rw_attachment_verified"):
+        custody[key]=True
+    complete(values,20,json_bytes(custody))
+    closure=json.loads(bytes.fromhex(values[21]["payload_hex"]))
+    closure.update(available_preservation="complete-candidate",required_capture="complete-candidate",
+                   original_execution="candidate",original_failure_observed=False)
+    complete(values,22,json_bytes(closure))
+    transport=json.loads(bytes.fromhex(values[22]["payload_hex"]))
+    transport["driver_terminal"]=driver_terminal
+    for key in ("attach_stdout_complete","attach_stderr_complete","source_read_complete",
+                "continuous_same_mount_verified","all_writers_quiescent_verified",
+                "no_rw_attachment_verified"):
+        transport[key]=True
+    complete(values,23,json_bytes(transport))
+    refresh_accounting(values)
+    return values
+
+
+@pytest.mark.parametrize("driver_terminal", ["normal","not-started","unknown","error"])
+def test_complete_candidate_requires_normal_finished_driver(wire,driver_terminal):
+    """Catch SW-M-01 without interpreting any opaque original as native proof."""
+    values=complete_candidate_values(driver_terminal)
+    capture=wire.decode_framing(build(values),expected=identity(wire))
+    assert all(record.state==1 for record in capture.records)
+    if driver_terminal=="normal":
+        state=not_accepted(wire,capture)
+        assert state.arm_states==("finished",)*3
+        assert state.required_records_present is True
+    else:
+        with pytest.raises(wire.StateError) as caught:wire.validate_state(capture)
+        assert isinstance(caught.value,wire.WireError)
+        assert (caught.value.step,caught.value.code)==(11,"STATE_OR_CLOSURE_INCOMPLETE")
+
+
+@pytest.mark.parametrize("driver_terminal", ["not-started","unknown","error"])
+def test_incomplete_driver_observation_remains_valid_ineligible(wire,driver_terminal):
+    """Missing originals plus incomplete claims do not pretend a finished driver."""
+    values=vectors("V06_CLOSED_METADATA_INCOMPLETE")
+    obj=json.loads(bytes.fromhex(values[22]["payload_hex"]))
+    obj["driver_terminal"]=driver_terminal
+    complete(values,23,json_bytes(obj))
+    state=not_accepted(wire,wire.decode_framing(build(values),expected=identity(wire)))
+    assert state.arm_states==("unstarted",)*3
+    assert state.required_records_present is False
