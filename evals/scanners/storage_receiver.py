@@ -320,7 +320,12 @@ def receive_capture(
 
     def check() -> None:
         nonlocal expired
-        now = clock()
+        try:
+            now = clock()
+        except Exception:  # noqa: BLE001 - stop writes when the trusted clock fails
+            latch("CLOCK")
+            expired = True
+            raise _Fault from None
         if type(now) not in (int, float) or not math.isfinite(now):
             latch("CLOCK")
             expired = True
@@ -419,6 +424,14 @@ def receive_capture(
             current, size = file_identity(handle, path)
             if current != identity or size != len(data):
                 raise ReceiverError("OUTPUT_CHANGED")
+        except ReceiverError as exc:
+            latch(exc.code)
+            raise
+        except _Fault:
+            raise
+        except Exception:  # noqa: BLE001 - latch IO fault before close can also fail
+            latch("STATUS_IO" if status else "CAPTURE_IO")
+            raise
         finally:
             if not close(handle):
                 raise _Fault
@@ -462,6 +475,14 @@ def receive_capture(
             check()
             verified_files[path] = (identity, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
             return digest.hexdigest()
+        except ReceiverError as exc:
+            latch(exc.code)
+            raise
+        except _Fault:
+            raise
+        except Exception:  # noqa: BLE001 - preserve readback failure before close
+            latch("READBACK_IO")
+            raise
         finally:
             if not close(handle):
                 raise _Fault
