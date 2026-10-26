@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import stat
 
@@ -32,6 +33,47 @@ def raw(path, cap=2 * 1024 * 1024):
     return data
 
 
+def entry_metadata(entry):
+    """No following links; separately injectable metadata for inert controls."""
+    # Windows DirEntry.stat may omit st_nlink; Path.lstat obtains the actual
+    # non-following filesystem metadata needed to reject hard links.
+    return Path(entry.path).lstat()
+
+
+def exact_membership(context, declared):
+    """Inspect names and lstat metadata only, before opening declared payloads.
+
+    Only ancestors of declared files may be directories. Never descend into an
+    undeclared directory, a reparse point, or any other linked/special entry.
+    """
+    expected_files = set(declared)
+    expected_dirs = {parent.as_posix() for relative in declared
+                     for parent in Path(relative).parents if parent != Path(".")}
+    files, directories = set(), set()
+    pending = [context]
+    while pending:
+        directory = pending.pop()
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                relative = (directory / entry.name).relative_to(context).as_posix()
+                info = entry_metadata(entry)
+                if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                    raise ValueError("linked context entry")
+                if stat.S_ISDIR(info.st_mode):
+                    if relative not in expected_dirs:
+                        raise ValueError("extra context directory")
+                    directories.add(relative)
+                    pending.append(directory / entry.name)
+                elif stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
+                    if relative not in expected_files:
+                        raise ValueError("extra context file")
+                    files.add(relative)
+                else:
+                    raise ValueError("special or multiply-linked context entry")
+    if files != expected_files or directories != expected_dirs:
+        raise ValueError("missing declared context member")
+
+
 def inspect(context, packaging_commit, pins_sha, source_sha):
     if len(packaging_commit) != 40 or any(c not in "0123456789abcdef" for c in packaging_commit):
         raise ValueError("exact packaging commit required")
@@ -46,17 +88,25 @@ def inspect(context, packaging_commit, pins_sha, source_sha):
     if source["source_commit"] != BASE or source["packaging_commit"] != packaging_commit:
         raise ValueError("source tuple mismatch")
     if source["primary_scans"] != 0: raise ValueError("metadata cannot claim primary scans")
-    for relative, expected in pins.items():
+    # Validate every declaration before inventory or declared-payload reads.
+    for relative in pins:
         p = Path(relative)
-        if p.is_absolute() or ".." in p.parts or "\\" in relative or ":" in relative:
+        if (p.is_absolute() or ".." in p.parts or "\\" in relative or ":" in relative
+                or p.as_posix() != relative or relative == "."):
             raise ValueError("unsafe manifest path")
-        if any(part.startswith(".env") or part.lower() == "auth.json" for part in p.parts):
+        if any(part.lower().startswith(".env") or part.lower() in
+               {"auth", "auth.json", "credentials", "credentials.json", "secret", "secrets", "key", "keys"}
+               or Path(part).suffix.lower() in {".key", ".pem", ".p12", ".pfx"}
+               for part in p.parts):
             raise ValueError("credential path refused without reading")
         permitted = (relative.startswith(("product/src/iac_review/", "product/eval/",
                      "product/evals/", "product/tests/eval/", "policies/checkov-custom/",
                      "pins/", "cache-seed/policy/")) or
                      relative in ("Dockerfile.scanners-linux", "product/pyproject.toml", "product/uv.lock"))
         if not permitted: raise ValueError("outside declared build allowlist")
+    exact_membership(context, pins)
+    for relative, expected in pins.items():
+        p = Path(relative)
         data = raw(context / p)
         actual = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
         if actual != expected: raise ValueError("staged byte pin mismatch")
