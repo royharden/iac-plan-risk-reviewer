@@ -1,0 +1,15 @@
+# R04 runtime-v1 core
+
+D12, 0111_Codex_gpt-61-sol_D12; Medium. This package continues the fourteen-file D8 r2 packet under INT4's I-D12-runtime-core-r1 and CONTRACT-R04-semantics-r1. All historical files were hash/size verified before copying into this new directory. The old source and immutable records remain unchanged. D8's DORMANT-BRIDGE-r2.md is retained historical context; R04 public API is recorded in the run requests/D12-runtime-core-API-r1.md, addendum-r2.md and D12-to-D14-original-protocol-answer-r2.md.
+
+Import with package-qualified runtime_v1 modules. Internal imports are relative. Merely importing code does not issue a context, invoke LocalMetadataBackend, install hooks or dispatch effects. The frozen source32/ordered103/whitelist12 leaves remain byte-identical, bound to source924/tree8907. This source directory is not added to the product wheel by this package.
+
+InertContext is an explicitly injected model: data-only dispatch markers, pin/observation readers and receipt store. Direct observation never finalizes a slot. The outer handle checks retained post-readback before finalizing. Known original errors preserve object identity and permanently block later effects; UNKNOWN retains pending correlation and cause. No adapter may repair private state.
+
+summarize_results validates complete DATA only: exactly each frozen103 ID once, PASS/FAIL, arbitrary arrival order, canonical final mapping/failure list. Both completion paths additionally require exact eight finalized slots and no pending/active/poison. complete_data is distinct from all_passed/success; any FAIL makes the latter false. Synthetic completion always retains actual_runtime_verified=false and is never original103 evidence.
+
+The dormant GuardedContext exposes manifest_raw, raw, grant_sha256 and existing exact-slot APIs. For an admitted future error path the outer Protocol catches the original error inside the effect window, observes after exit, writes the correct ERROR post, then calls public require_exact for retained post-readback. Only then does core finalize, latch permanent poison and rethrow the same error. Post failure becomes UNKNOWN with original cause and retained pending state. Junction errors still require independently bound termination proof, otherwise UNKNOWN.
+
+PARTIAL ACTUAL BRIDGE: _root_admission remains a refusal before I/O. No independent artifact/path/owner/process binding is installed; Windows metadata/observer representation and junction termination are unqualified. Actual context issuance, native/link/device operations, namespace setup, full103 activation and physical custody/SB03 are not executed or accepted. LocalMetadataBackend remains dormant; injected facts do not establish physical proof. Exact seven-key grant and null descriptive authority remain unchanged. No schema/catalog/DAG/control artifacts or replacement generator are supplied.
+
+RV3 owns runtime tests; RV4 coordinates independent core/launcher review. Developer smoke is separate from independent tests and INT acceptance. No ports, containers, listening service, paid/live/credentialed action or publication belongs to this package.

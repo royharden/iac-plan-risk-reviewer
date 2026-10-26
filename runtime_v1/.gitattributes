@@ -1,0 +1,4 @@
+.gitattributes text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+bindings/*.json -text whitespace=cr-at-eol
