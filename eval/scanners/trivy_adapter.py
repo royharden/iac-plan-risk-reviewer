@@ -5,7 +5,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .bundle_inventory import BundleInventory, plain_directory
-from .runner import Limits, Observation, Runner, ScanArtifact, ScannerPin, capture
+from .runner import (
+    BoundedSubprocessRunner,
+    Limits,
+    Observation,
+    Runner,
+    ScanArtifact,
+    ScannerPin,
+    _attempt_clock,
+    capture,
+)
 
 if TYPE_CHECKING:
     from .artifacts import Mapping
@@ -43,7 +52,11 @@ def scan(*, plan_path: Path, pin: ScannerPin, config_path: Path, workspace: Path
          policy_manifest_path: Path | None = None,
          checks_bundle_files: tuple[tuple[Path, str, int], ...] = (),
          bundle_inventory: BundleInventory | None = None,
-         attempt_deadline: float | None = None) -> ScanArtifact:
+         attempt_deadline: float | None = None,
+         attempt_started_at: float | None = None) -> ScanArtifact:
+    if (type(runner) is BoundedSubprocessRunner or bundle_inventory is not None
+            or attempt_deadline is not None or attempt_started_at is not None):
+        attempt_started_at, attempt_deadline = _attempt_clock(limits, attempt_deadline, attempt_started_at)
     # Flags follow upstream source, not a claimed tested release. Caller pins and
     # verifies that exact release/profile before any record can be scored.
     argv = (str(pin.executable), "config", "--format", "json", "--config", str(config_path),
@@ -73,4 +86,4 @@ def scan(*, plan_path: Path, pin: ScannerPin, config_path: Path, workspace: Path
                    policy_sha256=policy_sha256, limits=limits,
                    policy_manifest_path=policy_manifest_path,
                    extra_files=checks_bundle_files, bundle_inventory=bundle_inventory,
-                   attempt_deadline=attempt_deadline)
+                   attempt_deadline=attempt_deadline, attempt_started_at=attempt_started_at)

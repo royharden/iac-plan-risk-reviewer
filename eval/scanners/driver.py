@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -29,6 +29,8 @@ from .runner import (
     Runner,
     ScanArtifact,
     ScannerPin,
+    _attempt_clock,
+    _check_deadline,
     bounded_read,
     cell_status,
     digest,
@@ -237,7 +239,9 @@ def _absent(arm: str, reason: str) -> ScanArtifact:
 
 
 def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
-             fake_only: bool, limits: Limits, *, tree_mode: bool = False) -> tuple[ScanArtifact, tuple[Mapping, ...]]:
+             fake_only: bool, limits: Limits, *, tree_mode: bool = False,
+             attempt_deadline: float | None = None,
+             attempt_started_at: float | None = None) -> tuple[ScanArtifact, tuple[Mapping, ...]]:
     if settings is None:
         return _absent(arm, "missing_arm_configuration"), ()
     check_ids = settings.get("check_ids", [])
@@ -261,10 +265,11 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
     if runner is None:
         return _absent(arm, "no_explicit_authorized_runtime_runner"), ()
     staged = None
-    attempt_deadline = (time.monotonic() + min(30.0, limits.timeout_seconds)
-                        if tree_mode and arm == "T" else None)
+    attempt_started_at, attempt_deadline = _attempt_clock(limits, attempt_deadline, attempt_started_at)
     try:
+        _check_deadline(attempt_deadline)
         mappings = _mappings(settings)
+        _check_deadline(attempt_deadline)
         workspace = _path(settings.get("workspace"))
         plan_path = case.plan_path
         if case.guarded is not None:
@@ -280,13 +285,13 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
                       check_ids=tuple(check_ids), mappings=mappings,
                       policy_sha256=settings.get("policy_sha256"),
                       policy_manifest_path=_path(settings["policy_manifest_path"])
-                      if settings.get("policy_manifest_path") else None, limits=limits)
+                      if settings.get("policy_manifest_path") else None, limits=limits,
+                      attempt_deadline=attempt_deadline, attempt_started_at=attempt_started_at)
         if arm == "T":
             if tree_mode:
                 binding = load_bundle_inventory(settings.get("bundle_inventory"), workspace,
                                                 deadline=attempt_deadline)
-                artifact = adapter.scan(**common, bundle_inventory=binding,
-                                        attempt_deadline=attempt_deadline)
+                artifact = adapter.scan(**common, bundle_inventory=binding)
             else:
                 artifact = adapter.scan(**common, checks_bundle_files=_files(settings, "bundle_files"))
         elif arm == "C-custom":
@@ -299,13 +304,22 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
             artifact = adapter.scan(**common)
         if artifact.arm != arm:
             raise ValueError("adapter arm mismatch")
-        return artifact, mappings
+    except TimeoutError:
+        return replace(_absent(arm, "complete_tree_attempt_timeout" if tree_mode and arm == "T"
+                               else "scanner_timeout"), status="timeout",
+                       elapsed_seconds=time.monotonic() - attempt_started_at), ()
     except (OSError, ValueError, TypeError, KeyError, RecursionError, UnicodeError):
         return _absent(arm, "unavailable_or_unverified_activation_inputs"), ()
     finally:
         if staged is not None and not remove_guarded_input(staged, case.plan_sha256, limits.plan_bytes):
             # Never silently leave heldout bytes behind: the comparison aborts.
             raise ValueError("guarded heldout staging cleanup failed")
+    # Staging cleanup cannot turn a late attempt into an eligible capture.
+    if time.monotonic() >= attempt_deadline:
+        artifact = replace(artifact, status="timeout", observations=(),
+                           reasons=("complete_tree_attempt_timeout" if tree_mode and arm == "T"
+                                    else "scanner_timeout",))
+    return replace(artifact, elapsed_seconds=time.monotonic() - attempt_started_at), mappings
 
 
 def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = False,
@@ -343,9 +357,15 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
     rows, receipts = [], []
     for case in cases:
         for arm in ARMS:
+            # Batch admission is separate. Ownership precedes this arm's raw
+            # verification and follows it through every nested preparation.
+            started_at, deadline = (_attempt_clock(limits) if runner is not None and not fake_only
+                                    and arms.get(arm) is not None else (None, None))
             if digest(_case_bytes(case, limits)) != case.plan_sha256:
                 raise ValueError("plan mutation between arms aborts comparison")
-            artifact, mappings = _collect(case, arm, arms.get(arm), runner, fake_only, limits, tree_mode=tree_mode)
+            artifact, mappings = _collect(case, arm, arms.get(arm), runner, fake_only, limits,
+                                          tree_mode=tree_mode, attempt_deadline=deadline,
+                                          attempt_started_at=started_at)
             if artifact.plan_sha256 not in (None, case.plan_sha256):
                 raise ValueError("scanner capture used different plan bytes")
             capture_hash = _capture_digest(artifact)
