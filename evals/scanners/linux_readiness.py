@@ -267,7 +267,7 @@ def audit_tree(root):
         with os.scandir(directory) as entries:
             for entry in entries:
                 path = Path(entry.path)
-                info = entry.stat(follow_symlinks=False)
+                info = path.lstat()
                 relative = path.relative_to(root).as_posix()
                 if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
                     raise ValueError("audit link/reparse refused")
@@ -595,7 +595,7 @@ def image_membership(root):
                 rel = path.relative_to(root).as_posix()
                 if len(rel.encode()) > 256 or len(path.relative_to(root).parts) > 16:
                     raise ValueError("image membership path cap")
-                info = entry.stat(follow_symlinks=False)
+                info = path.lstat()
                 if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
                     raise ValueError("image linked/reparse entry")
                 if stat.S_ISDIR(info.st_mode):
