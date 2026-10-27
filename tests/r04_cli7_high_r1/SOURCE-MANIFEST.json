@@ -1,0 +1,188 @@
+{
+  "edition": "D13-CLI7-0149-source-r1",
+  "status": "STATIC_SOURCE_ONLY_NOT_PARSED_NOT_BUILT_NOT_RUN",
+  "author": "0149_Codex_gpt-61-sol_Sub_CLI7RunnerHigh",
+  "workspace_author": "0827_Codex_gpt-61-sol_Sub_M4CLI7RunnerHigh",
+  "session": "01a17b5a-0450-7133-9a5f-8c3b7ff88dde",
+  "actual_effort": "high",
+  "base": "8f6da247e229d5b517519902e4383d3e967cd19c",
+  "selected_source": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+  "desired_target": "6a0866ade47662660b78a8ac8ead99ca0b1f47b4",
+  "raw17": "Exact original D12 actual CRLF sizes/SHA, original and copied pins reverified",
+  "original_oracle_sha256": "4fa5bb010692d024f319389be7ae349961a3d395f45ffc4fbe7a734c0f58a0b6",
+  "input_pin_count": 911,
+  "logical_cases_planned": 7,
+  "cli_calls_planned": 25,
+  "execution_count": 0,
+  "files": [
+    {
+      "relative": ".gitattributes",
+      "bytes": 63,
+      "sha256": "9f6d88c455b9de925a540e58b0902dfe8c620c0875234028477b8c4f1fc8df1c"
+    },
+    {
+      "relative": "adapter.py",
+      "bytes": 7297,
+      "sha256": "e71ccee67464d31fdb734376d5acb670a846a2ef8cc618f9d7782009933f7a76"
+    },
+    {
+      "relative": "bootstrap-read-paths.txt",
+      "bytes": 78117,
+      "sha256": "7c06dd00c340cb7c59c364bfe414dfa14315ea806298f9f59bf6b5399961c411"
+    },
+    {
+      "relative": "bootstrap.py",
+      "bytes": 3736,
+      "sha256": "8f81584cd04705069dce298dc5dd0cecfa38bde4763724548849a77164f3f1fa"
+    },
+    {
+      "relative": "childguard.py",
+      "bytes": 17913,
+      "sha256": "825be17bc7f0a43569e72ca2e3ecbe0c4f96b13ed12021132f8b0f09fe794a56"
+    },
+    {
+      "relative": "freeze-proposal.ps1",
+      "bytes": 7483,
+      "sha256": "6e66774044914bbf1a232010954cd6c2e4b8660f44fbdd76fd16c14ffd2303d4"
+    },
+    {
+      "relative": "oracle/expectations.json",
+      "bytes": 1373,
+      "sha256": "0b764e026ba8b40d6086fa71726d869d64d14af8f24d093ac04268a0999c4e3b"
+    },
+    {
+      "relative": "oracle/test_journey.py",
+      "bytes": 4639,
+      "sha256": "4fa5bb010692d024f319389be7ae349961a3d395f45ffc4fbe7a734c0f58a0b6"
+    },
+    {
+      "relative": "OwnedJobSupervisor.cs",
+      "bytes": 24520,
+      "sha256": "fca74f28edaccfd825fc046426320fdb87226b2253909af1d68083decf150c4c"
+    },
+    {
+      "relative": "OwnedJobSupervisor.csproj",
+      "bytes": 468,
+      "sha256": "0d3806d8d0facbe834d6f882f96578fde07d1263e80ce2544f24edf39bcf5e8a"
+    },
+    {
+      "relative": "parse_only.py",
+      "bytes": 2100,
+      "sha256": "168ac92acfa98f2f810b7a96efb2c105ddef1c0b0e0994608761c23e84d10f7f"
+    },
+    {
+      "relative": "proposal-config.json",
+      "bytes": 263623,
+      "sha256": "44c8a3b1939edd3815f1640c79b55b68b4cc7757659ec3dff93dde09e5dac2a1"
+    },
+    {
+      "relative": "REVIEW-HANDOFF.md",
+      "bytes": 10154,
+      "sha256": "516d68140d1c38f7abb70cd76576017e8bc019cbcb945ba75d56dca6d8f3b556"
+    },
+    {
+      "relative": "source-representation.json",
+      "bytes": 11941,
+      "sha256": "1079ed6f74233638fe7c3c25d4d9af372c6094273d10b934373da5bd1e339d26"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/__init__.py",
+      "bytes": 110,
+      "sha256": "00709f47682cec023f8ef864ee2437d922fac868cbd6d95b4440b887b44f2844"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/__main__.py",
+      "bytes": 112,
+      "sha256": "eb7e0622f868366d3af43e3dea13e892fb9bc15c3d2dd2b905dc9668678ca251"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/attempts/__init__.py",
+      "bytes": 21683,
+      "sha256": "ba51e126864a0e7620ed46a166ea1d1cf1141a87c026295b1e728e92a149009e"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/cli.py",
+      "bytes": 7229,
+      "sha256": "3576265eeea733db65a41696f9d7903f73a583596faef4a17d31ad46dcc91b05"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/contracts/__init__.py",
+      "bytes": 4271,
+      "sha256": "62179661b7019674c526d9354f2a3d293bd5b7c8ba642366c1b106a410b9c3ae"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/contracts/manifest.py",
+      "bytes": 8534,
+      "sha256": "12049436acd6e1c4fb48a22c558b12bf98f8fe614da095e30ab495daefd2e643"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/contracts/report_inventory.py",
+      "bytes": 7601,
+      "sha256": "b41f67c3ddb4a2ce48b74a89a30ee0e2bc85bb80038ea54d2188eb78bf11fcc0"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/contracts/report_wire.py",
+      "bytes": 28179,
+      "sha256": "0b927c57d0b512e3562d24404d3bbc1333406a79bb949e67eebc669d899f1790"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/evidence/__init__.py",
+      "bytes": 13005,
+      "sha256": "1b0f94750ef1f88468321ca4e350a503f1558e946633cda154e79cddfa833d0c"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/explain/__init__.py",
+      "bytes": 11339,
+      "sha256": "e7ae4a774b8b035e1ae8f7ebd5522f7d86a75c0fc9b3371d4e093e7544b900af"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/ingest/__init__.py",
+      "bytes": 11377,
+      "sha256": "3039b2a5b662c7836b48c776397afc65c7e0ec97b4b75682ef18b033a7621367"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/ledger_cli.py",
+      "bytes": 4393,
+      "sha256": "c3e2e400765f0c4b1444f3516146720d85150cdfbd9cf5035794a4cfa7f38a5f"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/provenance.py",
+      "bytes": 9862,
+      "sha256": "4f6c65270da0fbacf537c5e60112dec7641e3b1cd84ab8ab4cbb2e9d3f01ce71"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/report/__init__.py",
+      "bytes": 25963,
+      "sha256": "a3a368dfe0531c171e5e07da145dc06e2c04094249bd1529644eca41e987f098"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/rules/__init__.py",
+      "bytes": 16009,
+      "sha256": "c43d01cd1bd04b61e90269efe82fd11f34f9a50cf008ac0685c1b96c34f9a9cb"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/shareable_export.py",
+      "bytes": 9593,
+      "sha256": "9a853bb176a3d56c7c244eb0149f564c0665186fd428cc2c809aa54ae3bce21f"
+    },
+    {
+      "relative": "source-snapshot/src/iac_review/source_view.py",
+      "bytes": 24515,
+      "sha256": "9508818893ef6d102f529b688caff14d99ffb63f422ba60f3edef19ba0b74ae7"
+    }
+  ],
+  "self_excluded": "SOURCE-MANIFEST.json self hash is bound externally in READY/commit",
+  "output": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\RV4-CLI7-0149-output-r1",
+  "output_absent": true,
+  "scope_gate": false,
+  "ast_gate": "OWNER_RECIPE_CONFIRMED_VERSION_QUALIFICATION_PENDING",
+  "remaining_gates": [
+    "AST historical interpreter/schema provenance and equivalence",
+    "marker replacement/final payload rollback/temp-state cleanup exact decision",
+    "transitive OS DLL provenance",
+    "pinned .NET compiler/build/runtime closure and separate build permission",
+    "source-free owned lifecycle fixtures under new admission",
+    "independent High RV4 whole preflight and explicit exact INT activation"
+  ],
+  "exports": "NOT_REFRESHED_POLICY"
+}

@@ -1,0 +1,42 @@
+{
+  "frozen_test_commit": "8f6da247e229d5b517519902e4383d3e967cd19c",
+  "frozen_test_tree": "a7ba4475350791ceaae22dfbd34f529a0937e805",
+  "test_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\tests\\r04_runtime\\retained\\frozen-actual-tests-r2\\tests\\r04_cli\\test_journey.py",
+  "test_bytes": 4639,
+  "test_sha256": "4fa5bb010692d024f319389be7ae349961a3d395f45ffc4fbe7a734c0f58a0b6",
+  "test_body_AST_sha256": "cc2bbb6baddcfb334ac24e74af06935948b381fd5f9d826e26a078669d4069d0",
+  "plan_function_AST_sha256": "5269b63a3555e878ce3f16f06c6ba1a159aec509899b71008896ac2eaa4dda74",
+  "cases": [
+    {
+      "case": "clear",
+      "expected_exit": 0
+    },
+    {
+      "case": "risk",
+      "expected_exit": 1
+    },
+    {
+      "case": "unknown",
+      "expected_exit": 2
+    },
+    {
+      "case": "incomplete",
+      "expected_exit": 2
+    },
+    {
+      "case": "errored",
+      "expected_exit": 2
+    },
+    {
+      "case": "minor",
+      "expected_exit": 2
+    },
+    {
+      "case": "malformed",
+      "expected_exit": 3
+    }
+  ],
+  "logical_case_count": 7,
+  "intended_cli_invocation_count": 25,
+  "qualifier": "Static extraction only; no pytest/import/test/CLI execution. No assertions rewritten. Future mechanical adapter must prove body+plan AST unchanged and preserve frozen source."
+}

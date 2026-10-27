@@ -1,0 +1,189 @@
+{
+  "review_summary": "requests/REVIEW-RV4-CLI7-delegated-0142-r1.json",
+  "review_preflight": "C:\\Users\\Roy Harden\\OneDrive\\PJ-OD\\PortfolioBuilder\\iac-plan-risk-reviewer\\agentops\\runs\\PB-M4-R04\\reviews\\RV4-CLI7-delegated-0142-r1\\PREFLIGHT-r1.json",
+  "review_preflight_sha256": "ec02914773158a526e530263065373017f2d05c361fde53e96a6211c57d49433",
+  "sealed_source_pin_manifest": "C:\\Users\\Roy Harden\\OneDrive\\PJ-OD\\PortfolioBuilder\\iac-plan-risk-reviewer\\agentops\\runs\\PB-M4-R04\\reviews\\RV4-CLI7-delegated-0142-r1\\STATIC-PINS-r1.json",
+  "sealed_source_pin_manifest_sha256": "bd883fce3f73bbab3b82ced107f60df94257e33d6c54f15c77cd3b0bc8d980f4",
+  "reviewer_refs_rehashed": 12,
+  "source_worktree": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli",
+  "observed_worktree_HEAD": "8f6da247e229d5b517519902e4383d3e967cd19c",
+  "selected_product_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+  "product_source_dirty": false,
+  "source_file_count": 17,
+  "files": [
+    {
+      "relative": "src/iac_review/__init__.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\__init__.py",
+      "actual_bytes": 110,
+      "actual_sha256": "00709f47682cec023f8ef864ee2437d922fac868cbd6d95b4440b887b44f2844",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 107,
+      "git_sha256": "70df2afd9c6e7eb83e2866c18a6389267d80228128c903bdeefbd563c5e68c94",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/__main__.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\__main__.py",
+      "actual_bytes": 112,
+      "actual_sha256": "eb7e0622f868366d3af43e3dea13e892fb9bc15c3d2dd2b905dc9668678ca251",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 108,
+      "git_sha256": "cb177e4e0cf738919725ac89a9e0a92b4b56b97939730e3fff424e11d46f79ae",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/cli.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\cli.py",
+      "actual_bytes": 7229,
+      "actual_sha256": "3576265eeea733db65a41696f9d7903f73a583596faef4a17d31ad46dcc91b05",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 7102,
+      "git_sha256": "b339c61751550b3384f2212edd821611b8da4ef68c47c4e29cc3d83b3ed3f5e3",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/ledger_cli.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\ledger_cli.py",
+      "actual_bytes": 4393,
+      "actual_sha256": "c3e2e400765f0c4b1444f3516146720d85150cdfbd9cf5035794a4cfa7f38a5f",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 4302,
+      "git_sha256": "76e8173d9c8026f35fdc7680e645c8696a5a511fd1aca3f59afd211c421090c0",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/provenance.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\provenance.py",
+      "actual_bytes": 9862,
+      "actual_sha256": "4f6c65270da0fbacf537c5e60112dec7641e3b1cd84ab8ab4cbb2e9d3f01ce71",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 9680,
+      "git_sha256": "135174f8f3a376b87dc49eebbd98ce83aa3f2714ad4c9497a92dfbc51d213c6f",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/shareable_export.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\shareable_export.py",
+      "actual_bytes": 9593,
+      "actual_sha256": "9a853bb176a3d56c7c244eb0149f564c0665186fd428cc2c809aa54ae3bce21f",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 9395,
+      "git_sha256": "c1e5d0c74ab84df92c9fee9d332894c1a47abaf93508e25e1aefe3e6c5b4cbd8",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/source_view.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\source_view.py",
+      "actual_bytes": 24515,
+      "actual_sha256": "9508818893ef6d102f529b688caff14d99ffb63f422ba60f3edef19ba0b74ae7",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 24041,
+      "git_sha256": "9596f32c4824f03f2594ece34fb0d45b081458965b1ef41bc426c962c4421144",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/attempts/__init__.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\attempts\\__init__.py",
+      "actual_bytes": 21683,
+      "actual_sha256": "ba51e126864a0e7620ed46a166ea1d1cf1141a87c026295b1e728e92a149009e",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 21259,
+      "git_sha256": "dd02fa5b1d0899079fa5f73a99ac75731e81efb8d4464060af6a1710dce78482",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/contracts/__init__.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\contracts\\__init__.py",
+      "actual_bytes": 4271,
+      "actual_sha256": "62179661b7019674c526d9354f2a3d293bd5b7c8ba642366c1b106a410b9c3ae",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 4154,
+      "git_sha256": "4a80bab62a15d5964197d24f99d78887331f853617a87e6ed66a5b849f456cf4",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/contracts/manifest.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\contracts\\manifest.py",
+      "actual_bytes": 8534,
+      "actual_sha256": "12049436acd6e1c4fb48a22c558b12bf98f8fe614da095e30ab495daefd2e643",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 8347,
+      "git_sha256": "9c2aa79f53646c1e7fc7e13c1b2a6f5653ddf1afb376e8663f5b9d469285ecb8",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/contracts/report_inventory.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\contracts\\report_inventory.py",
+      "actual_bytes": 7601,
+      "actual_sha256": "b41f67c3ddb4a2ce48b74a89a30ee0e2bc85bb80038ea54d2188eb78bf11fcc0",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 7413,
+      "git_sha256": "a2d96b9c7536e698e99ef1db8a4427ec4750f5b416aa1def7c4c8553324ca7d4",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/contracts/report_wire.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\contracts\\report_wire.py",
+      "actual_bytes": 28179,
+      "actual_sha256": "0b927c57d0b512e3562d24404d3bbc1333406a79bb949e67eebc669d899f1790",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 27595,
+      "git_sha256": "93cc1a1f520628335fb29d2f1591b067bcda69b101459bc37c7261799ce2515f",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/evidence/__init__.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\evidence\\__init__.py",
+      "actual_bytes": 13005,
+      "actual_sha256": "1b0f94750ef1f88468321ca4e350a503f1558e946633cda154e79cddfa833d0c",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 12702,
+      "git_sha256": "decf26d68acf483085b3690ef9905fe59dff9ec24a0778b8217162ec50ac8a6a",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/explain/__init__.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\explain\\__init__.py",
+      "actual_bytes": 11339,
+      "actual_sha256": "e7ae4a774b8b035e1ae8f7ebd5522f7d86a75c0fc9b3371d4e093e7544b900af",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 11099,
+      "git_sha256": "482fc6fd36bb97ff1d26a5bc2d46fc65b03434cbc0191c83a2aef1d085b1efd9",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/ingest/__init__.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\ingest\\__init__.py",
+      "actual_bytes": 11377,
+      "actual_sha256": "3039b2a5b662c7836b48c776397afc65c7e0ec97b4b75682ef18b033a7621367",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 11090,
+      "git_sha256": "c27074283c2979372d456cccec25d101964dc87481cd52a7740ea84ebe94b0c6",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/report/__init__.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\report\\__init__.py",
+      "actual_bytes": 25963,
+      "actual_sha256": "a3a368dfe0531c171e5e07da145dc06e2c04094249bd1529644eca41e987f098",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 25439,
+      "git_sha256": "259ebb926e5c53c04acd6f992fba036f938b96404bab6e817e63a0e6174b10c7",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    },
+    {
+      "relative": "src/iac_review/rules/__init__.py",
+      "actual_path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV1-tests-cli\\src\\iac_review\\rules\\__init__.py",
+      "actual_bytes": 16009,
+      "actual_sha256": "c43d01cd1bd04b61e90269efe82fd11f34f9a50cf008ac0685c1b96c34f9a9cb",
+      "git_source_commit": "ddcdffd72cf6377b22d5ace95bafed61504652bb",
+      "git_bytes": 15633,
+      "git_sha256": "4a7f165a077857fabfbdc47895e143919c22d093ebf0ba185da13a8083007fad",
+      "representation": "exact CRLF rendering of LF Git blob; actual raw bytes selected, no transformation performed"
+    }
+  ],
+  "candidate_imports": 0,
+  "candidate_executions": 0,
+  "source_mutations": 0,
+  "EOL_rewrites": 0
+}
