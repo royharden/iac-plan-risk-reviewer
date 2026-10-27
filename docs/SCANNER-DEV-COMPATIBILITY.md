@@ -241,3 +241,36 @@ Package METADATA pins verify declared versions, not package-code integrity;
 extra build-tool pip is reported as unpinned. No old image/context proof carries
 forward. New independent SOURCE/TEST/effect review and exact conditional Docker
 resource/heavy-slot grant are required before any build or run.
+
+
+## Public inert image observations
+
+The optional keyword-only `observations` interface on `image_membership`,
+`package_metadata`, and `inspect_image_metadata` supplies all `lstat`, `entries`
+and `read` observations. `ImageNode(kind,size=0,links=1,reparse=False)` is the
+immutable public node representation. Partial interfaces and malformed records
+refuse. Supplied observations never fall back to OS operations. Default behavior
+still uses ordinary read-only OS observations; symlink/reparse/special/multilink,
+path, count, byte and membership checks remain in force. A provider is a trusted
+inert testing dependency, not a sandbox for hostile Python callbacks.
+
+The source receipt and complete-tree manifest are explicitly external anchor
+reads. Full image membership enumeration and comparison precede all other
+manifest-listed reads. Tests may observe this ordering through public methods.
+No fixture needs real links or private patching to model rejected metadata.
+
+`image_metadata_report(commit,source_sha,observations=None,roots=None)` returns
+bounded `(bytes,exit_code)` without printing or writing. Keyword-only roots,
+when supplied, must be a three-Path tuple and always produce synthetic evidence.
+`image_metadata_cli(argv,observations=None)` exposes the fixed-root CLI dispatch
+for inert positive/negative controls; actual CLI has no root/injection flags.
+`render_synthetic_image_report(report)` exercises the shared bounded serializer,
+forces synthetic labeling and every old168/native/primary/product restriction,
+and supplies no inspection or actual-image proof. Production defaults retain
+fixed image roots. All supplied observations are explicitly synthetic.
+
+The frozen d8fe source and its prior results remain unchanged. The independent
+2551 test watchdog timeout remains an incomplete execution, not a source defect
+or a pass. New source and independent test successors require their own exact
+review; this observation component authorizes no Docker, device, old168, native,
+full103, schema/catalog or root-authority activation.
