@@ -1,0 +1,13 @@
+{
+  ".gitattributes": "705fd4d6451a31d36b3df7de96f83f30ac976c9b4a6d1e51671d8e2f33e2d0da",
+  "effect_guard.py": "f053fb8885df3c0360e00911f92852bdcdc9dc55b25d8abf093b8d45e4b362c6",
+  "fixture_cost_diagnostic.py": "a21451d383fb7319fe590022b5f8de3e8fd4d9c391c5b8130fd3c46d62206692",
+  "image-data.zip": "9f4cef593c539663df73195b11783f7f1f3e5d56701f13d838ec9ef4b533d238",
+  "inert_fixture.py": "259f7bb446ebde49a8da2fb7aa14348cc87a4de944ff08c75ca6e30ea7daf343",
+  "oracle.json": "d849264c6205aafba2ea429f0185d374f7e65d4698da50b2a0dc997d2258e93b",
+  "original_suite.py": "43cc3d62db2039597aa9aed93a00f93c20033223d575f75d28fcfa9476ff8617",
+  "README.md": "6e2386d1639143ec9e6a1ccf71741390cae070ce65dc32c33665d0e7121dfcc2",
+  "run_retained.ps1": "67715de328c5ec51d34ed42c6e5f83275871ff58a099a5f7dfbd581bf467e3c2",
+  "startup.json": "3deb25c9a1787c32f9a93d19ea2c874f284de5de78b5e99784086be8f3b001cd",
+  "suite.py": "076f58fb1c71bcdad3f40d37574d605be1618fe0a207dd86ad636d57decf05bb"
+}
