@@ -108,6 +108,9 @@ def validate_origin(facts, backend, process):
 def observe_owned(pending, relation, result, error, backend, *, child_terminated):
     try:
         closed(pending, 'slot relation target_identity pre_sha256')
+        need(error is None or isinstance(error, BaseException), 'original error object required')
+        need(any(exact_value(pending['slot'], slot) for slot in load_frozen_bindings().slots),
+             'exact original eight-slot binding required')
         need(exact_value(relation, pending['relation']) and hex64(pending['pre_sha256']), 'pending action correlation differs')
         ordinary_chain(backend, relation['target'])
         ordinary_chain(backend, relation['physical'])
@@ -129,4 +132,4 @@ def observe_owned(pending, relation, result, error, backend, *, child_terminated
                 'target_identity': target.identity, 'link_kind': link.kind, 'link_target': link.link_target,
                 'pre_sha256': pending['pre_sha256']}
     except BaseException as exc:
-        raise Unknown('owned post-effect observation UNKNOWN') from (error if error is not None else exc)
+        raise Unknown('owned post-effect observation UNKNOWN') from (error if isinstance(error, BaseException) else exc)
