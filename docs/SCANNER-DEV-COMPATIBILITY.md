@@ -220,3 +220,24 @@ This repin prepares metadata packaging only. New context/image loaded-byte and
 runtime test evidence requires a fresh independent review and new team-owned
 resources. The readiness profile remains NOT_RUN and product_acceptance=false;
 no Checkov callbacks, primary scans, hidden/holdout or live models are admitted.
+
+
+## R04 read-only image metadata mode
+
+The separate `image-metadata --packaging-commit <full40> --source-sha <sha256>`
+entrypoint verifies actual read-back file membership, lengths, hashes, policy,
+config, complete cache, and pinned distribution METADATA versions. The external
+source-receipt digest and packaging commit come from the reviewed new context.
+It imports no product, policy or scanner code and executes no subprocess or
+pytest lifecycle. It creates no files, links or scratch directories; evidence is
+bounded stdout. Dockerfile.scanners-linux selects this explicit mode.
+
+The previous 168-test path is held: empty argv, `tests` and `legacy-tests` refuse
+with exit 2. Its function bodies remain preserved for a separately approved
+future route. Metadata output reports `legacy168_tests=NOT_RUN_HELD`,
+`nofollow=NOT_RUN`, `native_callbacks=NOT_RUN`, `primary_inputs=NOT_RUN` and
+`product_acceptance=false`. A metadata pass never supplies those execution proofs.
+Package METADATA pins verify declared versions, not package-code integrity;
+extra build-tool pip is reported as unpinned. No old image/context proof carries
+forward. New independent SOURCE/TEST/effect review and exact conditional Docker
+resource/heavy-slot grant are required before any build or run.

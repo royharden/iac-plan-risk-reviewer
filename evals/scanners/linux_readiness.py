@@ -583,18 +583,264 @@ def runtime():
     return int(not report["passed"] or len(raw) > MAX_REPORT)
 
 
+def image_membership(root):
+    """Enumerate bounded ordinary membership before any manifest-listed reads."""
+    plain_chain(root)
+    files, directories, stack = set(), set(), [root]
+    while stack:
+        directory = stack.pop()
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                path = Path(entry.path)
+                rel = path.relative_to(root).as_posix()
+                if len(rel.encode()) > 256 or len(path.relative_to(root).parts) > 16:
+                    raise ValueError("image membership path cap")
+                info = entry.stat(follow_symlinks=False)
+                if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                    raise ValueError("image linked/reparse entry")
+                if stat.S_ISDIR(info.st_mode):
+                    directories.add(rel)
+                    stack.append(path)
+                elif stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
+                    files.add(rel)
+                else:
+                    raise ValueError("image special/multilink entry")
+                if len(files) > 1024 or len(directories) > 256:
+                    raise ValueError("image membership count cap")
+    return files, directories
+
+
+def requirement_versions(raw):
+    required = {}
+    for line in raw.decode("utf-8").splitlines():
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==([^\s\\]+)(?:\s.*)?", line)
+        if match:
+            name = re.sub(r"[-_.]+", "-", match[1]).lower()
+            if name in required:
+                raise ValueError("duplicate pinned distribution")
+            required[name] = match[2]
+    if not required or len(required) > 128:
+        raise ValueError("bounded pinned distributions required")
+    return required
+
+
+def package_metadata(root, required):
+    """Read distribution headers directly; never import installed package code."""
+    from email.parser import BytesHeaderParser
+
+    plain_chain(root)
+    observed, entries_seen = {}, 0
+    with os.scandir(root) as entries:
+        for entry in entries:
+            entries_seen += 1
+            if entries_seen > 2048:
+                raise ValueError("package directory count cap")
+            if not entry.name.endswith(".dist-info"):
+                continue
+            path = root / entry.name / "METADATA"
+            data = regular_bytes(path, MAX_ARTIFACT)
+            headers = BytesHeaderParser().parsebytes(data)
+            if len(headers.get_all("Name", [])) != 1 or len(headers.get_all("Version", [])) != 1:
+                raise ValueError("distribution name/version headers required")
+            name = re.sub(r"[-_.]+", "-", headers["Name"]).lower()
+            version = headers["Version"]
+            if not re.fullmatch(r"[a-z0-9-]{1,128}", name) or len(version) > 128:
+                raise ValueError("invalid package metadata")
+            if name in observed:
+                raise ValueError("duplicate installed distribution")
+            observed[name] = {"version": version, "metadata_sha256": sha(data)}
+            if len(observed) > 129:
+                raise ValueError("distribution count cap")
+    if set(observed) - set(required) - {"pip"} or set(required) - set(observed):
+        raise ValueError("installed distribution membership mismatch")
+    if any(observed[name]["version"] != version for name, version in required.items()):
+        raise ValueError("installed distribution version mismatch")
+    return {"required": required, "observed": observed, "pip_unpinned": "pip" not in required}
+
+
+def inspect_image_metadata(
+    image_root, core_packages, checkov_packages, packaging_commit, source_sha
+):
+    """Pure read-back seam. Injected roots are test data, not image qualification."""
+    if not isinstance(packaging_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", packaging_commit):
+        raise ValueError("explicit full packaging commit required")
+    if not isinstance(source_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", source_sha):
+        raise ValueError("external source receipt digest required")
+    raw_source = regular_bytes(image_root / "pins/source.json", 524288)
+    if sha(raw_source) != source_sha:
+        raise ValueError("external source receipt mismatch")
+    source = json.loads(raw_source)
+    if source["source_commit"] != BASE or source["packaging_commit"] != packaging_commit:
+        raise ValueError("source tuple mismatch")
+    if source["primary_scans"] != 0 or source["cache_sha256"] != TREE_SHA:
+        raise ValueError("metadata source scope mismatch")
+    pins = source["files"]
+    if not isinstance(pins, dict) or not 1 <= len(pins) <= 1024:
+        raise ValueError("bounded image pins required")
+    expected = {"pins/source.json"}
+    for relative in pins:
+        if relative == "Dockerfile.scanners-linux":
+            continue  # Build input, not copied into /opt/m4.
+        parts = relative.split("/")
+        if (
+            not all(re.fullmatch(r"[A-Za-z0-9_.-]+", part) for part in parts)
+            or any(part in (".", "..") for part in parts)
+            or any(
+                part.lower().startswith((".env", ".credentials")) or part.lower() == "auth.json"
+                for part in parts
+            )
+            or not relative.startswith(
+                ("product/", "policies/checkov-custom/", "cache-seed/policy/", "pins/")
+            )
+        ):
+            raise ValueError("unsafe image pin path")
+        expected.add(relative)
+    actual, directories = image_membership(image_root)
+    expected_dirs = {
+        parent.as_posix() for p in expected for parent in Path(p).parents if parent != Path(".")
+    }
+    tree_raw = regular_bytes(image_root / "pins/trivy-bundle-tree.json", 524288)
+    if sha(tree_raw) != TREE_SHA:
+        raise ValueError("cache tree manifest mismatch")
+    tree = json.loads(tree_raw)
+    expected_dirs.update(
+        "cache-seed/policy/" + row["path"] for row in tree["rows"] if row["kind"] == "directory"
+    )
+    if actual != expected or directories != expected_dirs:
+        raise ValueError("image membership mismatch")
+    total = len(raw_source)
+    for relative in sorted(expected - {"pins/source.json"}):
+        data = regular_bytes(image_root / relative, MAX_ARTIFACT)
+        if {"bytes": len(data), "sha256": sha(data)} != pins[relative]:
+            raise ValueError("loaded image byte pin mismatch: " + relative)
+        total += len(data)
+        if total > 16 * 1024 * 1024:
+            raise ValueError("image aggregate byte cap")
+    policies = {
+        "policies/checkov-custom/" + name: pins.get("policies/checkov-custom/" + name)
+        for name in POLICIES
+    }
+    sizes = {"__init__.py": 82, "m4_checks.py": 2576, "m4_policy.py": 11018}
+    if any(
+        policies["policies/checkov-custom/" + name] != {"bytes": sizes[name], "sha256": digest}
+        for name, digest in POLICIES.items()
+    ):
+        raise ValueError("approved loaded policy mismatch")
+    profile = json.loads(
+        regular_bytes(image_root / "product/eval/scanners/dev-readiness.json", MAX_ARTIFACT)
+    )
+    rows = profile["custom_policy_files"]
+    if (
+        len(rows) != 3
+        or {row["path"]: {"bytes": row["bytes"], "sha256": row["sha256"]} for row in rows}
+        != policies
+    ):
+        raise ValueError("loaded policy profile mismatch")
+    config = profile["config"]
+    if (
+        config["path"] != "eval/scanners/dev-empty-config.json"
+        or config["sha256"] != pins["product/" + config["path"]]["sha256"]
+    ):
+        raise ValueError("loaded config profile mismatch")
+    cache_files = [row for row in tree["rows"] if row["kind"] == "file"]
+    for row in cache_files:
+        if pins.get("cache-seed/policy/" + row["path"]) != {
+            "bytes": row["bytes"],
+            "sha256": row["sha256"],
+        }:
+            raise ValueError("loaded cache manifest mismatch")
+    core_required = requirement_versions(
+        regular_bytes(image_root / "pins/core-requirements.txt", MAX_ARTIFACT)
+    )
+    if core_required != source["test_dependencies"]:
+        raise ValueError("core dependency source mismatch")
+    checkov_raw = regular_bytes(image_root / "pins/checkov.requirements.txt", MAX_ARTIFACT)
+    if sha(checkov_raw) != CHECKOV_LOCK:
+        raise ValueError("Checkov requirements lock mismatch")
+    return {
+        "kind": "m4-readonly-image-metadata-v1",
+        "passed": True,
+        "source_commit": BASE,
+        "packaging_commit": packaging_commit,
+        "source_receipt_sha256": source_sha,
+        "files_verified": len(expected),
+        "bytes_verified": total,
+        "policy_files": policies,
+        "config_sha256": config["sha256"],
+        "cache": {
+            "tree_sha256": TREE_SHA,
+            "files": len(cache_files),
+            "directories": sum(row["kind"] == "directory" for row in tree["rows"]),
+            "aggregate_file_bytes": sum(row["bytes"] for row in cache_files),
+        },
+        "packages": {
+            "core": package_metadata(core_packages, core_required),
+            "checkov": package_metadata(checkov_packages, requirement_versions(checkov_raw)),
+        },
+        "primary_scans": 0,
+        "legacy168_tests": "NOT_RUN_HELD",
+        "nofollow": "NOT_RUN",
+        "native_callbacks": "NOT_RUN",
+        "primary_inputs": "NOT_RUN",
+        "product_acceptance": False,
+    }
+
+
+def image_metadata_main(packaging_commit, source_sha):
+    try:
+        report = inspect_image_metadata(
+            Path("/opt/m4"),
+            Path("/opt/m4-core/lib/python3.12/site-packages"),
+            Path("/opt/m4-checkov/lib/python3.12/site-packages"),
+            packaging_commit,
+            source_sha,
+        )
+        raw = encode(report)
+        if len(raw) > MAX_REPORT:
+            raise ValueError("metadata report cap")
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
+        raw = encode(
+            {
+                "kind": "m4-readonly-image-metadata-v1",
+                "passed": False,
+                "error": {"type": type(error).__name__, "message": str(error)[:1024]},
+                "legacy168_tests": "NOT_RUN_HELD",
+                "primary_scans": 0,
+                "product_acceptance": False,
+            }
+        )
+        print(raw.decode())
+        return 1
+    print(raw.decode())
+    return 0
+
+
 if __name__ == "__main__":
-    if sys.argv[1:] == ["tests"]:
-        raise SystemExit(test_phase())
-    if len(sys.argv) > 1:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("mode", choices=["stage"])
-        parser.add_argument("--root", type=Path, required=True)
-        parser.add_argument("--packaging-commit", required=True)
-        parser.add_argument("--context", type=Path, required=True)
-        parser.add_argument("--cache", type=Path, required=True)
-        parser.add_argument("--manifest", type=Path, required=True)
-        args = parser.parse_args()
+    if not sys.argv[1:] or sys.argv[1:] in (["tests"], ["legacy-tests"]):
+        print(
+            encode(
+                {
+                    "kind": "m4-legacy-readiness-held",
+                    "passed": False,
+                    "legacy168_tests": "NOT_RUN_HELD",
+                    "product_acceptance": False,
+                }
+            ).decode()
+        )
+        raise SystemExit(2)
+    parser = argparse.ArgumentParser()
+    modes = parser.add_subparsers(dest="mode", required=True)
+    staging = modes.add_parser("stage")
+    staging.add_argument("--root", type=Path, required=True)
+    staging.add_argument("--packaging-commit", required=True)
+    staging.add_argument("--context", type=Path, required=True)
+    staging.add_argument("--cache", type=Path, required=True)
+    staging.add_argument("--manifest", type=Path, required=True)
+    metadata = modes.add_parser("image-metadata")
+    metadata.add_argument("--packaging-commit", required=True)
+    metadata.add_argument("--source-sha", required=True)
+    args = parser.parse_args()
+    if args.mode == "stage":
         stage(args.root, args.context, args.cache, args.manifest, args.packaging_commit)
     else:
-        raise SystemExit(runtime())
+        raise SystemExit(image_metadata_main(args.packaging_commit, args.source_sha))
