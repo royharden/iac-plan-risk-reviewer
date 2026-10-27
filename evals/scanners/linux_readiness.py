@@ -267,7 +267,7 @@ def audit_tree(root):
         with os.scandir(directory) as entries:
             for entry in entries:
                 path = Path(entry.path)
-                info = path.lstat()
+                info = entry.stat(follow_symlinks=False)
                 relative = path.relative_to(root).as_posix()
                 if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
                     raise ValueError("audit link/reparse refused")
