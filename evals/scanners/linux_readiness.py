@@ -20,6 +20,7 @@ import sys
 import time
 import tomllib
 import xml.etree.ElementTree as ET
+from collections import namedtuple
 from pathlib import Path
 
 BASE = "ddcdffd72cf6377b22d5ace95bafed61504652bb"
@@ -583,10 +584,418 @@ def runtime():
     return int(not report["passed"] or len(raw) > MAX_REPORT)
 
 
+ImageNode = namedtuple("ImageNode", "kind size links reparse", defaults=(0, 1, False))
+
+
+class _OSImageObservations:
+    def lstat(self, path):
+        info = path.lstat()
+        kind = "special"
+        if stat.S_ISLNK(info.st_mode):
+            kind = "symlink"
+        elif stat.S_ISDIR(info.st_mode):
+            kind = "directory"
+        elif stat.S_ISREG(info.st_mode):
+            kind = "file"
+        return ImageNode(
+            kind, info.st_size, info.st_nlink, bool(getattr(info, "st_file_attributes", 0) & 0x400)
+        )
+
+    def entries(self, path):
+        names = []
+        with os.scandir(path) as entries:
+            for entry in entries:
+                names.append(entry.name)
+                if len(names) > 2048:
+                    raise ValueError("observation entry count cap")
+        return tuple(names)
+
+    def read(self, path, limit):
+        with path.open("rb") as stream:
+            return stream.read(limit)
+
+
+class _ImageObservationReader:
+    def __init__(self, observations):
+        self.synthetic = observations is not None
+        self.provider = _OSImageObservations() if observations is None else observations
+        if any(
+            not callable(getattr(self.provider, name, None))
+            for name in ("lstat", "entries", "read")
+        ):
+            raise ValueError("complete image observations required")
+
+    def node(self, path):
+        node = self.provider.lstat(path)
+        if (
+            type(node) is not ImageNode
+            or node.kind not in ("file", "directory", "symlink", "special")
+            or type(node.size) is not int
+            or node.size < 0
+            or type(node.links) is not int
+            or node.links < 0
+            or type(node.reparse) is not bool
+        ):
+            raise ValueError("malformed image node observation")
+        return node
+
+    def chain(self, path):
+        for ancestor in reversed((path, *path.parents)):
+            node = self.node(ancestor)
+            if node.kind == "symlink" or node.reparse:
+                raise ValueError("image linked/reparse observation")
+            if ancestor != path and node.kind != "directory":
+                raise ValueError("image ancestor directory required")
+        return node
+
+    def entries(self, path):
+        if self.chain(path).kind != "directory":
+            raise ValueError("image observation directory required")
+        names = self.provider.entries(path)
+        if type(names) is not tuple or len(names) > 2048:
+            raise ValueError("bounded complete entry tuple required")
+        if any(
+            type(name) is not str
+            or not name
+            or name in (".", "..")
+            or any(c in name for c in ("/", "\\", ":", "\x00"))
+            or len(name.encode("utf-8")) > 256
+            for name in names
+        ):
+            raise ValueError("invalid observed entry name")
+        if len(set(names)) != len(names):
+            raise ValueError("duplicate observed entries")
+        return names
+
+    def bytes(self, path, cap):
+        node = self.chain(path)
+        if node.kind != "file" or node.links != 1 or node.size > cap:
+            raise ValueError("bounded single-link regular observation required")
+        data = self.provider.read(path, cap + 1)
+        if type(data) is not bytes or len(data) != node.size or len(data) > cap:
+            raise ValueError("image read observation size mismatch")
+        if self.node(path) != node:
+            raise ValueError("image node observation changed")
+        return data
+
+
+def _image_reader(observations):
+    if type(observations) is _ImageObservationReader:
+        return observations
+    return _ImageObservationReader(observations)
+
+
+def image_membership(root, *, observations=None):
+    """Enumerate complete observed membership before manifest-listed byte reads."""
+    reader = _image_reader(observations)
+    if reader.chain(root).kind != "directory":
+        raise ValueError("image root directory required")
+    files, directories, stack = set(), set(), [root]
+    while stack:
+        directory = stack.pop()
+        for name in reader.entries(directory):
+            path = directory / name
+            rel = path.relative_to(root).as_posix()
+            if len(rel.encode()) > 256 or len(path.relative_to(root).parts) > 16:
+                raise ValueError("image membership path cap")
+            node = reader.node(path)
+            if node.kind == "symlink" or node.reparse:
+                raise ValueError("image linked/reparse entry")
+            if node.kind == "directory":
+                directories.add(rel)
+                stack.append(path)
+            elif node.kind == "file" and node.links == 1:
+                files.add(rel)
+            else:
+                raise ValueError("image special/multilink entry")
+            if len(files) > 1024 or len(directories) > 256:
+                raise ValueError("image membership count cap")
+    return files, directories
+
+
+def requirement_versions(raw):
+    required = {}
+    for line in raw.decode("utf-8").splitlines():
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==([^\s\\]+)(?:\s.*)?", line)
+        if match:
+            name = re.sub(r"[-_.]+", "-", match[1]).lower()
+            if name in required:
+                raise ValueError("duplicate pinned distribution")
+            required[name] = match[2]
+    if not required or len(required) > 128:
+        raise ValueError("bounded pinned distributions required")
+    return required
+
+
+def package_metadata(root, required, *, observations=None):
+    """Read distribution headers directly; never import installed package code."""
+    from email.parser import BytesHeaderParser
+
+    reader = _image_reader(observations)
+    observed, entries_seen = {}, 0
+    for entry_name in reader.entries(root):
+        entries_seen += 1
+        if entries_seen > 2048:
+            raise ValueError("package directory count cap")
+        if not entry_name.endswith(".dist-info"):
+            continue
+        path = root / entry_name / "METADATA"
+        data = reader.bytes(path, MAX_ARTIFACT)
+        headers = BytesHeaderParser().parsebytes(data)
+        if len(headers.get_all("Name", [])) != 1 or len(headers.get_all("Version", [])) != 1:
+            raise ValueError("distribution name/version headers required")
+        name = re.sub(r"[-_.]+", "-", headers["Name"]).lower()
+        version = headers["Version"]
+        if not re.fullmatch(r"[a-z0-9-]{1,128}", name) or len(version) > 128:
+            raise ValueError("invalid package metadata")
+        if name in observed:
+            raise ValueError("duplicate installed distribution")
+        observed[name] = {"version": version, "metadata_sha256": sha(data)}
+        if len(observed) > 129:
+            raise ValueError("distribution count cap")
+    if set(observed) - set(required) - {"pip"} or set(required) - set(observed):
+        raise ValueError("installed distribution membership mismatch")
+    if any(observed[name]["version"] != version for name, version in required.items()):
+        raise ValueError("installed distribution version mismatch")
+    return {"required": required, "observed": observed, "pip_unpinned": "pip" not in required}
+
+
+def inspect_image_metadata(
+    image_root, core_packages, checkov_packages, packaging_commit, source_sha, *, observations=None
+):
+    """Pure read-back seam. Injected roots are test data, not image qualification."""
+    reader = _image_reader(observations)
+    if not isinstance(packaging_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", packaging_commit):
+        raise ValueError("explicit full packaging commit required")
+    if not isinstance(source_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", source_sha):
+        raise ValueError("external source receipt digest required")
+    raw_source = reader.bytes(image_root / "pins/source.json", 524288)
+    if sha(raw_source) != source_sha:
+        raise ValueError("external source receipt mismatch")
+    source = json.loads(raw_source)
+    if source["source_commit"] != BASE or source["packaging_commit"] != packaging_commit:
+        raise ValueError("source tuple mismatch")
+    if source["primary_scans"] != 0 or source["cache_sha256"] != TREE_SHA:
+        raise ValueError("metadata source scope mismatch")
+    pins = source["files"]
+    if not isinstance(pins, dict) or not 1 <= len(pins) <= 1024:
+        raise ValueError("bounded image pins required")
+    expected = {"pins/source.json"}
+    for relative in pins:
+        if relative == "Dockerfile.scanners-linux":
+            continue  # Build input, not copied into /opt/m4.
+        parts = relative.split("/")
+        if (
+            not all(re.fullmatch(r"[A-Za-z0-9_.-]+", part) for part in parts)
+            or any(part in (".", "..") for part in parts)
+            or any(
+                part.lower().startswith((".env", ".credentials")) or part.lower() == "auth.json"
+                for part in parts
+            )
+            or not relative.startswith(
+                ("product/", "policies/checkov-custom/", "cache-seed/policy/", "pins/")
+            )
+        ):
+            raise ValueError("unsafe image pin path")
+        expected.add(relative)
+    actual, directories = image_membership(image_root, observations=reader)
+    expected_dirs = {
+        parent.as_posix() for p in expected for parent in Path(p).parents if parent != Path(".")
+    }
+    tree_raw = reader.bytes(image_root / "pins/trivy-bundle-tree.json", 524288)
+    if sha(tree_raw) != TREE_SHA:
+        raise ValueError("cache tree manifest mismatch")
+    tree = json.loads(tree_raw)
+    expected_dirs.update(
+        "cache-seed/policy/" + row["path"] for row in tree["rows"] if row["kind"] == "directory"
+    )
+    if actual != expected or directories != expected_dirs:
+        raise ValueError("image membership mismatch")
+    total = len(raw_source)
+    for relative in sorted(expected - {"pins/source.json"}):
+        data = reader.bytes(image_root / relative, MAX_ARTIFACT)
+        if {"bytes": len(data), "sha256": sha(data)} != pins[relative]:
+            raise ValueError("loaded image byte pin mismatch: " + relative)
+        total += len(data)
+        if total > 16 * 1024 * 1024:
+            raise ValueError("image aggregate byte cap")
+    policies = {
+        "policies/checkov-custom/" + name: pins.get("policies/checkov-custom/" + name)
+        for name in POLICIES
+    }
+    sizes = {"__init__.py": 82, "m4_checks.py": 2576, "m4_policy.py": 11018}
+    if any(
+        policies["policies/checkov-custom/" + name] != {"bytes": sizes[name], "sha256": digest}
+        for name, digest in POLICIES.items()
+    ):
+        raise ValueError("approved loaded policy mismatch")
+    profile = json.loads(
+        reader.bytes(image_root / "product/eval/scanners/dev-readiness.json", MAX_ARTIFACT)
+    )
+    rows = profile["custom_policy_files"]
+    if (
+        len(rows) != 3
+        or {row["path"]: {"bytes": row["bytes"], "sha256": row["sha256"]} for row in rows}
+        != policies
+    ):
+        raise ValueError("loaded policy profile mismatch")
+    config = profile["config"]
+    if (
+        config["path"] != "eval/scanners/dev-empty-config.json"
+        or config["sha256"] != pins["product/" + config["path"]]["sha256"]
+    ):
+        raise ValueError("loaded config profile mismatch")
+    cache_files = [row for row in tree["rows"] if row["kind"] == "file"]
+    for row in cache_files:
+        if pins.get("cache-seed/policy/" + row["path"]) != {
+            "bytes": row["bytes"],
+            "sha256": row["sha256"],
+        }:
+            raise ValueError("loaded cache manifest mismatch")
+    core_required = requirement_versions(
+        reader.bytes(image_root / "pins/core-requirements.txt", MAX_ARTIFACT)
+    )
+    if core_required != source["test_dependencies"]:
+        raise ValueError("core dependency source mismatch")
+    checkov_raw = reader.bytes(image_root / "pins/checkov.requirements.txt", MAX_ARTIFACT)
+    if sha(checkov_raw) != CHECKOV_LOCK:
+        raise ValueError("Checkov requirements lock mismatch")
+    return {
+        "synthetic": reader.synthetic
+        or (image_root, core_packages, checkov_packages)
+        != (
+            Path("/opt/m4"),
+            Path("/opt/m4-core/lib/python3.12/site-packages"),
+            Path("/opt/m4-checkov/lib/python3.12/site-packages"),
+        ),
+        "kind": "m4-readonly-image-metadata-v1",
+        "passed": True,
+        "source_commit": BASE,
+        "packaging_commit": packaging_commit,
+        "source_receipt_sha256": source_sha,
+        "files_verified": len(expected),
+        "bytes_verified": total,
+        "policy_files": policies,
+        "config_sha256": config["sha256"],
+        "cache": {
+            "tree_sha256": TREE_SHA,
+            "files": len(cache_files),
+            "directories": sum(row["kind"] == "directory" for row in tree["rows"]),
+            "aggregate_file_bytes": sum(row["bytes"] for row in cache_files),
+        },
+        "packages": {
+            "core": package_metadata(core_packages, core_required, observations=reader),
+            "checkov": package_metadata(
+                checkov_packages, requirement_versions(checkov_raw), observations=reader
+            ),
+        },
+        "primary_scans": 0,
+        "legacy168_tests": "NOT_RUN_HELD",
+        "nofollow": "NOT_RUN",
+        "native_callbacks": "NOT_RUN",
+        "primary_inputs": "NOT_RUN",
+        "product_acceptance": False,
+    }
+
+
+def _render_image_metadata_report(report=None, *, error=None, synthetic=False):
+    try:
+        if error is not None:
+            raise error
+        if type(report) is not dict or type(report.get("passed")) is not bool:
+            raise ValueError("metadata report with explicit passed required")
+        payload = dict(report)
+        payload.update(
+            synthetic=synthetic,
+            observation_kind="synthetic" if synthetic else "os-readback",
+            legacy168_tests="NOT_RUN_HELD",
+            nofollow="NOT_RUN",
+            native_callbacks="NOT_RUN",
+            primary_inputs="NOT_RUN",
+            primary_scans=0,
+            product_acceptance=False,
+        )
+        raw = encode(payload)
+        if len(raw) > MAX_REPORT:
+            raise ValueError("metadata report cap")
+        return raw, int(not payload["passed"])
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as failure:
+        raw = encode(
+            {
+                "kind": "m4-readonly-image-metadata-v1",
+                "passed": False,
+                "error": {"type": type(failure).__name__, "message": str(failure)[:1024]},
+                "synthetic": synthetic,
+                "observation_kind": "synthetic" if synthetic else "os-readback",
+                "legacy168_tests": "NOT_RUN_HELD",
+                "nofollow": "NOT_RUN",
+                "native_callbacks": "NOT_RUN",
+                "primary_inputs": "NOT_RUN",
+                "primary_scans": 0,
+                "product_acceptance": False,
+            }
+        )
+        return raw, 1
+
+
+def render_synthetic_image_report(report):
+    """Serialization controls only. This always labels output as synthetic."""
+    return _render_image_metadata_report(report, synthetic=True)
+
+
+def image_metadata_report(packaging_commit, source_sha, *, observations=None, roots=None):
+    synthetic = observations is not None or roots is not None
+    try:
+        reader = _image_reader(observations)
+        if roots is None:
+            roots = (
+                Path("/opt/m4"),
+                Path("/opt/m4-core/lib/python3.12/site-packages"),
+                Path("/opt/m4-checkov/lib/python3.12/site-packages"),
+            )
+        if (
+            type(roots) is not tuple
+            or len(roots) != 3
+            or any(not isinstance(p, Path) for p in roots)
+        ):
+            raise ValueError("exact three Path roots required")
+        report = inspect_image_metadata(*roots, packaging_commit, source_sha, observations=reader)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
+        return _render_image_metadata_report(error=error, synthetic=synthetic)
+    return _render_image_metadata_report(report, synthetic=synthetic)
+
+
+def image_metadata_main(packaging_commit, source_sha):
+    raw, code = image_metadata_report(packaging_commit, source_sha)
+    print(raw.decode())
+    return code
+
+
+def image_metadata_cli(argv, *, observations=None):
+    """Fixed-root public dispatch seam; no injection flags exist in actual CLI."""
+    if not argv or list(argv) in (["tests"], ["legacy-tests"]):
+        return _render_image_metadata_report(
+            {"kind": "m4-legacy-readiness-held", "passed": False},
+            synthetic=observations is not None,
+        )[0], 2
+    if len(argv) != 5 or argv[0] != "image-metadata":
+        return _render_image_metadata_report(
+            error=ValueError("explicit image-metadata arguments required"),
+            synthetic=observations is not None,
+        )[0], 2
+    options = dict(zip(argv[1::2], argv[2::2], strict=True))
+    if set(options) != {"--packaging-commit", "--source-sha"}:
+        return _render_image_metadata_report(
+            error=ValueError("exact image-metadata options required"),
+            synthetic=observations is not None,
+        )[0], 2
+    return image_metadata_report(
+        options["--packaging-commit"], options["--source-sha"], observations=observations
+    )
+
+
 if __name__ == "__main__":
-    if sys.argv[1:] == ["tests"]:
-        raise SystemExit(test_phase())
-    if len(sys.argv) > 1:
+    if sys.argv[1:2] == ["stage"]:
         parser = argparse.ArgumentParser()
         parser.add_argument("mode", choices=["stage"])
         parser.add_argument("--root", type=Path, required=True)
@@ -597,4 +1006,6 @@ if __name__ == "__main__":
         args = parser.parse_args()
         stage(args.root, args.context, args.cache, args.manifest, args.packaging_commit)
     else:
-        raise SystemExit(runtime())
+        raw, code = image_metadata_cli(sys.argv[1:])
+        print(raw.decode())
+        raise SystemExit(code)
