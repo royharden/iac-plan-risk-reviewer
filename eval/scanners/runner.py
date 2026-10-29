@@ -85,8 +85,15 @@ def bounded_read(path: Path, cap: int) -> bytes:
     # A fresh open still reads through EOF or the same cap-plus-one sentinel.
     with path.open("rb") as stream:
         remaining = cap + 1
-        if type(remaining) is not int or remaining <= 0:
-            # Preserve the stream's legacy handling of out-of-contract caps.
+        chunked = type(remaining) is int and remaining > 0
+        if chunked:
+            try:
+                # Probe index-size representability without allocating byte storage.
+                len(range(remaining))
+            except OverflowError:
+                chunked = False
+        if not chunked:
+            # Let read validate malformed or oversized caps outside the exception.
             data = stream.read(remaining)
         else:
             chunks = []
