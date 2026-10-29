@@ -18,3 +18,13 @@ private-reports/
 *.tfstate*
 *.bak-*
 
+
+# Credential and generated artifact exclusions
+.creds/
+ArchiveManager-creds.txt
+*.pem
+*.key
+*.p12
+*.pfx
+node_modules/
+*.zip

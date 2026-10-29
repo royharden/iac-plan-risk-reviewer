@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "kind": "unexecuted-exact-production-predicate-source-free-method",
+  "author": "0148_Codex_gpt-61-sol_Sub_OriginEnvXhigh",
+  "session": "01a17b54-d7a4-7a31-b477-7e31943a42f3",
+  "actual_effort": "xhigh",
+  "status": "STATIC_PROPOSAL_REQUIRES_FRESH_INDEPENDENT_FULL_METHOD_PREFLIGHT_AND_ADMISSION",
+  "inputs": [
+    {
+      "path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV3-origin-env-Xhigh-r4\\tests\\r04_origin\\run_env_xhigh_r4.py",
+      "bytes": 276645,
+      "sha256": "57bc0f7893187ce5205411e1ad8c60a2a382659774b6b3754b0eedbd8981f0e0"
+    },
+    {
+      "path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV3-origin-env-Xhigh-r4\\tests\\r04_origin\\closure_env_xhigh_r4.json",
+      "bytes": 582173,
+      "sha256": "7aa337ef7b440e9c48a0bef876581c99f9302ee319066879f5b68c00ea9ebe0f"
+    },
+    {
+      "path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV3-origin-env-Xhigh-r4\\tests\\r04_origin\\env_transition_vectors_r4.json",
+      "bytes": 23806,
+      "sha256": "ef715b50632ee4a6bbf9dd66f1ecca1833500a14837add2bad87a627619ff0f8"
+    },
+    {
+      "path": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV3-origin-env-Xhigh-r4\\tests\\r04_origin\\predicate_controls_env_xhigh_r4.py",
+      "bytes": 242708,
+      "sha256": "ee142392af605166abd84c47f47e75efd7e6734ab2f4c94a167ac1f96ada6946"
+    }
+  ],
+  "spans": {
+    "predicate": {
+      "start_byte": 239377,
+      "end_byte_exclusive": 241936,
+      "bytes": 2559,
+      "sha256": "e37403a658bbb00b426d30d84d419150a1f66c2bbb0db3941406deb1e3576cc7"
+    },
+    "reporting": {
+      "start_byte": 251782,
+      "end_byte_exclusive": 257699,
+      "bytes": 5917,
+      "sha256": "e0bdc25d8a4e103b203d3ddfb82bab87b32559709224487def0c44f01127a4fe"
+    },
+    "audit_effect": {
+      "start_byte": 241983,
+      "end_byte_exclusive": 245905,
+      "bytes": 3922,
+      "sha256": "8ccec51f65629ec3b0b2e7c46bc615bdeea3a7ef081e98905c9ff4b9986b42ca"
+    },
+    "audit_installation": {
+      "start_byte": 245905,
+      "end_byte_exclusive": 248353,
+      "bytes": 2448,
+      "sha256": "f3fa9c0d1f24b02ab9dd67ae5c75c4a8f2957dea20181e347d8714f41c85df84"
+    }
+  },
+  "binding": "Full runner plus exact production predicate, _framework_effect callsite and _audit+installation raw spans are pinned. The production audit handler calls this predicate before admitting the native OS mutation; helpers execute the unchanged predicate span with a synthetic list-append sink. Static review of real caller/key/value bindings and before-effect wiring remains required; helper results alone do not prove authentic framework integration.",
+  "expected_guard_cases": 49,
+  "expected_guard_allowed": 17,
+  "expected_guard_denied": 32,
+  "unchanged_classifier_XML_controls": 12,
+  "independent_XML_aggregate_cases": 4,
+  "execution_method": "Single exact pinned Python -I -S -B -X freshprefix process from OUTER with cleared literal3-key environment. Source-loader no-pyc and finite content-read audit installed before JSON/hashlib/XML imports. Compile/execute only the exact raw production-predicate and unchanged reporting spans; no AST rewrite, runner body import or pytest/product import.",
+  "runtime_inventory": "The unchanged closure_env dependency1220/startup_config1/binaryDATA3 and finite1948 bootstrap code read literals/728 aliases apply. Launcher verifies those pins, all12 startup absences and alias root before launch; no source899 content is needed by the control worker.",
+  "command": [
+    "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R03-RV2-eval-db\\.venv\\Scripts\\python.exe",
+    "-I",
+    "-S",
+    "-B",
+    "-X",
+    "pycache_prefix=C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV3-origin-env-Xhigh-r4\\tests\\r04_origin\\retained\\0148-env-controls-r4\\never-bytecode",
+    "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV3-origin-env-Xhigh-r4\\tests\\r04_origin\\predicate_controls_env_xhigh_r4.py"
+  ],
+  "cwd": "C:\\Users\\Roy Harden\\OneDrive\\PJ-OD\\PortfolioBuilder\\iac-plan-risk-reviewer",
+  "environment": {
+    "SYSTEMROOT": "C:\\WINDOWS",
+    "WINDIR": "C:\\WINDOWS",
+    "SYSTEMDRIVE": "C:"
+  },
+  "output": "C:\\Worktrees\\PortfolioBuilder\\iac-plan-risk-reviewer\\R04-RV3-origin-env-Xhigh-r4\\tests\\r04_origin\\retained\\0148-env-controls-r4",
+  "write_files": [
+    "stdout.txt",
+    "stderr.txt",
+    "execution.json"
+  ],
+  "effects": "One fresh ordinary exact output directory and3 exclusive new files created by task-owned PowerShell launcher; one child process, only-owned10s watchdog kill +5s wait; no child writes/process/env/cwd/device/network/delete/rename effects, no overwrite or cleanup. Parent environment unchanged.",
+  "reporting": "Bounded <=65536-character successful worker JSON stdout containing each actual control result and honest zero source/pytest imports; exclusive retained stderr/execution receipt with exact native exit, timeout, pins and prefix state. No success manufactured for timeout/exception/incomplete retention. Launcher stopwatch monotonic; no custom host/wallclock/timezone probes.",
+  "limitations": [
+    "NOT EXECUTED: Python parsing/compile/predicate/classifier/XML/bootstrap have not run under this author.",
+    "Synthetic effect sink exercises actual pure production transition predicate but not authentic pytest frames, audit callback invocation, or actual OS environment effects.",
+    "Cooperative pinned Python audit is not an OS sandbox or complete native-initializer/SystemDLL/metadata/timing census.",
+    "Original source16/test18/1220 dependencies and original product assertions are separate and unchanged. Controls do not establish source acceptance, operational qualification or whole-product acceptance.",
+    "No source899/defaultOS/backend/context/root/device/link/original-operational103/Docker/network/credentials/ports/catalog/publication authority follows."
+  ]
+}

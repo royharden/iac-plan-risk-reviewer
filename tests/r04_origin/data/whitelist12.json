@@ -1,0 +1,14 @@
+[
+  "tests/eval/test_scanner_dev_execution.py::test_raw_non_utf8_bytes_exit_and_hash_links_survive[0]",
+  "tests/eval/test_scanner_dev_execution.py::test_raw_non_utf8_bytes_exit_and_hash_links_survive[1]",
+  "tests/eval/test_scanner_dev_execution.py::test_raw_non_utf8_bytes_exit_and_hash_links_survive[7]",
+  "tests/eval/test_scanner_dev_execution.py::test_timeout_keeps_captured_bytes_and_a_terminal_receipt",
+  "tests/eval/test_scanner_dev_execution.py::test_overflow_retains_only_capped_prefix_and_marks_it_incomplete",
+  "tests/eval/test_scanner_dev_execution.py::test_start_error_preserves_empty_outputs_and_never_attests_process_start",
+  "tests/eval/test_scanner_dev_execution.py::test_existing_raw_output_is_never_overwritten[stdout]",
+  "tests/eval/test_scanner_dev_execution.py::test_existing_raw_output_is_never_overwritten[stderr]",
+  "tests/eval/test_scanner_dev_execution.py::test_output_write_failure_cannot_become_a_successful_capture[stdout]",
+  "tests/eval/test_scanner_dev_execution.py::test_output_write_failure_cannot_become_a_successful_capture[stderr]",
+  "tests/eval/test_scanner_dev_execution.py::test_terminal_write_failure_is_explicit_after_raw_files_survive",
+  "tests/eval/test_scanner_dev_execution.py::test_ordinary_workspace_approval_has_no_effect_then_keeps_capture"
+]

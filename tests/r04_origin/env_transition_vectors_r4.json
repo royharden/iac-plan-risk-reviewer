@@ -1,0 +1,1071 @@
+{
+  "schema_version": 1,
+  "kind": "unexecuted-production-current-test-transition-vectors",
+  "author": "0148_Codex_gpt-61-sol_Sub_OriginEnvXhigh",
+  "session": "01a17b54-d7a4-7a31-b477-7e31943a42f3",
+  "scope": "Exact production transition predicate only; simulated sink is not an OS environment mutation or authentic caller-stack test",
+  "cases": [
+    {
+      "name": "fresh-setup",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "setup",
+      "phases": {},
+      "expected": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "passed-setup-call",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "call",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        }
+      },
+      "expected": {
+        "teardown": false,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "call"
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "call-passed-teardown",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "call"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "call-passed-remove",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "event": "os.unsetenv",
+      "when": null,
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": true,
+        "call": true,
+        "setup": true,
+        "phase": null
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "call-failed-teardown",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "call"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "failed"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "call-failed-remove",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "event": "os.unsetenv",
+      "when": null,
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "failed"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": true,
+        "call": true,
+        "setup": true,
+        "phase": null
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "call-skipped-teardown",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "call"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "skipped"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "call-skipped-remove",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "event": "os.unsetenv",
+      "when": null,
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "skipped"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": true,
+        "call": true,
+        "setup": true,
+        "phase": null
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "setup-failed-no-core-mutation-teardown",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "failed"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": "teardown"
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "setup-failed-after-core-mutation-teardown",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "failed"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "setup-failed-no-call-remove",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": "teardown"
+      },
+      "event": "os.unsetenv",
+      "when": null,
+      "phases": {
+        "setup": {
+          "outcome": "failed"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": true,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "setup-failed-core-no-call-remove",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "event": "os.unsetenv",
+      "when": null,
+      "phases": {
+        "setup": {
+          "outcome": "failed"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": true,
+        "call": false,
+        "setup": true,
+        "phase": null
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "setup-failed-consumed-removal-repeated-teardown",
+      "state": {
+        "teardown": true,
+        "removal": true,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "failed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "setup-failed-consumed-removal-repeated-setup",
+      "state": {
+        "teardown": true,
+        "removal": true,
+        "call": false,
+        "setup": true,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "setup",
+      "phases": {
+        "setup": {
+          "outcome": "failed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "setup-failed-call-denied",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "call",
+      "phases": {
+        "setup": {
+          "outcome": "failed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "setup-failed-early-report-repeated-setup",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "setup",
+      "phases": {
+        "setup": {
+          "outcome": "failed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "setup-skipped-no-core-mutation-teardown",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "skipped"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": "teardown"
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "setup-skipped-after-core-mutation-teardown",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "skipped"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "setup-skipped-no-call-remove",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": "teardown"
+      },
+      "event": "os.unsetenv",
+      "when": null,
+      "phases": {
+        "setup": {
+          "outcome": "skipped"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": true,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "setup-skipped-core-no-call-remove",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "event": "os.unsetenv",
+      "when": null,
+      "phases": {
+        "setup": {
+          "outcome": "skipped"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": true,
+        "call": false,
+        "setup": true,
+        "phase": null
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "setup-skipped-consumed-removal-repeated-teardown",
+      "state": {
+        "teardown": true,
+        "removal": true,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "skipped"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "setup-skipped-consumed-removal-repeated-setup",
+      "state": {
+        "teardown": true,
+        "removal": true,
+        "call": false,
+        "setup": true,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "setup",
+      "phases": {
+        "setup": {
+          "outcome": "skipped"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "setup-skipped-call-denied",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "call",
+      "phases": {
+        "setup": {
+          "outcome": "skipped"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "setup-skipped-early-report-repeated-setup",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "setup",
+      "phases": {
+        "setup": {
+          "outcome": "skipped"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "call-hook-error-before-core-update-teardown",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "failed"
+        }
+      },
+      "expected": {
+        "teardown": true,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "expected_effects": 1
+    },
+    {
+      "name": "repeat-setup-before-report",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "setup",
+      "phases": {},
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "repeat-call-before-report",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "call"
+      },
+      "event": "os.putenv",
+      "when": "call",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "repeat-teardown-before-removal",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "repeat-removal-before-logfinish",
+      "state": {
+        "teardown": true,
+        "removal": true,
+        "call": true,
+        "setup": true,
+        "phase": null
+      },
+      "event": "os.unsetenv",
+      "when": null,
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "consumed-removal-repeat-setup-before-teardown-report",
+      "state": {
+        "teardown": true,
+        "removal": true,
+        "call": true,
+        "setup": true,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "setup",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "consumed-removal-repeat-setup-after-teardown-report",
+      "state": {
+        "teardown": true,
+        "removal": true,
+        "call": true,
+        "setup": true,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "setup",
+      "phases": {
+        "teardown": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        },
+        "setup": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "consumed-removal-repeat-call",
+      "state": {
+        "teardown": true,
+        "removal": true,
+        "call": true,
+        "setup": true,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "call",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "consumed-removal-repeat-teardown",
+      "state": {
+        "teardown": true,
+        "removal": true,
+        "call": true,
+        "setup": true,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "call-before-setup",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "call",
+      "phases": {},
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "teardown-before-setup-report",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {},
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "remove-before-teardown",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "call"
+      },
+      "event": "os.unsetenv",
+      "when": null,
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "passed-setup-missing-call-report",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "teardown-error-repeated-teardown-denied-no-cleanup",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "teardown": {
+          "outcome": "failed"
+        },
+        "call": {
+          "outcome": "passed"
+        },
+        "setup": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "teardown-error-late-removal-denied-no-cleanup",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "event": "os.unsetenv",
+      "when": null,
+      "phases": {
+        "teardown": {
+          "outcome": "failed"
+        },
+        "call": {
+          "outcome": "passed"
+        },
+        "setup": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "unknown-event",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.getenv",
+      "when": "setup",
+      "phases": {},
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "unknown-phase",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "cleanup",
+      "phases": {},
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "putenv-none",
+      "state": {
+        "teardown": true,
+        "removal": false,
+        "call": true,
+        "setup": true,
+        "phase": "teardown"
+      },
+      "event": "os.putenv",
+      "when": null,
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "unsetenv-setup",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.unsetenv",
+      "when": "setup",
+      "phases": {},
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "unknown-report-phase",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "call",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "extra": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "unknown-report-outcome",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": "setup"
+      },
+      "event": "os.putenv",
+      "when": "call",
+      "phases": {
+        "setup": {
+          "outcome": "other"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "missing-state-key",
+      "state": {
+        "teardown": false,
+        "call": false,
+        "setup": false,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "setup",
+      "phases": {},
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "nonbool-state-key",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": 0,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "setup",
+      "phases": {},
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "call-without-setup-state",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": true,
+        "setup": false,
+        "phase": "call"
+      },
+      "event": "os.putenv",
+      "when": "teardown",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        },
+        "call": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    },
+    {
+      "name": "phase-state-mismatch",
+      "state": {
+        "teardown": false,
+        "removal": false,
+        "call": false,
+        "setup": true,
+        "phase": null
+      },
+      "event": "os.putenv",
+      "when": "call",
+      "phases": {
+        "setup": {
+          "outcome": "passed"
+        }
+      },
+      "expected": null,
+      "expected_effects": 0
+    }
+  ]
+}
