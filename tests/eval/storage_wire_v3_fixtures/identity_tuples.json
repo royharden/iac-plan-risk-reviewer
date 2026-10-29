@@ -1,0 +1,254 @@
+[
+  {
+    "phase": "dev-compat-r1",
+    "wire_ordinal": 1,
+    "case_ordinal": 1,
+    "case_id": "r1-world-ssh-create",
+    "slot": "c01",
+    "host_capture_name": "dev-compat-r1-c01.capture",
+    "host_status_name": "dev-compat-r1-c01.status.json"
+  },
+  {
+    "phase": "dev-compat-r1",
+    "wire_ordinal": 2,
+    "case_ordinal": 8,
+    "case_id": "r2-public-create",
+    "slot": "c08",
+    "host_capture_name": "dev-compat-r1-c08.capture",
+    "host_status_name": "dev-compat-r1-c08.status.json"
+  },
+  {
+    "phase": "dev-compat-r1",
+    "wire_ordinal": 3,
+    "case_ordinal": 13,
+    "case_id": "r3-removes-encryption",
+    "slot": "c13",
+    "host_capture_name": "dev-compat-r1-c13.capture",
+    "host_status_name": "dev-compat-r1-c13.status.json"
+  },
+  {
+    "phase": "dev-compat-r1",
+    "wire_ordinal": 4,
+    "case_ordinal": 18,
+    "case_id": "r4-delete",
+    "slot": "c18",
+    "host_capture_name": "dev-compat-r1-c18.capture",
+    "host_status_name": "dev-compat-r1-c18.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 1,
+    "case_ordinal": 1,
+    "case_id": "r1-world-ssh-create",
+    "slot": "c01",
+    "host_capture_name": "dev-primary-r1-c01.capture",
+    "host_status_name": "dev-primary-r1-c01.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 2,
+    "case_ordinal": 2,
+    "case_id": "r1-https-outside-policy",
+    "slot": "c02",
+    "host_capture_name": "dev-primary-r1-c02.capture",
+    "host_status_name": "dev-primary-r1-c02.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 3,
+    "case_ordinal": 3,
+    "case_id": "r1-ipv6-rdp",
+    "slot": "c03",
+    "host_capture_name": "dev-primary-r1-c03.capture",
+    "host_status_name": "dev-primary-r1-c03.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 4,
+    "case_ordinal": 4,
+    "case_id": "r1-cidr-reorder",
+    "slot": "c04",
+    "host_capture_name": "dev-primary-r1-c04.capture",
+    "host_status_name": "dev-primary-r1-c04.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 5,
+    "case_ordinal": 5,
+    "case_id": "r1-add-rdp-to-ssh",
+    "slot": "c05",
+    "host_capture_name": "dev-primary-r1-c05.capture",
+    "host_status_name": "dev-primary-r1-c05.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 6,
+    "case_ordinal": 6,
+    "case_id": "r1-unknown-prior",
+    "slot": "c06",
+    "host_capture_name": "dev-primary-r1-c06.capture",
+    "host_status_name": "dev-primary-r1-c06.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 7,
+    "case_ordinal": 7,
+    "case_id": "r1-inline-unsupported",
+    "slot": "c07",
+    "host_capture_name": "dev-primary-r1-c07.capture",
+    "host_status_name": "dev-primary-r1-c07.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 8,
+    "case_ordinal": 8,
+    "case_id": "r2-public-create",
+    "slot": "c08",
+    "host_capture_name": "dev-primary-r1-c08.capture",
+    "host_status_name": "dev-primary-r1-c08.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 9,
+    "case_ordinal": 9,
+    "case_id": "r2-still-public",
+    "slot": "c09",
+    "host_capture_name": "dev-primary-r1-c09.capture",
+    "host_status_name": "dev-primary-r1-c09.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 10,
+    "case_ordinal": 10,
+    "case_id": "r2-becomes-private",
+    "slot": "c10",
+    "host_capture_name": "dev-primary-r1-c10.capture",
+    "host_status_name": "dev-primary-r1-c10.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 11,
+    "case_ordinal": 11,
+    "case_id": "r2-unknown-prior",
+    "slot": "c11",
+    "host_capture_name": "dev-primary-r1-c11.capture",
+    "host_status_name": "dev-primary-r1-c11.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 12,
+    "case_ordinal": 12,
+    "case_id": "r2-sensitive-after",
+    "slot": "c12",
+    "host_capture_name": "dev-primary-r1-c12.capture",
+    "host_status_name": "dev-primary-r1-c12.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 13,
+    "case_ordinal": 13,
+    "case_id": "r3-removes-encryption",
+    "slot": "c13",
+    "host_capture_name": "dev-primary-r1-c13.capture",
+    "host_status_name": "dev-primary-r1-c13.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 14,
+    "case_ordinal": 14,
+    "case_id": "r3-create-unencrypted",
+    "slot": "c14",
+    "host_capture_name": "dev-primary-r1-c14.capture",
+    "host_status_name": "dev-primary-r1-c14.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 15,
+    "case_ordinal": 15,
+    "case_id": "r3-unknown-prior",
+    "slot": "c15",
+    "host_capture_name": "dev-primary-r1-c15.capture",
+    "host_status_name": "dev-primary-r1-c15.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 16,
+    "case_ordinal": 16,
+    "case_id": "r3-still-encrypted",
+    "slot": "c16",
+    "host_capture_name": "dev-primary-r1-c16.capture",
+    "host_status_name": "dev-primary-r1-c16.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 17,
+    "case_ordinal": 17,
+    "case_id": "r3-missing-after",
+    "slot": "c17",
+    "host_capture_name": "dev-primary-r1-c17.capture",
+    "host_status_name": "dev-primary-r1-c17.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 18,
+    "case_ordinal": 18,
+    "case_id": "r4-delete",
+    "slot": "c18",
+    "host_capture_name": "dev-primary-r1-c18.capture",
+    "host_status_name": "dev-primary-r1-c18.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 19,
+    "case_ordinal": 19,
+    "case_id": "r4-destroy-create",
+    "slot": "c19",
+    "host_capture_name": "dev-primary-r1-c19.capture",
+    "host_status_name": "dev-primary-r1-c19.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 20,
+    "case_ordinal": 20,
+    "case_id": "r4-create-destroy",
+    "slot": "c20",
+    "host_capture_name": "dev-primary-r1-c20.capture",
+    "host_status_name": "dev-primary-r1-c20.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 21,
+    "case_ordinal": 21,
+    "case_id": "r4-create",
+    "slot": "c21",
+    "host_capture_name": "dev-primary-r1-c21.capture",
+    "host_status_name": "dev-primary-r1-c21.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 22,
+    "case_ordinal": 22,
+    "case_id": "r4-update",
+    "slot": "c22",
+    "host_capture_name": "dev-primary-r1-c22.capture",
+    "host_status_name": "dev-primary-r1-c22.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 23,
+    "case_ordinal": 23,
+    "case_id": "r4-contradictory-prior",
+    "slot": "c23",
+    "host_capture_name": "dev-primary-r1-c23.capture",
+    "host_status_name": "dev-primary-r1-c23.status.json"
+  },
+  {
+    "phase": "dev-primary-r1",
+    "wire_ordinal": 24,
+    "case_ordinal": 24,
+    "case_id": "r4-other-stateful",
+    "slot": "c24",
+    "host_capture_name": "dev-primary-r1-c24.capture",
+    "host_status_name": "dev-primary-r1-c24.status.json"
+  }
+]

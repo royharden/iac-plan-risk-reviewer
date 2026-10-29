@@ -1,0 +1,25 @@
+{
+  "kind": "FINAL_ORACLE_EDITION_BEFORE_PRODUCT_STATIC_INSPECTION",
+  "at_utc": "2026-10-26T01:20:55.405699+00:00",
+  "source_inspected": false,
+  "source_executed": false,
+  "preserved_construction_commit": "f5d2712a117b5e830d030684e1486f65a1f06c38",
+  "original_matrix_sha256": "6a7627bee7b73e9b01c5999f735512ea7595591563f0fde9010c104f720ca631",
+  "normative_addendum_sha256": "4e27fc3b2001e92ba055a79ac9b5015ecc7b3fcd9fbda53f33b0167310e32e0a",
+  "Q1_resolution": "RECORD_ORDINAL step3 for short52Brecordheader; replaces pre-source proposed step6, from INT addendum only",
+  "Q2_resolution": "GENERATED_SCHEMA_OR_CANONICAL step8 for generated tuple mismatch; same expected outcome as pre-source proposal",
+  "call_binding": "D10-storage-wire-v3-call-binding-r1.json declared API; omitted expected TypeError, explicit invalidexpected stage2 after validheader1",
+  "code_sha256": "c422c4582bb8118c4c62b2bc7cb7694eff1ebab6c135b05c074868bc0ede77ed",
+  "changes_since_construction": [
+    "Q1 normative clarification",
+    "Declared call-binding negative cases",
+    "Phase ordinal maxima",
+    "Rejected observation reason5/6/7/9 with knownu64 or unknownzero preserves zero payload",
+    "Unicode-escape specimen now decodes same valid key to isolate canonical rejection"
+  ],
+  "unchanged_semantics": "All32 literal examples, caps, state distinctions, identities unchanged. No expected result selected from implementation observations.",
+  "scope_exclusions": [
+    "No stager/receiver/custody/native/durability acceptance",
+    "No sourceauthor output as oracle"
+  ]
+}

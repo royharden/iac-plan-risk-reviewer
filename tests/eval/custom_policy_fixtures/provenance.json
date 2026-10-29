@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "source_packages": {
+    "original_manifest_sha256": "68bba6ffbe5687f32632db68faadd28d42a333bc827723ab45cd62819b4c7eae",
+    "near_manifest_sha256": "3ab3056f1a9a531b17a078704cba4481e10642730d2d0008f2dd61dfe200001e"
+  },
+  "frozen_inputs": {
+    "test_semantics.py": "efdbb1eeff54700817545fd5bde6ff188ace73d70fa86d565ec42387fd9d7cab",
+    "oracle.json": "8477a047410294c034b0f124665531f0a0eda383aad1b1be5ce1076e63e53543",
+    "cases.json": "364a4be73abd4f2f11b42ae8d7fac49e70764fb411da68d882f147c1f6c94bb8",
+    "test_near_controls.py": "09bfebdb0b7487bab282d78780425a3b2161b53e4680e33cccb65bfb370e1446",
+    "candidate_loader.py": "0b93471d1e38c105ea0cdb53109e5930cba931d04d2689a6e2c6f82cb78094ef"
+  },
+  "counts": {
+    "original_scored": 61,
+    "original_unscored": 2,
+    "near_scored": 98,
+    "near_unscored": 22
+  },
+  "limits": [
+    "Overlapping suites; not 159 unique gold examples.",
+    "Original oracle was issue-informed, not blind.",
+    "Numeric JSON 6/-1, 0006 and other normalization probes remain unscored; no wire-domain admission.",
+    "Pure evaluate_change only; no callbacks, native Checkov, product detector, gold or scanner acceptance.",
+    "Portable harness changes loading/output only. Original old-source failures remain preserved in frozen reviewer packages.",
+    "Pre/open/post/import/teardown checks detect ordinary mutation; no atomic adversarial-race guarantee.",
+    "Git CRLF checkouts are permitted: loader compiles exact validated raw source bytes; LF-only frozen scratch restriction removed for portability."
+  ]
+}

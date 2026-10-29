@@ -11,17 +11,34 @@ invocation, import or tests executed during that construction.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Callable, Literal
 import json
 import re
+import time
+from dataclasses import asdict, dataclass, field, replace
+from pathlib import Path
+from typing import Callable, Literal
 
 from . import checkov_adapter, trivy_adapter
 from .artifacts import Mapping
-from .runner import (BoundedSubprocessRunner, FakeRunner, Limits, Runner, SHA256, ScanArtifact, ScannerPin,
-                     bounded_read, cell_status, digest, remove_guarded_input, simulate_capture,
-                     stage_guarded_input, strict_json)
+from .bundle_inventory import load_bundle_inventory
+from .runner import (
+    SHA256,
+    BoundedSubprocessRunner,
+    FakeRunner,
+    Limits,
+    Runner,
+    ScanArtifact,
+    ScannerPin,
+    _attempt_clock,
+    _check_deadline,
+    bounded_read,
+    cell_status,
+    digest,
+    remove_guarded_input,
+    simulate_capture,
+    stage_guarded_input,
+    strict_json,
+)
 
 SCOPES = ("development_synthetic", "heldout")
 
@@ -100,7 +117,9 @@ def _path(value: object) -> Path:
 def _load_cases(manifest: dict, limits: Limits,
                 guarded: GuardedScannerInput | None = None) -> tuple[Case, ...]:
     scope = manifest.get("input_scope")
-    if manifest.get("schema_version") != "m4-scanner-run-v1" or scope not in SCOPES:
+    if (manifest.get("schema_version") not in {"m4-scanner-run-v1", "m4-scanner-run-v2"}
+            or scope not in SCOPES
+            or (manifest.get("schema_version") == "m4-scanner-run-v2" and scope != "development_synthetic")):
         raise ValueError("only declared development synthetic or guarded heldout inputs are authorized")
     heldout = scope == "heldout"
     if heldout != (guarded is not None) or (guarded is not None and type(guarded) is not GuardedScannerInput):
@@ -219,8 +238,53 @@ def _absent(arm: str, reason: str) -> ScanArtifact:
                         reasons=(reason,))
 
 
+def _seal_arm(case_id: str, artifact: ScanArtifact, arm_rows: list[ComparisonRow], *,
+              started_at: float | None, deadline: float | None,
+              tree_mode: bool) -> tuple[list[dict], dict]:
+    # Materialize the whole arm before its last eligibility check. In particular,
+    # a later cell or row cannot leave an earlier row from this arm eligible.
+    rows = [asdict(row) for row in arm_rows]
+    receipt = asdict(artifact)
+    receipt.pop("observations")
+    receipt = dict(case_id=case_id, capture_sha256="", **receipt)
+
+    def seal(now: float | None) -> None:
+        nonlocal artifact
+        if now is not None:
+            if now >= deadline:
+                reason = ("complete_tree_attempt_timeout" if tree_mode and artifact.arm == "T"
+                          else "scanner_timeout")
+                artifact = replace(artifact, status="timeout", observations=(),
+                                   reasons=tuple(sorted({*artifact.reasons, reason})))
+                for row in rows:
+                    row.update(status="timeout", introduced_prediction=None, live_eligible=False,
+                               reasons=tuple(sorted({*row["reasons"], reason})))
+            # This is the whole owner's elapsed snapshot, including final cell
+            # mapping and row/receipt materialization, not capture's subduration.
+            artifact = replace(artifact, elapsed_seconds=now - started_at)
+            receipt.update(status=artifact.status, reasons=artifact.reasons,
+                           elapsed_seconds=artifact.elapsed_seconds)
+        capture_hash = _capture_digest(artifact)
+        receipt["capture_sha256"] = capture_hash
+        for row in rows:
+            row["capture_sha256"] = capture_hash
+
+    seal(time.monotonic() if deadline is not None else None)
+    if deadline is not None:
+        finished = time.monotonic()
+        if finished >= deadline:
+            # A hash or final materialization may itself return late. Permanently
+            # reject this arm and reseal all links with that observed elapsed.
+            # The snapshot cannot attest the future time hashing itself takes;
+            # this recovery never restores eligibility or renews the deadline.
+            seal(finished)
+    return rows, receipt
+
+
 def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
-             fake_only: bool, limits: Limits) -> tuple[ScanArtifact, tuple[Mapping, ...]]:
+             fake_only: bool, limits: Limits, *, tree_mode: bool = False,
+             attempt_deadline: float | None = None,
+             attempt_started_at: float | None = None) -> tuple[ScanArtifact, tuple[Mapping, ...]]:
     if settings is None:
         return _absent(arm, "missing_arm_configuration"), ()
     check_ids = settings.get("check_ids", [])
@@ -244,8 +308,11 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
     if runner is None:
         return _absent(arm, "no_explicit_authorized_runtime_runner"), ()
     staged = None
+    attempt_started_at, attempt_deadline = _attempt_clock(limits, attempt_deadline, attempt_started_at)
     try:
+        _check_deadline(attempt_deadline)
         mappings = _mappings(settings)
+        _check_deadline(attempt_deadline)
         workspace = _path(settings.get("workspace"))
         plan_path = case.plan_path
         if case.guarded is not None:
@@ -261,9 +328,15 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
                       check_ids=tuple(check_ids), mappings=mappings,
                       policy_sha256=settings.get("policy_sha256"),
                       policy_manifest_path=_path(settings["policy_manifest_path"])
-                      if settings.get("policy_manifest_path") else None, limits=limits)
+                      if settings.get("policy_manifest_path") else None, limits=limits,
+                      attempt_deadline=attempt_deadline, attempt_started_at=attempt_started_at)
         if arm == "T":
-            artifact = adapter.scan(**common, checks_bundle_files=_files(settings, "bundle_files"))
+            if tree_mode:
+                binding = load_bundle_inventory(settings.get("bundle_inventory"), workspace,
+                                                deadline=attempt_deadline)
+                artifact = adapter.scan(**common, bundle_inventory=binding)
+            else:
+                artifact = adapter.scan(**common, checks_bundle_files=_files(settings, "bundle_files"))
         elif arm == "C-custom":
             if not settings.get("custom_policy_dir"):
                 return _absent(arm, "missing_custom_policy_directory"), mappings
@@ -274,13 +347,22 @@ def _collect(case: Case, arm: str, settings: dict | None, runner: Runner | None,
             artifact = adapter.scan(**common)
         if artifact.arm != arm:
             raise ValueError("adapter arm mismatch")
-        return artifact, mappings
-    except (OSError, ValueError, TypeError, KeyError):
+    except TimeoutError:
+        return replace(_absent(arm, "complete_tree_attempt_timeout" if tree_mode and arm == "T"
+                               else "scanner_timeout"), status="timeout",
+                       elapsed_seconds=time.monotonic() - attempt_started_at), ()
+    except (OSError, ValueError, TypeError, KeyError, RecursionError, UnicodeError):
         return _absent(arm, "unavailable_or_unverified_activation_inputs"), ()
     finally:
         if staged is not None and not remove_guarded_input(staged, case.plan_sha256, limits.plan_bytes):
             # Never silently leave heldout bytes behind: the comparison aborts.
             raise ValueError("guarded heldout staging cleanup failed")
+    # Staging cleanup cannot turn a late attempt into an eligible capture.
+    if time.monotonic() >= attempt_deadline:
+        artifact = replace(artifact, status="timeout", observations=(),
+                           reasons=("complete_tree_attempt_timeout" if tree_mode and arm == "T"
+                                    else "scanner_timeout",))
+    return replace(artifact, elapsed_seconds=time.monotonic() - attempt_started_at), mappings
 
 
 def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = False,
@@ -309,19 +391,27 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
         raise ValueError("unknown comparison arm")
     if any(not isinstance(settings, dict) for settings in arms.values()):
         raise ValueError("arm settings must be objects")
+    tree_mode = manifest["schema_version"] == "m4-scanner-run-v2"
+    for arm, settings in arms.items():
+        if "bundle_inventory" in settings and (not tree_mode or arm != "T"):
+            raise ValueError("complete-tree binding requires explicit v2 T arm")
+        if tree_mode and arm == "T" and ("bundle_inventory" not in settings or "bundle_files" in settings):
+            raise ValueError("v2 requires complete-tree descriptor without legacy bundle_files")
     rows, receipts = [], []
     for case in cases:
         for arm in ARMS:
+            # Batch admission is separate. Ownership precedes this arm's raw
+            # verification and follows it through every nested preparation.
+            started_at, deadline = (_attempt_clock(limits) if runner is not None and not fake_only
+                                    and arms.get(arm) is not None else (None, None))
             if digest(_case_bytes(case, limits)) != case.plan_sha256:
                 raise ValueError("plan mutation between arms aborts comparison")
-            artifact, mappings = _collect(case, arm, arms.get(arm), runner, fake_only, limits)
+            artifact, mappings = _collect(case, arm, arms.get(arm), runner, fake_only, limits,
+                                          tree_mode=tree_mode, attempt_deadline=deadline,
+                                          attempt_started_at=started_at)
             if artifact.plan_sha256 not in (None, case.plan_sha256):
                 raise ValueError("scanner capture used different plan bytes")
-            capture_hash = _capture_digest(artifact)
-            # Metadata-only private run receipt; raw scanner locators/output omitted.
-            receipt = asdict(artifact)
-            receipt.pop("observations")
-            receipts.append(dict(case_id=case.case_id, capture_sha256=capture_hash, **receipt))
+            arm_rows = []
             by_rule = {mapping.rule_id: mapping for mapping in mappings}
             for resource_id, resource in case.resources:
                 for rule in RULES:
@@ -350,11 +440,24 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
                             status, reasons = "unmapped", reasons + (cell,)
                         else:
                             reasons = reasons + ("capture_or_cell_incomplete",)
-                    rows.append(ComparisonRow(case.case_id, resource_id, rule, arm, status,
-                                              "introduced_risk", prediction,
-                                              status == "recorded" and not fake_only,
-                                              case.plan_sha256, _mapping_digest(mapping),
-                                              capture_hash, tuple(sorted(set(reasons)))))
+                    arm_rows.append(ComparisonRow(case.case_id, resource_id, rule, arm, status,
+                                                  "introduced_risk", prediction,
+                                                  status == "recorded" and not fake_only,
+                                                  case.plan_sha256, _mapping_digest(mapping),
+                                                  "", tuple(sorted(set(reasons)))))
+            # Finish this owner's serialization and eligibility before beginning
+            # an unrelated arm; later arms cannot taint an on-time sealed arm.
+            sealed_rows, receipt = _seal_arm(case.case_id, artifact, arm_rows,
+                                             started_at=started_at, deadline=deadline,
+                                             tree_mode=tree_mode)
+            if deadline is not None and time.monotonic() >= deadline:
+                # The arm-sealing operation's return is also inside the owner's
+                # allowance. A late return gets one permanently ineligible seal.
+                sealed_rows, receipt = _seal_arm(case.case_id, artifact, arm_rows,
+                                                 started_at=started_at, deadline=deadline,
+                                                 tree_mode=tree_mode)
+            rows.extend(sealed_rows)
+            receipts.append(receipt)
     for case in cases:
         if digest(_case_bytes(case, limits)) != case.plan_sha256:
             raise ValueError("plan mutation invalidates comparison")
@@ -363,9 +466,9 @@ def compare(manifest: dict, *, runner: Runner | None = None, fake_only: bool = F
                                                  separators=(",", ":")).encode()),
             "input_scope": scope, "fake_only": fake_only,
             "measurement_status": "SIMULATED_INELIGIBLE" if fake_only else (
-                "RECORDED" if rows and all(row.live_eligible for row in rows) else "INCOMPLETE"),
+                "RECORDED" if rows and all(row["live_eligible"] for row in rows) else "INCOMPLETE"),
             "source_enrichment": False, "product_acceptance": False,
-            "rows": [asdict(row) for row in rows], "capture_receipts": receipts,
+            "rows": rows, "capture_receipts": receipts,
             "limitations": ["No gold, confusion counts or product acceptance computed.",
                             "Binary introduced-risk predictions cannot recover unchanged/clear labels.",
                             "No direct ArmRow success conversion is provided."]}
