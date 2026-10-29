@@ -81,19 +81,14 @@ def bounded_read(path: Path, cap: int) -> bytes:
     """Reject direct symlinks, directories and over-cap streams before JSON parsing."""
     if path.is_symlink() or not path.is_file():
         raise ValueError("regular file required")
-    # Bound each read request even when a tiny file has a large byte cap.
+    # Bound read requests within the declared scanner profile (caps <= 256 MiB).
     # A fresh open still reads through EOF or the same cap-plus-one sentinel.
     with path.open("rb") as stream:
         remaining = cap + 1
-        chunked = type(remaining) is int and remaining > 0
-        if chunked:
-            try:
-                # Probe index-size representability without allocating byte storage.
-                len(range(remaining))
-            except OverflowError:
-                chunked = False
-        if not chunked:
-            # Let read validate malformed or oversized caps outside the exception.
+        if (type(remaining) is not int
+                or not 0 < remaining <= 256 * 1024 * 1024 + 1):
+            # Preserve native argument and large-request behavior outside
+            # the declared profile's largest cap; do not approximate I/O limits.
             data = stream.read(remaining)
         else:
             chunks = []
